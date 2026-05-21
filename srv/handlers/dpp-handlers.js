@@ -1,6 +1,5 @@
 'use strict';
 
-const cds = require('@sap/cds');
 const { getUserOrg } = require('./auth-helpers');
 const tokens = require('../lib/token');
 

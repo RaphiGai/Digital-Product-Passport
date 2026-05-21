@@ -22,7 +22,7 @@ describe('Tenant isolation & role gates (DPPService)', () => {
 
   test('dan.editor.b cannot publish an ORG-A DPP', async () => {
     await expect(
-      POST(`/odata/v4/dpp/DPPs('dpp-001')/DPPService.publishDPP`, {}, danEditorB)
+      POST('/odata/v4/dpp/DPPs(\'dpp-001\')/DPPService.publishDPP', {}, danEditorB)
     ).rejects.toThrow(/403/);
   });
 });
@@ -42,10 +42,10 @@ describe('Authority cross-tenant read', () => {
 
 describe('publishDPP lifecycle', () => {
   test('publishDPP transitions draft → published and mints a QR token', async () => {
-    await PATCH(`/odata/v4/dpp/DPPs('dpp-003')`, { visibility: 'public' }, aliceAdmin);
-    await POST(`/odata/v4/dpp/DPPs('dpp-003')/DPPService.publishDPP`, {}, aliceAdmin);
+    await PATCH('/odata/v4/dpp/DPPs(\'dpp-003\')', { visibility: 'public' }, aliceAdmin);
+    await POST('/odata/v4/dpp/DPPs(\'dpp-003\')/DPPService.publishDPP', {}, aliceAdmin);
     const { data } = await GET(
-      `/odata/v4/dpp/DPPs('dpp-003')?$select=status,qr_token,published_at`,
+      '/odata/v4/dpp/DPPs(\'dpp-003\')?$select=status,qr_token,published_at',
       aliceAdmin
     );
     expect(data.status).toBe('published');

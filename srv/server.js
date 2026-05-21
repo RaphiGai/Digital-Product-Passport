@@ -8,8 +8,8 @@ const publicHandler = require('./handlers/public-handler');
 let swaggerUi = null;
 try {
   swaggerUi = require('cds-swagger-ui-express');
-} catch (_e) {
-  // optional — log on bootstrap only if missing
+} catch {
+  // optional — warned on bootstrap if missing
 }
 
 // Express mounts that must live outside of CAP's auth middleware (e.g. the
