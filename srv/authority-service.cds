@@ -26,5 +26,4 @@ service AuthorityService @(
   @readonly entity SustainabilityIndicators as projection on db.SustainabilityIndicators;
   @readonly entity SupplyChainSteps      as projection on db.SupplyChainSteps;
   @readonly entity LifecycleEvents       as projection on db.LifecycleEvents;
-  @readonly entity BlockchainAnchors     as projection on db.BlockchainAnchors;
 }

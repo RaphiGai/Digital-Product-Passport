@@ -6,7 +6,6 @@ type GLN         : String(13);
 type EmailAddr   : String(254);
 type URL         : String(500);
 type Sha256Hex   : String(64);
-type TxHash      : String(66);
 
 type OrgType : String(20) enum {
   brand;
@@ -86,12 +85,6 @@ type UserRole : String(20) enum {
   editor;
   viewer;
   authority;
-}
-
-type AnchorStatus : String(12) enum {
-  pending;
-  anchored;
-  failed;
 }
 
 type LifecycleEventType : String(20) enum {

@@ -54,8 +54,6 @@ entity DPPs : identified, managed {
   archived_at                : Timestamp;
   qr_token                   : String(128);
   qr_payload_url             : URL;
-  data_hash                  : Sha256Hex;
-  data_hash_at               : Timestamp;
 
   materials      : Composition of many MaterialComposition       on materials.dpp      = $self;
   compliance     : Composition of many ComplianceStatements      on compliance.dpp     = $self;
@@ -65,10 +63,6 @@ entity DPPs : identified, managed {
   sustainability : Composition of one  SustainabilityIndicators  on sustainability.dpp = $self;
   supplychain    : Composition of many SupplyChainSteps          on supplychain.dpp    = $self;
   lifecycle      : Composition of many LifecycleEvents           on lifecycle.dpp      = $self;
-
-  // BlockchainAnchors live in db/blockchain.cds. We do NOT add a backref Association
-  // here to avoid a circular `using` between dpp.cds and blockchain.cds. The service
-  // layer exposes anchors via its own entity projection (filterable by dpp_ID).
 }
 
 annotate DPPs with @assert.unique : {

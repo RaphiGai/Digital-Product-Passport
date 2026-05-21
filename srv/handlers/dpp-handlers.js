@@ -3,16 +3,16 @@
 const cds = require('@sap/cds');
 const { getUserOrg } = require('./auth-helpers');
 const tokens = require('../lib/token');
-const outbox = require('../lib/outbox');
 
 /**
  * Register handlers on DPPService.
- * Phase-2 scope: tenant defaults + status transitions + stub blockchain action.
- * The real anchor flow is wired in Phase 11 — for now `anchorOnBlockchain`
- * just records a 'pending' row so callers can observe the outbox lifecycle.
+ *   - tenant defaulting on CREATE for Products and DPPs
+ *   - status transitions (publishDPP / archiveDPP)
+ *   - QR code generation (returns token + base64 PNG)
+ *   - SHA-256 hashing of Document binary content on the way in
  */
 module.exports = (srv) => {
-  const { DPPs, Products, Documents, BlockchainAnchors } = srv.entities;
+  const { DPPs, Products, Documents } = srv.entities;
 
   // ----- Defaults on CREATE -----
 
@@ -33,12 +33,12 @@ module.exports = (srv) => {
     if (!req.data.granularity_level) req.data.granularity_level = 'model';
   });
 
-  // ----- Document upload: compute SHA-256 on the way in -----
+  // ----- Document upload: compute SHA-256 + size on the way in -----
 
   srv.before(['CREATE', 'UPDATE'], Documents, async (req) => {
     if (req.data.content instanceof Buffer) {
-      const { sha256Hex } = require('../lib/hash');
-      req.data.sha256 = sha256Hex(req.data.content);
+      const { createHash } = require('crypto');
+      req.data.sha256 = createHash('sha256').update(req.data.content).digest('hex');
       req.data.size_bytes = req.data.content.length;
     }
   });
@@ -68,11 +68,6 @@ module.exports = (srv) => {
       qr_payload_url: `${process.env.PUBLIC_BASE_URL || ''}/public/dpp/${qrToken}`
     }).where({ ID: id });
 
-    // Compute snapshot hash and enqueue an anchor row — the worker picks it up.
-    const fresh = await SELECT.one.from(DPPs).where({ ID: id });
-    const dataHash = await outbox.computeSnapshotHash(null, fresh);
-    await outbox.enqueueAnchor({ dppId: id, dataHash });
-
     return SELECT.one.from(DPPs).where({ ID: id });
   });
 
@@ -90,19 +85,6 @@ module.exports = (srv) => {
     return SELECT.one.from(DPPs).where({ ID: id });
   });
 
-  // ----- Action: anchorOnBlockchain -----
-
-  srv.on('anchorOnBlockchain', DPPs, async (req) => {
-    const id = req.params[req.params.length - 1].ID;
-    const dpp = await SELECT.one.from(DPPs).where({ ID: id });
-    if (!dpp) req.reject(404, `DPP '${id}' not found.`);
-
-    const dataHash = await outbox.computeSnapshotHash(null, dpp);
-    const row = await outbox.enqueueAnchor({ dppId: id, dataHash });
-
-    return SELECT.one.from(BlockchainAnchors).where({ ID: row.ID });
-  });
-
   // ----- Function: generateQRCode -----
 
   srv.on('generateQRCode', DPPs, async (req) => {
@@ -114,8 +96,8 @@ module.exports = (srv) => {
     const payload = dpp.qr_payload_url ||
       `${process.env.PUBLIC_BASE_URL || ''}/public/dpp/${dpp.qr_token}`;
 
-    // Real PNG generation lives in Phase 7. For now we return only the payload
-    // so the frontend already gets a stable shape.
-    return { png: '', payload };
+    const QRCode = require('qrcode');
+    const pngBuffer = await QRCode.toBuffer(payload, { type: 'png', margin: 1, scale: 6 });
+    return { png: pngBuffer.toString('base64'), payload };
   });
 };

@@ -31,28 +31,4 @@ jobs:
       - name: Run tests
         run: npm test
         env:
-          BLOCKCHAIN_ENABLED: 'false'
           QR_TOKEN_HMAC_SECRET: 'ci-test-secret-not-for-production-use'
-
-  hardhat-test:
-    name: Smart-contract test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: blockchain
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Hardhat deps
-        run: npm install
-
-      - name: Compile contracts
-        run: npx hardhat compile
-
-      - name: Run contract tests
-        run: npx hardhat test

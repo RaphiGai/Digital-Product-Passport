@@ -87,15 +87,6 @@ function toConsumerDTO(dpp, children) {
       type: e.event_type,
       date: e.event_date,
       notes: e.notes
-    })),
-    blockchain: (children.anchors || []).map((a) => ({
-      network: a.network,
-      chain_id: a.chain_id,
-      tx_hash: a.tx_hash,
-      block_number: a.block_number,
-      version: a.version,
-      anchored_at: a.anchored_at,
-      status: a.status
     }))
   };
 }
@@ -104,14 +95,14 @@ async function loadDPPByToken(token) {
   if (!tokens.verify(token)) return null;
   const { DPPs, MaterialComposition, ComplianceStatements, CareInstructions,
     SubstancesOfConcern, SustainabilityIndicators, LifecycleEvents,
-    BlockchainAnchors, Products } = cds.entities('dpp');
+    Products } = cds.entities('dpp');
 
   const dpp = await SELECT.one.from(DPPs).where({ qr_token: token });
   if (!dpp) return null;
   if (dpp.status !== 'published') return null;
   if (dpp.visibility === 'internal' || dpp.visibility === 'authority_only') return null;
 
-  const [product, materials, compliance, care, substances, sustainability, lifecycle, anchors] =
+  const [product, materials, compliance, care, substances, sustainability, lifecycle] =
     await Promise.all([
       SELECT.one.from(Products).where({ ID: dpp.product_ID }),
       SELECT.from(MaterialComposition).where({ dpp_ID: dpp.ID }),
@@ -119,8 +110,7 @@ async function loadDPPByToken(token) {
       SELECT.from(CareInstructions).where({ dpp_ID: dpp.ID }),
       SELECT.from(SubstancesOfConcern).where({ dpp_ID: dpp.ID }),
       SELECT.one.from(SustainabilityIndicators).where({ dpp_ID: dpp.ID }),
-      SELECT.from(LifecycleEvents).where({ dpp_ID: dpp.ID }),
-      SELECT.from(BlockchainAnchors).where({ dpp_ID: dpp.ID, status: 'anchored' })
+      SELECT.from(LifecycleEvents).where({ dpp_ID: dpp.ID })
     ]);
 
   return toConsumerDTO({ ...dpp, product }, {
@@ -129,8 +119,7 @@ async function loadDPPByToken(token) {
     care,
     substances,
     sustainability,
-    lifecycle,
-    anchors
+    lifecycle
   });
 }
 

@@ -2,7 +2,6 @@
 
 const cds = require('@sap/cds');
 const publicHandler = require('./handlers/public-handler');
-const outbox = require('./lib/outbox');
 
 // Swagger UI is loaded lazily so test environments without the dev-only
 // dependency installed can still boot.
@@ -28,11 +27,6 @@ cds.on('bootstrap', (app) => {
   } else if (process.env.NODE_ENV !== 'test') {
     console.warn('cds-swagger-ui-express not installed — /swagger is disabled');
   }
-});
-
-// Start the blockchain outbox worker once the database is ready.
-cds.on('listening', () => {
-  outbox.startWorker();
 });
 
 module.exports = cds.server;

@@ -54,15 +54,12 @@ service DPPService @(
   ]
   entity DPPs as projection on db.DPPs actions {
     @Common.SideEffects: { TargetProperties: ['status', 'published_at', 'qr_token', 'qr_payload_url'] }
-    action   publishDPP()         returns DPPs;
+    action   publishDPP()      returns DPPs;
 
     @Common.SideEffects: { TargetProperties: ['status', 'archived_at'] }
-    action   archiveDPP()         returns DPPs;
+    action   archiveDPP()      returns DPPs;
 
-    @Common.SideEffects: { TargetProperties: ['data_hash', 'data_hash_at'] }
-    action   anchorOnBlockchain() returns BlockchainAnchors;
-
-    function generateQRCode()     returns { png : LargeString; payload : String };
+    function generateQRCode()  returns { png : LargeString; payload : String };
   };
 
   // ---- DPP child entities (Composition) ----
@@ -114,12 +111,4 @@ service DPPService @(
     { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'dpp.issuing_organization.tenant_id = $user.tenant' }
   ]
   entity LifecycleEvents          as projection on db.LifecycleEvents;
-
-  // ---- Blockchain anchors (read-only for company users) ----
-
-  @readonly
-  @restrict: [
-    { grant: 'READ', to: ['admin', 'editor', 'viewer'], where: 'dpp.issuing_organization.tenant_id = $user.tenant' }
-  ]
-  entity BlockchainAnchors        as projection on db.BlockchainAnchors;
 }
