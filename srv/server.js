@@ -67,9 +67,13 @@ cds.on('bootstrap', (app) => {
   app.get('/public/dpp/:token', publicHandler.resolveDPPByToken);
   app.get('/public/dpp/:token/qr.png', publicHandler.getQRImage);
 
-  // OpenAPI / Swagger UI at /swagger (per-service docs available too).
+  // OpenAPI / Swagger UI at /$api-docs.
+  // In production the approuter terminates XSUAA in front of us, so we don't
+  // advertise a Basic-Auth scheme — Swagger UI inherits the session cookie.
   if (swaggerUi) {
-    app.use(injectBasicAuthScheme);
+    if (process.env.NODE_ENV !== 'production') {
+      app.use(injectBasicAuthScheme);
+    }
     app.use(swaggerUi());
   } else if (process.env.NODE_ENV !== 'test') {
     console.warn('cds-swagger-ui-express not installed — /swagger is disabled');

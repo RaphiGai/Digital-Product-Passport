@@ -1,0 +1,11 @@
+node_modules/
+test/
+gen/
+.git/
+.github/
+.vscode/
+docs/
+README.md
+*.log
+*.db
+*.sqlite*

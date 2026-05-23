@@ -1,0 +1,83 @@
+_schema-version: '3.3'
+ID: dpp-capgemini
+version: 0.1.0
+description: Digital Product Passport backend for the fashion industry
+parameters:
+  enable-parallel-deployments: true
+
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npm ci || npm install
+        - npm run build
+
+modules:
+  # ---- CAP service runtime ----
+  - name: dpp-srv
+    type: nodejs
+    path: gen/srv
+    parameters:
+      instances: 1
+      memory: 512M
+      disk-quota: 1024M
+      buildpack: nodejs_buildpack
+    build-parameters:
+      builder: npm-ci
+    requires:
+      - name: dpp-db
+      - name: dpp-uaa
+    provides:
+      - name: srv-api          # consumed by approuter via destinations
+        properties:
+          srv-url: ${default-url}
+
+  # ---- HDI table deployer (creates HANA schema from CDS) ----
+  - name: dpp-db-deployer
+    type: hdb
+    path: gen/db
+    parameters:
+      buildpack: nodejs_buildpack
+      memory: 256M
+      disk-quota: 512M
+    requires:
+      - name: dpp-db
+
+  # ---- Approuter (public entrypoint, terminates auth) ----
+  - name: dpp-approuter
+    type: approuter.nodejs
+    path: app/router
+    parameters:
+      keep-existing-routes: true
+      memory: 256M
+      disk-quota: 512M
+    requires:
+      - name: srv-api
+        group: destinations
+        properties:
+          name: srv-api        # must match the destination name in xs-app.json
+          url: ~{srv-url}
+          forwardAuthToken: true
+      - name: dpp-uaa
+    provides:
+      - name: app-api
+        properties:
+          app-protocol: ${protocol}
+          app-uri: ${default-uri}
+
+resources:
+  - name: dpp-db
+    type: com.sap.xs.hdi-container
+    parameters:
+      service: hana
+      service-plan: hdi-shared
+
+  - name: dpp-uaa
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security.json
+      config:
+        xsappname: dpp-capgemini-${space}
+        tenant-mode: dedicated

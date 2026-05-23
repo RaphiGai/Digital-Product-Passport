@@ -35,3 +35,4 @@ mta_archives/
 *.mtar
 coverage/
 .nyc_output/
+.cf/
