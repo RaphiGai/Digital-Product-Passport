@@ -15,6 +15,42 @@ function publicOnly(arr) {
 }
 
 /**
+ * Render a Material master-data record as a public sub-tree, descending
+ * recursively through MaterialComponents. Materials with visibility != public
+ * are pruned. Cycles are guarded via a visited-set; depth is hard-capped.
+ */
+async function expandMaterialTree(materialId, share, materialsById, edgesByParent, depth = 0, visited = new Set()) {
+  if (depth > 8) return null;
+  if (visited.has(materialId)) return null;
+  visited.add(materialId);
+
+  const m = materialsById.get(materialId);
+  if (!m || m.visibility !== 'public') return null;
+
+  const childEdges = edgesByParent.get(materialId) || [];
+  const components = [];
+  for (const e of childEdges) {
+    const sub = await expandMaterialTree(
+      e.child_material_ID, e.percentage, materialsById, edgesByParent, depth + 1, new Set(visited)
+    );
+    if (sub) components.push(sub);
+  }
+
+  return {
+    name: m.name,
+    class: m.material_class,
+    percentage: share,
+    country_of_origin: m.country_of_origin,
+    recycled_content_pct: m.recycled_content_pct,
+    verification_status: m.verification_status,
+    co2_kg: m.co2_footprint_kg,
+    water_l: m.water_usage_l,
+    energy_kwh: m.energy_usage_kwh,
+    components
+  };
+}
+
+/**
  * Build the Consumer-DTO. Only `visibility=public` content is exposed and the
  * payload deliberately omits operational fields (tenant, hash audit, anchor
  * attempt counters).
@@ -41,14 +77,7 @@ function toConsumerDTO(dpp, children) {
           description: dpp.product.description
         }
       : null,
-    materials: publicOnly(children.materials).map((m) => ({
-      class: m.material_class,
-      fiber: m.fiber_name,
-      percentage: m.percentage,
-      country_of_origin: m.country_of_origin,
-      recycled_content_pct: m.recycled_content_pct,
-      verification_status: m.verification_status
-    })),
+    materials: children.materialsTree,
     compliance: publicOnly(children.compliance).map((c) => ({
       standard: c.compliance_standard,
       statement: c.statement_text,
@@ -93,7 +122,8 @@ function toConsumerDTO(dpp, children) {
 
 async function loadDPPByToken(token) {
   if (!tokens.verify(token)) return null;
-  const { DPPs, MaterialComposition, ComplianceStatements, CareInstructions,
+  const { DPPs, MaterialComposition, Materials, MaterialComponents,
+    ComplianceStatements, CareInstructions,
     SubstancesOfConcern, SustainabilityIndicators, LifecycleEvents,
     Products } = cds.entities('dpp');
 
@@ -113,8 +143,37 @@ async function loadDPPByToken(token) {
       SELECT.from(LifecycleEvents).where({ dpp_ID: dpp.ID })
     ]);
 
+  // Build recursive material tree: for each MaterialComposition row,
+  // expand the referenced master Material through its BOM.
+  const rootMatIds = publicOnly(materials).map((m) => m.material_ID).filter(Boolean);
+  let materialsTree = [];
+  if (rootMatIds.length) {
+    // Load the full reachable material graph for the owning org so we can
+    // expand the tree without N+1 queries.
+    const owningOrgId = product?.owning_organization_ID;
+    const [allMats, allEdges] = await Promise.all([
+      owningOrgId
+        ? SELECT.from(Materials).where({ owning_organization_ID: owningOrgId })
+        : SELECT.from(Materials),
+      SELECT.from(MaterialComponents)
+    ]);
+    const materialsById = new Map(allMats.map((m) => [m.ID, m]));
+    const edgesByParent = new Map();
+    for (const e of allEdges) {
+      if (!edgesByParent.has(e.parent_material_ID)) edgesByParent.set(e.parent_material_ID, []);
+      edgesByParent.get(e.parent_material_ID).push(e);
+    }
+    for (const mc of publicOnly(materials)) {
+      const tree = await expandMaterialTree(mc.material_ID, mc.percentage, materialsById, edgesByParent);
+      if (tree) {
+        if (mc.notes) tree.notes = mc.notes;
+        materialsTree.push(tree);
+      }
+    }
+  }
+
   return toConsumerDTO({ ...dpp, product }, {
-    materials,
+    materialsTree,
     compliance,
     care,
     substances,

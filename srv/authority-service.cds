@@ -18,6 +18,8 @@ service AuthorityService @(
   @readonly entity Facilities            as projection on db.Facilities;
   @readonly entity Products              as projection on db.Products;
   @readonly entity DPPs                  as projection on db.DPPs;
+  @readonly entity Materials             as projection on db.Materials;
+  @readonly entity MaterialComponents    as projection on db.MaterialComponents;
   @readonly entity MaterialComposition   as projection on db.MaterialComposition;
   @readonly entity ComplianceStatements  as projection on db.ComplianceStatements;
   @readonly entity Documents             as projection on db.Documents excluding { content };

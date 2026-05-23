@@ -70,17 +70,54 @@ annotate DPPs with @assert.unique : {
   batchPerProduct : [product, batch_lot_number]
 };
 
-// ----- Composition children (lifecycle bound to a DPP) -----
+// ----- Material master data (reusable across DPPs, with BOM tree) -----
 
-entity MaterialComposition : identified {
-  dpp                  : Association to DPPs not null;
-  material_class       : MaterialClass        not null;
-  fiber_name           : String(80)           not null;
-  percentage           : Decimal(5, 2)        not null;
+entity Materials : identified, managed {
+  owning_organization  : Association to Organizations not null;
+  name                 : String(120)        not null;
+  material_class       : MaterialClass      not null;
+  description          : String(500);
+
+  // DPP-relevant attributes that every node of the tree carries:
   country_of_origin    : CountryISO2;
   recycled_content_pct : Decimal(5, 2) default 0;
-  verification_status  : Verification default 'declared';
-  visibility           : Visibility   default 'public';
+  verification_status  : Verification  default 'declared';
+  supplier             : Association to Organizations;
+  supplier_facility    : Association to Facilities;
+
+  // Optional sustainability indicators per material (declared at master-data level):
+  co2_footprint_kg     : Decimal(10, 3);
+  water_usage_l        : Decimal(12, 2);
+  energy_usage_kwh     : Decimal(12, 2);
+
+  components           : Composition of many MaterialComponents
+                           on components.parent_material = $self;
+  usages               : Association to many MaterialComposition
+                           on usages.material = $self;
+  visibility           : Visibility default 'public';
+}
+
+annotate Materials with @assert.unique : { name_per_org : [name, owning_organization] };
+
+// Each row says: parent_material is made of `percentage` % of child_material.
+entity MaterialComponents : identified {
+  parent_material : Association to Materials not null;
+  child_material  : Association to Materials not null;
+  percentage      : Decimal(5, 2)             not null;
+}
+
+annotate MaterialComponents with @assert.unique : { edge : [parent_material, child_material] };
+
+// ----- Composition children (lifecycle bound to a DPP) -----
+
+// Links a DPP to a (root) Material from the master data. The composition tree
+// of that material is read transitively from MaterialComponents.
+entity MaterialComposition : identified {
+  dpp        : Association to DPPs      not null;
+  material   : Association to Materials not null;
+  percentage : Decimal(5, 2)            not null;
+  notes      : String(500);
+  visibility : Visibility default 'public';
 }
 
 entity ComplianceStatements : identified, managed {

@@ -1,17 +1,40 @@
 'use strict';
 
+const cds = require('@sap/cds');
 const { getUserOrg } = require('./auth-helpers');
 const tokens = require('../lib/token');
 
 /**
+ * Walk the BOM graph upward from `startId`: would adding an edge
+ * (parent=newParentId -> child=startId) create a cycle?
+ * A cycle exists iff newParentId is reachable when descending from startId.
+ */
+async function descendantsReach(startId, targetId, MaterialComponents) {
+  const visited = new Set();
+  const stack = [startId];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (visited.has(cur)) continue;
+    visited.add(cur);
+    if (cur === targetId) return true;
+    const rows = await SELECT.from(MaterialComponents)
+      .columns(['child_material_ID'])
+      .where({ parent_material_ID: cur });
+    for (const r of rows) stack.push(r.child_material_ID);
+  }
+  return false;
+}
+
+/**
  * Register handlers on DPPService.
- *   - tenant defaulting on CREATE for Products and DPPs
+ *   - tenant defaulting on CREATE for Products, DPPs, Materials
  *   - status transitions (publishDPP / archiveDPP)
  *   - QR code generation (returns token + base64 PNG)
  *   - SHA-256 hashing of Document binary content on the way in
+ *   - BOM integrity: percentage bounds, self-loop, transitive cycle guard
  */
 module.exports = (srv) => {
-  const { DPPs, Products, Documents } = srv.entities;
+  const { DPPs, Products, Documents, Materials, MaterialComponents } = srv.entities;
 
   // ----- Defaults on CREATE -----
 
@@ -30,6 +53,34 @@ module.exports = (srv) => {
     if (!req.data.status) req.data.status = 'draft';
     if (!req.data.visibility) req.data.visibility = 'internal';
     if (!req.data.granularity_level) req.data.granularity_level = 'model';
+  });
+
+  srv.before('CREATE', Materials, async (req) => {
+    if (!req.data.owning_organization_ID) {
+      const org = await getUserOrg(req);
+      req.data.owning_organization_ID = org.ID;
+    }
+  });
+
+  // ----- BOM integrity: percentage bounds + acyclic graph -----
+
+  srv.before(['CREATE', 'UPDATE'], MaterialComponents, async (req) => {
+    const { parent_material_ID, child_material_ID, percentage } = req.data;
+    if (parent_material_ID && child_material_ID && parent_material_ID === child_material_ID) {
+      req.reject(400, 'A material cannot reference itself as a component.');
+    }
+    if (percentage != null && (percentage <= 0 || percentage > 100)) {
+      req.reject(400, 'Component percentage must be within (0, 100].');
+    }
+    if (parent_material_ID && child_material_ID) {
+      const db = cds.entities('dpp');
+      const wouldCycle = await descendantsReach(
+        child_material_ID, parent_material_ID, db.MaterialComponents
+      );
+      if (wouldCycle) {
+        req.reject(409, 'Adding this component would introduce a cycle in the material tree.');
+      }
+    }
   });
 
   // ----- Document upload: compute SHA-256 + size on the way in -----

@@ -62,6 +62,20 @@ service DPPService @(
     function generateQRCode()  returns { png : LargeString; payload : String };
   };
 
+  // ---- Material master data + BOM tree (tenant-scoped) ----
+
+  @restrict: [
+    { grant: 'READ',                         to: ['admin', 'editor', 'viewer'], where: 'owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'owning_organization.tenant_id = $user.tenant' }
+  ]
+  entity Materials               as projection on db.Materials;
+
+  @restrict: [
+    { grant: 'READ',                         to: ['admin', 'editor', 'viewer'], where: 'parent_material.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'parent_material.owning_organization.tenant_id = $user.tenant' }
+  ]
+  entity MaterialComponents      as projection on db.MaterialComponents;
+
   // ---- DPP child entities (Composition) ----
 
   @restrict: [

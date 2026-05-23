@@ -1,0 +1,11 @@
+ID;owning_organization_ID;name;material_class;description;country_of_origin;recycled_content_pct;verification_status;supplier_ID;supplier_facility_ID;co2_footprint_kg;water_usage_l;energy_usage_kwh;visibility
+mat-org-cotton-tr;org-greenline;Organic Cotton TR;natural_plant;GOTS-certified organic cotton from Aegean region;TR;0;documented;;;3.50;8000.00;15.50;public
+mat-rec-cotton;org-greenline;Recycled Cotton PT;recycled;Mechanically recycled cotton blend produced in Portugal;PT;100;third_party_verified;org-porto;fac-porto-plant;1.20;800.00;5.00;public
+mat-pcc-cotton;org-greenline;Post-consumer Cotton Scraps;recycled;Reclaimed garments from post-consumer waste streams;PT;100;third_party_verified;org-porto;fac-porto-plant;0.80;500.00;3.00;public
+mat-pic-cotton;org-greenline;Pre-consumer Cotton Waste;recycled;Cutting-room scraps from EU textile manufacturing;DE;100;documented;;;1.00;600.00;4.00;public
+mat-polyester;org-greenline;Recycled Polyester Yarn;recycled;Recycled PET yarn spun in Germany;DE;80;documented;;;2.80;200.00;18.00;public
+mat-pc-pet;org-greenline;Post-consumer PET Flakes;recycled;PET from collected beverage bottles;DE;100;third_party_verified;;;1.50;100.00;10.00;public
+mat-pi-pet;org-greenline;Post-industrial PET Flakes;recycled;PET offcuts from injection-moulding facilities;DE;100;declared;;;1.80;120.00;11.00;public
+mat-hemp-fr;org-greenline;Hemp FR;natural_plant;French-grown hemp fibre, low-water cultivation;FR;0;declared;;;1.50;3000.00;6.00;public
+mat-cotton-in;org-fashionista;Cotton IN;natural_plant;Conventional cotton from India;IN;0;declared;;;5.00;10000.00;18.00;public
+mat-elastane-cn;org-fashionista;Elastane CN;synthetic;Standard elastane fibre;CN;0;declared;;;7.00;500.00;25.00;public

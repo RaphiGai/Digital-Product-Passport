@@ -1,0 +1,5 @@
+ID;parent_material_ID;child_material_ID;percentage
+mc-rc-pcc;mat-rec-cotton;mat-pcc-cotton;70.00
+mc-rc-pic;mat-rec-cotton;mat-pic-cotton;30.00
+mc-pet-pc;mat-polyester;mat-pc-pet;80.00
+mc-pet-pi;mat-polyester;mat-pi-pet;20.00

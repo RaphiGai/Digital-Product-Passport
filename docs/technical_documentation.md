@@ -139,7 +139,7 @@ All composition children expose a `visibility` column so that the public filter 
 
 | Entity | Purpose |
 |--------|---------|
-| MaterialComposition | Fibres, percentage, recycled share, country of origin |
+| MaterialComposition | Links a DPP to a root Material from the master data, with the percentage that material contributes to the DPP |
 | ComplianceStatements | Statements covering ESPR / REACH / SCIP / CSDDD / etc. including evidence document |
 | Documents | Certificates and reports including `LargeBinary` content, SHA-256, MIME type |
 | SubstancesOfConcern | CAS / EC numbers, SCIP reference, concentration |
@@ -148,56 +148,79 @@ All composition children expose a `visibility` column so that the public filter 
 | SupplyChainSteps | Tier 1–4 step, facility, organization, time range |
 | LifecycleEvents | manufactured / sold / repaired / recycled / etc. |
 
+## 1.4 Material Master Data and BOM Tree
+
+Materials are modelled as reusable master data per organization. A material carries every DPP-relevant attribute (origin, recycled share, verification status, CO₂ / water / energy figures, supplier). A material may itself be composed of further materials through a many-to-many BOM relation (`MaterialComponents`), so a recycled-cotton yarn can declare its sub-materials, each of which exposes the same DPP attributes.
+
+### Materials
+
+| Field | Type | Notes |
+|-------|------|-------|
+| ID | String(36) | Primary key |
+| owning_organization | Association to Organizations | not null, tenant scope |
+| name | String(120) | not null, UNIQUE within organization |
+| material_class | MaterialClass | not null |
+| description | String(500) | |
+| country_of_origin | CountryISO2 | |
+| recycled_content_pct | Decimal(5,2) | default 0 |
+| verification_status | Verification | default `declared` |
+| supplier | Association to Organizations | optional supplier reference |
+| supplier_facility | Association to Facilities | optional |
+| co2_footprint_kg | Decimal(10,3) | declared per master record |
+| water_usage_l | Decimal(12,2) | |
+| energy_usage_kwh | Decimal(12,2) | |
+| visibility | Visibility | default `public` |
+| components | Composition of many MaterialComponents | child BOM edges |
+| usages | Association to many MaterialComposition | back-reference to DPP usage |
+
+### MaterialComponents (BOM edges)
+
+A row says: `parent_material` is composed of `percentage` % of `child_material`.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| ID | String(36) | Primary key |
+| parent_material | Association to Materials | not null |
+| child_material | Association to Materials | not null |
+| percentage | Decimal(5,2) | not null, range (0, 100] |
+
+UNIQUE on `(parent_material, child_material)`. Self-loops and transitive cycles are rejected by handler.
+
+### MaterialComposition (DPP usage)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| ID | String(36) | Primary key |
+| dpp | Association to DPPs | not null |
+| material | Association to Materials | not null — root of the per-DPP sub-tree |
+| percentage | Decimal(5,2) | share of this material in the finished DPP |
+| notes | String(500) | optional per-usage remark |
+| visibility | Visibility | default `public` |
+
+### Integrity rules (handler-enforced)
+
+- `MaterialComponents.parent_material != child_material` (no direct self-loop).
+- Inserting an edge that would close a cycle (parent reachable from child) is rejected with HTTP 409.
+- `MaterialComponents.percentage` must be in (0, 100].
+- Tenant defaulting: on CREATE of `Materials`, `owning_organization` is auto-filled from the caller's tenant.
+
 ### Uniqueness and integrity constraints
 
 - `Organizations.tenant_id` UNIQUE
 - `Users (email, organization)` UNIQUE
 - `Products (gtin, owning_organization)` UNIQUE
+- `Materials (name, owning_organization)` UNIQUE
+- `MaterialComponents (parent_material, child_material)` UNIQUE
 - `DPPs.qr_token` UNIQUE
 - `DPPs (product, batch_lot_number)` UNIQUE
 
 # 2. Architecture Diagrams
 
-The diagrams below are provided both as Mermaid source (renders on GitHub / VS Code with the Mermaid extension) and as a textual description that remains readable inside this .docx export.
-
 ## 2.1 High-Level System Architecture
 
-**Description.** Three client classes (internal brand users, public authority users, and anonymous consumers) connect to a CAP runtime hosted on SAP BTP Cloud Foundry. Authenticated traffic flows through the App Router and XSUAA; the public consumer route bypasses authentication and is mounted directly on the Express bootstrap. Persistence targets SQLite for local development and SAP HANA Cloud in production.
+Three client classes (internal brand users, public authority users, and anonymous consumers) connect to a CAP runtime hosted on SAP BTP Cloud Foundry. Authenticated traffic flows through the App Router and XSUAA; the public consumer route bypasses authentication and is mounted directly on the Express bootstrap. Persistence targets SQLite for local development and SAP HANA Cloud in production.
 
-```mermaid
-flowchart TB
-    subgraph Clients
-        BR[Brand / Manufacturer<br/>OData Client]
-        AUTH[Market Surveillance<br/>Authority]
-        CONS[Consumer<br/>Smartphone / QR scanner]
-    end
-
-    subgraph BTP[SAP BTP - Cloud Foundry]
-        APR[App Router<br/>app/router - planned]
-        subgraph CAP[CAP Node.js Runtime]
-            DPP[/DPPService<br/>/odata/v4/dpp/]
-            AS[/AuthorityService<br/>/odata/v4/authority/]
-            PUB[/Public Handler<br/>/public/dpp/:token/]
-            HEALTH[/healthz + Swagger UI/]
-        end
-        XSUAA[XSUAA<br/>OAuth2 / JWT]
-    end
-
-    subgraph Persistence
-        DEV[(SQLite<br/>Dev)]
-        PROD[(HANA Cloud<br/>Prod)]
-    end
-
-    BR -->|JWT scope: admin/editor/viewer| APR --> XSUAA
-    AUTH -->|JWT scope: authority| APR
-    CONS -->|no login| PUB
-
-    APR --> DPP
-    APR --> AS
-    XSUAA -.validates.-> CAP
-    CAP --> DEV
-    CAP --> PROD
-```
+![High-level system architecture](diagrams/01_system_architecture.png)
 
 **Component responsibilities.**
 
@@ -210,77 +233,24 @@ flowchart TB
 
 ## 2.2 ER Diagram (Data Model)
 
-**Description.** Organizations sit at the top of the master-data tree; they own Facilities, Users, Products, and issue DPPs. A Product has one or more DPPs (model or batch granularity). Each DPP composes eight child entity sets; `SustainabilityIndicators` is the only 1:1 relationship.
+Organizations sit at the top of the master-data tree; they own Facilities, Users, Products, **Materials**, and issue DPPs. A Product has one or more DPPs (model or batch granularity). Materials are reusable master data that form a directed acyclic graph through `MaterialComponents` (BOM edges). Each DPP composes child entity sets; `MaterialComposition` is the link from a DPP to a root Material (the recursive sub-tree of which the consumer sees on scan). `SustainabilityIndicators` is the only 1:1 relationship.
 
-```mermaid
-erDiagram
-    Organizations ||--o{ Facilities      : "operates"
-    Organizations ||--o{ Users           : "employs"
-    Organizations ||--o{ Products        : "owns"
-    Organizations ||--o{ DPPs            : "issues"
-    Facilities    ||--o{ DPPs            : "manufactures at"
-    Products      ||--o{ DPPs            : "has passport"
-
-    DPPs ||--o{ MaterialComposition       : "composes of"
-    DPPs ||--o{ ComplianceStatements      : "states"
-    DPPs ||--o{ Documents                 : "evidences"
-    DPPs ||--o{ SubstancesOfConcern       : "declares"
-    DPPs ||--o{ CareInstructions          : "carries"
-    DPPs ||--|| SustainabilityIndicators  : "measured by"
-    DPPs ||--o{ SupplyChainSteps          : "traces"
-    DPPs ||--o{ LifecycleEvents           : "logs"
-
-    ComplianceStatements }o--|| Documents     : "evidence_document"
-    SupplyChainSteps     }o--|| Facilities    : "at"
-    SupplyChainSteps     }o--|| Organizations : "by"
-    LifecycleEvents      }o--|| Organizations : "actor"
-```
+![ER diagram](diagrams/02_er_diagram.png)
 
 **Key entity attributes (compact view).**
 
 - **Organizations** — `ID` (PK), `tenant_id` (UNIQUE), `legal_name`, `organization_type`, `country_iso2`, `gln`.
 - **DPPs** — `ID` (PK), `product` (FK), `issuing_organization` (FK), `status`, `visibility`, `verification_status`, `granularity_level`, `batch_lot_number`, `qr_token` (UNIQUE), `qr_payload_url`, `published_at`, `archived_at`.
 - **Products** — `ID` (PK), `gtin`, `owning_organization` (FK).
+- **Materials** — `ID` (PK), `owning_organization` (FK), `name` (UNIQUE per org), `material_class`, `country_of_origin`, `recycled_content_pct`, `verification_status`, `supplier` (FK), CO₂ / water / energy footprint, `visibility`.
+- **MaterialComponents** — `parent_material` (FK), `child_material` (FK), `percentage`; UNIQUE on the edge, no cycles allowed.
+- **MaterialComposition** — `dpp` (FK), `material` (FK), `percentage`, `notes`, `visibility`.
 
 ## 2.3 Service Architecture (Roles, Scopes, Authorization)
 
-**Description.** Authorization is layered. The service annotation `@requires` controls who can reach the service at all; per-entity `@restrict` rules then combine the caller's role with a `where` clause that pins each query to `Organizations.tenant_id = $user.tenant`. The `authority` role is intentionally issued without a `tenant` attribute, so its queries skip the tenant filter and observe the full data set (excluding document binary content).
+Authorization is layered. The service annotation `@requires` controls who can reach the service at all; per-entity `@restrict` rules then combine the caller's role with a `where` clause that pins each query to `Organizations.tenant_id = $user.tenant`. The `authority` role is intentionally issued without a `tenant` attribute, so its queries skip the tenant filter and observe the full data set (excluding document binary content).
 
-```mermaid
-flowchart LR
-    subgraph Roles[XSUAA role templates]
-        ADM[admin<br/>attr: tenant]
-        EDT[editor<br/>attr: tenant]
-        VWR[viewer<br/>attr: tenant]
-        AUT[authority<br/>no tenant attribute]
-    end
-
-    subgraph Services[CAP services]
-        direction TB
-        DS[DPPService<br/>requires authenticated-user]
-        AS2[AuthorityService<br/>requires authority]
-        PH[Public Handler<br/>no auth]
-    end
-
-    subgraph Restrictions[Per-entity restrictions]
-        R1["READ: admin/editor/viewer<br/>where tenant_id = $user.tenant"]
-        R2["WRITE: admin/editor<br/>where tenant_id = $user.tenant"]
-        R3["UPDATE Org / Users: admin only"]
-        R4["READ all entities<br/>cross-tenant, binary content excluded"]
-        R5["visibility != internal<br/>visibility != authority_only<br/>status = published"]
-    end
-
-    ADM --> DS
-    EDT --> DS
-    VWR --> DS
-    AUT --> AS2
-
-    DS --> R1
-    DS --> R2
-    DS --> R3
-    AS2 --> R4
-    PH --> R5
-```
+![Service architecture](diagrams/03_service_architecture.png)
 
 **Role / capability matrix.**
 
@@ -295,58 +265,9 @@ flowchart LR
 
 ## 2.4 QR Workflow (Publish → Consumer Scan)
 
-**Description.** When an editor publishes a DPP, the service generates an HMAC-signed token, stamps `published_at`, and stores the consumer payload URL. Calling `generateQRCode()` returns a base64 PNG of that URL. When a consumer scans the printed QR code, the public handler verifies the HMAC in constant time without touching the database, then loads the DPP and its children and emits a Consumer DTO that filters out non-public rows.
+When an editor publishes a DPP, the service generates an HMAC-signed token, stamps `published_at`, and stores the consumer payload URL. Calling `generateQRCode()` returns a base64 PNG of that URL. When a consumer scans the printed QR code, the public handler verifies the HMAC in constant time without touching the database, then loads the DPP and its children and emits a Consumer DTO that filters out non-public rows.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant E as Editor (Brand)
-    participant DS as DPPService
-    participant TK as token.js (HMAC-SHA256)
-    participant DB as DB (DPPs)
-    participant Q as QRCode lib
-    participant C as Consumer
-    participant PH as Public Handler
-
-    E->>DS: POST .../DPPs(ID)/DPPService.publishDPP()
-    DS->>DB: SELECT one DPP
-    alt status = archived
-        DS-->>E: 400 cannot publish archived
-    else status = published
-        DS-->>E: 200 (idempotent, current state)
-    else status = draft
-        DS->>TK: generate()
-        TK-->>DS: uuid.HMAC(uuid, secret)
-        DS->>DB: UPDATE set status=published, published_at=now, qr_token, qr_payload_url
-        DS-->>E: 200 published DPP
-    end
-
-    E->>DS: GET .../DPPs(ID)/DPPService.generateQRCode()
-    DS->>Q: toBuffer(payload_url)
-    Q-->>DS: PNG buffer
-    DS-->>E: { png: base64, payload }
-
-    Note over C: Consumer scans the QR code
-    C->>PH: GET /public/dpp/:token
-    PH->>TK: verify(token)
-    alt signature invalid
-        PH-->>C: 404
-    else valid
-        PH->>DB: SELECT DPP WHERE qr_token=token
-        alt not published / internal / authority_only
-            PH-->>C: 404
-        else
-            PH->>DB: SELECT children (materials, compliance, care, substances, sustainability, lifecycle)
-            PH->>PH: filter visibility = "public" → Consumer DTO
-            PH-->>C: 200 JSON (Cache-Control 60s)
-        end
-    end
-
-    C->>PH: GET /public/dpp/:token/qr.png
-    PH->>TK: verify(token)
-    PH->>Q: toBuffer(PUBLIC_BASE_URL/public/dpp/:token)
-    PH-->>C: image/png (Cache-Control 3600s)
-```
+![QR workflow](diagrams/04_qr_workflow.png)
 
 **Token format.**
 
