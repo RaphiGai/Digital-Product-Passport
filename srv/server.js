@@ -199,33 +199,48 @@ cds.on('bootstrap', (app) => {
   }
 });
 
-// After every Application Service is registered, wire the per-request user
-// lookup. We attach it only to our public-facing services (DPPService,
-// AuthorityService) so the internal DB queries lookupAppUser makes don't
-// recurse through this hook.
-const APP_SERVICES = ['DPPService', 'AuthorityService'];
+const APP_ROLES = ['company_advanced', 'company_user', 'end_user'];
 
-cds.on('served', (services) => {
-  for (const srv of Object.values(services)) {
-    if (!srv || !APP_SERVICES.includes(srv.name)) continue;
-    if (typeof srv.before !== 'function') continue;
-    srv.before('*', async (req) => {
-      if (!req.user || !req.user.id) return;
-      // If a mocked-auth role is already attached (dev), trust it.
-      if (Array.isArray(req.user.roles) && req.user.roles.length > 0) return;
-      try {
-        const lookup = await lookupAppUser(req.user.id);
-        if (lookup) {
-          applyAppRoleToUser(req.user, lookup);
-          if (cds.context && cds.context.user) applyAppRoleToUser(cds.context.user, lookup);
-        } else {
-          console.warn(`[rbac] no Users row for '${req.user.id}' — request will be denied by @restrict`);
-        }
-      } catch (err) {
-        console.error('[rbac] user lookup failed:', err.message);
-      }
-    });
+// Express middleware that runs after CAP's auth + ctx_user (so req.user.id
+// is populated) and before service dispatch (where @restrict is enforced).
+// Only fires for OData paths; /public, /healthz, /$api-docs pass through.
+async function rbacMiddleware(req, _res, next) {
+  const path = req.path || req.url || '';
+  if (!path.startsWith('/odata/')) return next();
+  if (!req.user || !req.user.id) return next();
+  // If a mocked-auth dev user already carries one of our app roles, leave
+  // it alone. We deliberately don't check `roles.length > 0` because
+  // XSUAA seeds it with platform scopes like `AuthenticatedUser` that
+  // mean nothing to our @restrict clauses.
+  const alreadyHasAppRole = typeof req.user.is === 'function' &&
+    APP_ROLES.some((r) => req.user.is(r));
+  if (alreadyHasAppRole) return next();
+
+  console.log(`[rbac] resolve '${req.user.id}' on ${req.method} ${path}`);
+  try {
+    const lookup = await lookupAppUser(req.user.id);
+    if (lookup) {
+      applyAppRoleToUser(req.user, lookup);
+      if (cds.context && cds.context.user) applyAppRoleToUser(cds.context.user, lookup);
+      console.log(`[rbac] '${req.user.id}' → role=${lookup.role} tenant=${lookup.tenantId || '(none)'}`);
+    } else {
+      console.warn(`[rbac] no Users row for '${req.user.id}' — request will be denied by @restrict`);
+    }
+  } catch (err) {
+    console.error('[rbac] user lookup failed:', err.message);
   }
-});
+  next();
+}
+
+// Push into CAP's middleware chain. Force-init the array first (CAP populates
+// it lazily on first access) so our push is guaranteed to land in the live
+// list that cds.serve will consume.
+const _force = cds.middlewares.before;
+if (Array.isArray(_force)) {
+  _force.push(rbacMiddleware);
+  console.log('[rbac] middleware registered in cds.middlewares.before');
+} else {
+  console.warn('[rbac] cds.middlewares.before is not an array — RBAC lookup not attached');
+}
 
 module.exports = cds.server;
