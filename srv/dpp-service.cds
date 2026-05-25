@@ -1,128 +1,169 @@
 using { dpp as db } from '../db/schema';
 
 /**
- * DPPService — primary OData V4 service for company users (admin/editor/viewer).
+ * DPPService — primary OData V4 service for company users.
  *
- * Authorisation is layered:
- *   - `@requires: 'authenticated-user'` blocks anonymous access service-wide.
- *   - Each entity gets `@restrict` rules that combine the role (admin/editor/viewer)
- *     with a `where` clause pinning visibility to the caller's tenant attribute
- *     (`$user.tenant`, populated from the XSUAA token attribute `tenant`).
+ * Roles (from `dpp.UserRole`):
+ *   - admin    : full CRUD on tenant data; user management.
+ *   - advanced : full CRUD on products/DPPs/business partners (US3.x, US4.x, US5.x).
+ *   - user     : READ tenant data + CREATE/UPDATE on ProductItems and DPPs (US3.8, US6.1).
+ *   - viewer   : READ-only.
  *
- * Tenants are modelled as a string column `tenant_id` on `Organizations`. The
- * `where` filters walk the association chain from each entity back to the
- * owning organization.
+ * Tenant isolation is enforced via `@restrict.where` clauses that walk back to
+ * `owning_organization.tenant_id = $user.tenant`.
  */
 service DPPService @(
   path     : '/odata/v4/dpp',
   requires : 'authenticated-user'
 ) {
 
-  // ---- Master data: organisation & facility (tenant-scoped) ----
+  // ---- Organisation & users ----
 
   @restrict: [
-    { grant: 'READ', to: ['admin', 'editor', 'viewer'], where: 'tenant_id = $user.tenant' },
-    { grant: ['UPDATE'], to: ['admin'], where: 'tenant_id = $user.tenant' }
+    { grant: 'READ',   to: ['admin', 'advanced', 'user', 'viewer'], where: 'tenant_id = $user.tenant' },
+    { grant: 'UPDATE', to: ['admin'],                                 where: 'tenant_id = $user.tenant' }
   ]
   entity Organizations as projection on db.Organizations;
 
   @restrict: [
-    { grant: 'READ', to: ['admin', 'editor', 'viewer'], where: 'organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin'], where: 'organization.tenant_id = $user.tenant' }
-  ]
-  entity Facilities as projection on db.Facilities;
-
-  @restrict: [
-    { grant: 'READ', to: ['admin'], where: 'organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin'], where: 'organization.tenant_id = $user.tenant' }
+    { grant: 'READ',                         to: ['admin', 'advanced'], where: 'organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin'],             where: 'organization.tenant_id = $user.tenant' }
   ]
   entity Users as projection on db.Users;
 
-  // ---- Products (tenant-scoped) ----
+  // ---- Business partners ----
 
   @restrict: [
-    { grant: 'READ',                          to: ['admin', 'editor', 'viewer'], where: 'owning_organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'],  to: ['admin', 'editor'],           where: 'owning_organization.tenant_id = $user.tenant' }
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'], where: 'owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'],                   where: 'owning_organization.tenant_id = $user.tenant' }
   ]
-  entity Products as projection on db.Products;
-
-  // ---- DPP core ----
+  entity BusinessPartners as projection on db.BusinessPartners;
 
   @restrict: [
-    { grant: '*',    to: ['admin', 'editor'], where: 'issuing_organization.tenant_id = $user.tenant' },
-    { grant: 'READ', to: ['viewer'],          where: 'issuing_organization.tenant_id = $user.tenant' }
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'], where: 'partner.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'],                   where: 'partner.owning_organization.tenant_id = $user.tenant' }
+  ]
+  entity BusinessPartnerRoles as projection on db.BusinessPartnerRoles;
+
+  // ---- Products & hierarchy ----
+
+  @restrict: [
+    { grant: 'READ', to: ['admin', 'advanced', 'user', 'viewer'], where: 'owning_organization.tenant_id = $user.tenant' },
+    { grant: '*',    to: ['admin', 'advanced'],                    where: 'owning_organization.tenant_id = $user.tenant' }
+  ]
+  entity Products as projection on db.Products actions {
+    @Common.SideEffects: { TargetProperties: ['status'] }
+    action archiveProduct() returns Products;
+  };
+
+  @restrict: [
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'], where: 'product.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'],                   where: 'product.owning_organization.tenant_id = $user.tenant' }
+  ]
+  entity ProductVariants as projection on db.ProductVariants;
+
+  @restrict: [
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'], where: 'variant.product.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'],                   where: 'variant.product.owning_organization.tenant_id = $user.tenant' }
+  ]
+  entity Batches as projection on db.Batches;
+
+  @restrict: [
+    { grant: 'READ',                                       to: ['admin', 'advanced', 'user', 'viewer'], where: 'batch.variant.product.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'],               to: ['admin', 'advanced', 'user'],            where: 'batch.variant.product.owning_organization.tenant_id = $user.tenant' }
+  ]
+  entity ProductItems as projection on db.ProductItems;
+
+  @restrict: [
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'], where: 'parent.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'],                   where: 'parent.owning_organization.tenant_id = $user.tenant' }
+  ]
+  entity ProductBOMs as projection on db.ProductBOMs;
+
+  @restrict: [
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'], where: 'product.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'],                   where: 'product.owning_organization.tenant_id = $user.tenant' }
+  ]
+  entity ProductBusinessPartners as projection on db.ProductBusinessPartners;
+
+  // ---- Digital Product Passport ----
+
+  @restrict: [
+    { grant: 'READ',               to: ['admin', 'advanced', 'user', 'viewer'], where: 'product.owning_organization.tenant_id = $user.tenant' },
+    { grant: '*',                  to: ['admin', 'advanced'],                    where: 'product.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE'], to: ['user'],                                 where: 'product.owning_organization.tenant_id = $user.tenant' }
   ]
   entity DPPs as projection on db.DPPs actions {
-    @Common.SideEffects: { TargetProperties: ['status', 'published_at', 'qr_token', 'qr_payload_url'] }
-    action   publishDPP()      returns DPPs;
+    @Common.SideEffects: { TargetProperties: ['status', 'approved_at', 'current_version'] }
+    action   approveDPP()      returns DPPs;
+
+    @Common.SideEffects: { TargetProperties: ['status', 'published_at', 'qr_token', 'qr_payload_url', 'public_url', 'current_version'] }
+    action   publishDPP(change_reason : String(500)) returns DPPs;
 
     @Common.SideEffects: { TargetProperties: ['status', 'archived_at'] }
     action   archiveDPP()      returns DPPs;
 
+    @Common.SideEffects: { TargetProperties: ['qr_token', 'qr_payload_url'] }
+    action   regenerateQRToken() returns DPPs;
+
     function generateQRCode()  returns { png : LargeString; payload : String };
+    function getValidationReport() returns array of {
+      warning_code : String;
+      severity     : String;
+      field_name   : String;
+      message      : String;
+    };
   };
 
-  // ---- Material master data + BOM tree (tenant-scoped) ----
-
   @restrict: [
-    { grant: 'READ',                         to: ['admin', 'editor', 'viewer'], where: 'owning_organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'owning_organization.tenant_id = $user.tenant' }
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'], where: 'dpp.product.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'],                   where: 'dpp.product.owning_organization.tenant_id = $user.tenant' }
   ]
-  entity Materials               as projection on db.Materials;
+  entity DPPVersions as projection on db.DPPVersions;
 
   @restrict: [
-    { grant: 'READ',                         to: ['admin', 'editor', 'viewer'], where: 'parent_material.owning_organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'parent_material.owning_organization.tenant_id = $user.tenant' }
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'], where: 'dpp.product.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'],                   where: 'dpp.product.owning_organization.tenant_id = $user.tenant' }
   ]
-  entity MaterialComponents      as projection on db.MaterialComponents;
-
-  // ---- DPP child entities (Composition) ----
+  entity QRCodes as projection on db.QRCodes;
 
   @restrict: [
-    { grant: 'READ',                         to: ['admin', 'editor', 'viewer'], where: 'dpp.issuing_organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'dpp.issuing_organization.tenant_id = $user.tenant' }
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'], where: 'dpp.product.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'],                   where: 'dpp.product.owning_organization.tenant_id = $user.tenant' }
   ]
-  entity MaterialComposition     as projection on db.MaterialComposition;
+  entity DPPStoryItems as projection on db.DPPStoryItems;
+
+  // ---- Compliance / Sustainability / Documents ----
 
   @restrict: [
-    { grant: 'READ',                         to: ['admin', 'editor', 'viewer'], where: 'dpp.issuing_organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'dpp.issuing_organization.tenant_id = $user.tenant' }
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'], where: 'product.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'],                   where: 'product.owning_organization.tenant_id = $user.tenant' }
   ]
-  entity ComplianceStatements    as projection on db.ComplianceStatements;
+  entity Certifications as projection on db.Certifications;
 
   @restrict: [
-    { grant: 'READ',                         to: ['admin', 'editor', 'viewer'], where: 'dpp.issuing_organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'dpp.issuing_organization.tenant_id = $user.tenant' }
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'], where: 'product.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'],                   where: 'product.owning_organization.tenant_id = $user.tenant' }
   ]
-  entity Documents               as projection on db.Documents;
+  entity SubstancesOfConcern as projection on db.SubstancesOfConcern;
 
   @restrict: [
-    { grant: 'READ',                         to: ['admin', 'editor', 'viewer'], where: 'dpp.issuing_organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'dpp.issuing_organization.tenant_id = $user.tenant' }
-  ]
-  entity SubstancesOfConcern     as projection on db.SubstancesOfConcern;
-
-  @restrict: [
-    { grant: 'READ',                         to: ['admin', 'editor', 'viewer'], where: 'dpp.issuing_organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'dpp.issuing_organization.tenant_id = $user.tenant' }
-  ]
-  entity CareInstructions        as projection on db.CareInstructions;
-
-  @restrict: [
-    { grant: 'READ',                         to: ['admin', 'editor', 'viewer'], where: 'dpp.issuing_organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'dpp.issuing_organization.tenant_id = $user.tenant' }
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'], where: 'product.owning_organization.tenant_id = $user.tenant' },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'],                   where: 'product.owning_organization.tenant_id = $user.tenant' }
   ]
   entity SustainabilityIndicators as projection on db.SustainabilityIndicators;
 
   @restrict: [
-    { grant: 'READ',                         to: ['admin', 'editor', 'viewer'], where: 'dpp.issuing_organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'dpp.issuing_organization.tenant_id = $user.tenant' }
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'] },
+    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'advanced'] }
   ]
-  entity SupplyChainSteps         as projection on db.SupplyChainSteps;
+  entity Documents as projection on db.Documents;
+
+  // ---- Warnings & tracking (Epic 10) ----
 
   @restrict: [
-    { grant: 'READ',                         to: ['admin', 'editor', 'viewer'], where: 'dpp.issuing_organization.tenant_id = $user.tenant' },
-    { grant: ['CREATE', 'UPDATE', 'DELETE'], to: ['admin', 'editor'],           where: 'dpp.issuing_organization.tenant_id = $user.tenant' }
+    { grant: 'READ',                         to: ['admin', 'advanced', 'user', 'viewer'] },
+    { grant: ['UPDATE'],                     to: ['admin', 'advanced'] }
   ]
-  entity LifecycleEvents          as projection on db.LifecycleEvents;
+  entity ValidationWarnings as projection on db.ValidationWarnings;
 }

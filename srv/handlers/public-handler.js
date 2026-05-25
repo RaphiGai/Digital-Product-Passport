@@ -5,181 +5,193 @@ const QRCode = require('qrcode');
 const tokens = require('../lib/token');
 
 /**
- * Filter sequences down to publicly visible rows. The visibility column lives
- * on every consumer-facing child entity. Authority-only and internal rows are
- * stripped from the response.
+ * Recursively expand a BOM tree starting from `productId`. Component DPPs that
+ * are linked become reference entries (id + public_url) instead of being inlined.
+ * Cycles are guarded via a visited set; depth is hard-capped.
  */
-function publicOnly(arr) {
-  if (!arr) return [];
-  return arr.filter((row) => row?.visibility === 'public');
-}
-
-/**
- * Render a Material master-data record as a public sub-tree, descending
- * recursively through MaterialComponents. Materials with visibility != public
- * are pruned. Cycles are guarded via a visited-set; depth is hard-capped.
- */
-async function expandMaterialTree(materialId, share, materialsById, edgesByParent, depth = 0, visited = new Set()) {
+async function expandBomTree(productId, share, unit, role, productsById, bomsByParent, depth = 0, visited = new Set()) {
   if (depth > 8) return null;
-  if (visited.has(materialId)) return null;
-  visited.add(materialId);
+  if (visited.has(productId)) return null;
+  visited.add(productId);
 
-  const m = materialsById.get(materialId);
-  if (!m || m.visibility !== 'public') return null;
+  const p = productsById.get(productId);
+  if (!p) return null;
 
-  const childEdges = edgesByParent.get(materialId) || [];
+  const childEdges = bomsByParent.get(productId) || [];
   const components = [];
   for (const e of childEdges) {
-    const sub = await expandMaterialTree(
-      e.child_material_ID, e.percentage, materialsById, edgesByParent, depth + 1, new Set(visited)
+    const sub = await expandBomTree(
+      e.component_ID, e.quantity, e.unit, e.component_role,
+      productsById, bomsByParent, depth + 1, new Set(visited)
     );
-    if (sub) components.push(sub);
+    if (sub) {
+      if (e.linked_dpp_ID) {
+        sub.linked_dpp = {
+          id: e.linked_dpp_ID,
+          public_url: `${process.env.PUBLIC_BASE_URL || ''}/public/dpp/by-id/${e.linked_dpp_ID}`
+        };
+      }
+      components.push(sub);
+    }
   }
 
   return {
-    name: m.name,
-    class: m.material_class,
-    percentage: share,
-    country_of_origin: m.country_of_origin,
-    recycled_content_pct: m.recycled_content_pct,
-    verification_status: m.verification_status,
-    co2_kg: m.co2_footprint_kg,
-    water_l: m.water_usage_l,
-    energy_kwh: m.energy_usage_kwh,
+    name: p.name,
+    product_type: p.product_type,
+    brand: p.brand,
+    category: p.category,
+    fibre_composition: p.fibre_composition,
+    quantity: share,
+    unit,
+    role,
     components
   };
 }
 
 /**
- * Build the Consumer-DTO. Only `visibility=public` content is exposed and the
- * payload deliberately omits operational fields (tenant, hash audit, anchor
- * attempt counters).
+ * Build the consumer-facing DTO from a published DPP. Aggregates Product +
+ * Variant + Batch + Item + BOM + sustainability + certifications (Sprint-1
+ * demo, public DPP page).
  */
-function toConsumerDTO(dpp, children) {
+function toConsumerDTO(dpp, ctx) {
   return {
     id: dpp.ID,
     status: dpp.status,
-    granularity: dpp.granularity_level,
-    batch: dpp.batch_lot_number || null,
-    verification_status: dpp.verification_status,
-    manufacturing: {
-      country: dpp.manufacturing_country_iso2,
-      from: dpp.manufacturing_date_from,
-      to: dpp.manufacturing_date_to,
-      placed_on_market: dpp.placed_on_market_date
-    },
-    product: dpp.product
+    version: dpp.current_version,
+    granularity: dpp.granularity,
+    valid_from: dpp.valid_from,
+    last_updated: dpp.last_updated,
+    item: ctx.item
       ? {
-          name: dpp.product.name,
-          brand: dpp.product.brand,
-          gtin: dpp.product.gtin,
-          category: dpp.product.category,
-          description: dpp.product.description
+          serial_number: ctx.item.serial_number,
+          upi: ctx.item.upi,
+          item_status: ctx.item.item_status,
+          qr_code: dpp.qr_token
+            ? { id: dpp.qr_token, value: dpp.qr_payload_url }
+            : null
         }
       : null,
-    materials: children.materialsTree,
-    compliance: publicOnly(children.compliance).map((c) => ({
-      standard: c.compliance_standard,
-      statement: c.statement_text,
+    product: ctx.product
+      ? {
+          name: ctx.product.name,
+          brand: ctx.product.brand,
+          category: ctx.product.category,
+          model: ctx.product.model,
+          description: ctx.product.description,
+          fibre_composition: ctx.product.fibre_composition,
+          care_instructions: ctx.product.care_instructions,
+          repair_instructions: ctx.product.repair_instructions,
+          disposal_instructions: ctx.product.disposal_instructions
+        }
+      : null,
+    variant: ctx.variant
+      ? {
+          color: ctx.variant.color,
+          size: ctx.variant.size,
+          sku: ctx.variant.sku,
+          gtin: ctx.variant.gtin
+        }
+      : null,
+    batch: ctx.batch
+      ? {
+          batch_number: ctx.batch.batch_number,
+          production_date: ctx.batch.production_date,
+          country_of_origin: ctx.batch.country_of_origin,
+          co2_footprint_kg: ctx.batch.co2_footprint_kg,
+          recycled_content_pct: ctx.batch.recycled_content_pct
+        }
+      : null,
+    materials: ctx.materialsTree,
+    sustainability: ctx.sustainability
+      ? {
+          co2_kg: ctx.sustainability.co2_footprint_kg,
+          water_l: ctx.sustainability.water_usage_l,
+          energy_kwh: ctx.sustainability.energy_usage_kwh,
+          recycled_content: ctx.sustainability.recycled_content_overall,
+          durability_score: ctx.sustainability.durability_score,
+          repairability_score: ctx.sustainability.repairability_score
+        }
+      : null,
+    certifications: (ctx.certifications || []).map((c) => ({
+      standard: c.standard,
+      certificate_number: c.certificate_number,
       valid_from: c.valid_from,
-      valid_until: c.valid_until,
-      verification_status: c.verification_status
+      valid_until: c.valid_until
     })),
-    care: publicOnly(children.care).map((c) => ({
-      language: c.language,
-      washing: c.washing,
-      drying: c.drying,
-      ironing: c.ironing,
-      bleaching: c.bleaching,
-      professional: c.professional,
-      repair: c.repair_info,
-      disposal: c.disposal_info
-    })),
-    substances: publicOnly(children.substances).map((s) => ({
+    substances: (ctx.substances || []).map((s) => ({
       name: s.substance_name,
       cas: s.cas_number,
       ec: s.ec_number,
       concentration_pct: s.concentration_pct
     })),
-    sustainability: children.sustainability && children.sustainability.visibility === 'public'
-      ? {
-          co2_kg: children.sustainability.co2_footprint_kg,
-          co2_methodology: children.sustainability.co2_methodology,
-          water_l: children.sustainability.water_usage_l,
-          energy_kwh: children.sustainability.energy_usage_kwh,
-          recycled_content: children.sustainability.recycled_content_overall,
-          durability_score: children.sustainability.durability_score,
-          repairability_score: children.sustainability.repairability_score
-        }
-      : null,
-    lifecycle: publicOnly(children.lifecycle).map((e) => ({
-      type: e.event_type,
-      date: e.event_date,
-      notes: e.notes
+    storytelling: (ctx.storytelling || []).map((s) => ({
+      title: s.title,
+      body: s.body,
+      media_url: s.media_url,
+      media_type: s.media_type
     }))
+  };
+}
+
+async function loadDPPContext(dpp) {
+  const {
+    Products, ProductVariants, Batches, ProductItems, ProductBOMs,
+    Certifications, SubstancesOfConcern, SustainabilityIndicators, DPPStoryItems
+  } = cds.entities('dpp');
+
+  const [product, item, certifications, substances, sustainability, storytelling] =
+    await Promise.all([
+      SELECT.one.from(Products).where({ ID: dpp.product_ID }),
+      dpp.item_ID ? SELECT.one.from(ProductItems).where({ ID: dpp.item_ID }) : null,
+      SELECT.from(Certifications).where({ product_ID: dpp.product_ID }),
+      SELECT.from(SubstancesOfConcern).where({ product_ID: dpp.product_ID }),
+      SELECT.one.from(SustainabilityIndicators).where({ product_ID: dpp.product_ID }),
+      SELECT.from(DPPStoryItems).where({ dpp_ID: dpp.ID })
+    ]);
+
+  let variant = null;
+  let batch = null;
+  if (item) {
+    batch = await SELECT.one.from(Batches).where({ ID: item.batch_ID });
+    if (batch) variant = await SELECT.one.from(ProductVariants).where({ ID: batch.variant_ID });
+  }
+
+  // Aggregate BOM rooted at the product. Load the org's product graph in one
+  // pass to avoid N+1 queries while expanding the tree.
+  const owningOrgId = product?.owning_organization_ID;
+  const [allProducts, allBoms] = await Promise.all([
+    owningOrgId
+      ? SELECT.from(Products).where({ owning_organization_ID: owningOrgId })
+      : SELECT.from(Products),
+    SELECT.from(ProductBOMs)
+  ]);
+  const productsById = new Map(allProducts.map((p) => [p.ID, p]));
+  const bomsByParent = new Map();
+  for (const e of allBoms) {
+    if (!bomsByParent.has(e.parent_ID)) bomsByParent.set(e.parent_ID, []);
+    bomsByParent.get(e.parent_ID).push(e);
+  }
+  const rootBom = await expandBomTree(dpp.product_ID, null, null, null, productsById, bomsByParent);
+  const materialsTree = rootBom?.components || [];
+
+  return {
+    product, variant, batch, item,
+    materialsTree,
+    certifications, substances, sustainability, storytelling
   };
 }
 
 async function loadDPPByToken(token) {
   if (!tokens.verify(token)) return null;
-  const { DPPs, MaterialComposition, Materials, MaterialComponents,
-    ComplianceStatements, CareInstructions,
-    SubstancesOfConcern, SustainabilityIndicators, LifecycleEvents,
-    Products } = cds.entities('dpp');
+  const { DPPs } = cds.entities('dpp');
 
   const dpp = await SELECT.one.from(DPPs).where({ qr_token: token });
   if (!dpp) return null;
   if (dpp.status !== 'published') return null;
-  if (dpp.visibility === 'internal' || dpp.visibility === 'authority_only') return null;
+  if (dpp.visibility !== 'public') return null;
 
-  const [product, materials, compliance, care, substances, sustainability, lifecycle] =
-    await Promise.all([
-      SELECT.one.from(Products).where({ ID: dpp.product_ID }),
-      SELECT.from(MaterialComposition).where({ dpp_ID: dpp.ID }),
-      SELECT.from(ComplianceStatements).where({ dpp_ID: dpp.ID }),
-      SELECT.from(CareInstructions).where({ dpp_ID: dpp.ID }),
-      SELECT.from(SubstancesOfConcern).where({ dpp_ID: dpp.ID }),
-      SELECT.one.from(SustainabilityIndicators).where({ dpp_ID: dpp.ID }),
-      SELECT.from(LifecycleEvents).where({ dpp_ID: dpp.ID })
-    ]);
-
-  // Build recursive material tree: for each MaterialComposition row,
-  // expand the referenced master Material through its BOM.
-  const rootMatIds = publicOnly(materials).map((m) => m.material_ID).filter(Boolean);
-  let materialsTree = [];
-  if (rootMatIds.length) {
-    // Load the full reachable material graph for the owning org so we can
-    // expand the tree without N+1 queries.
-    const owningOrgId = product?.owning_organization_ID;
-    const [allMats, allEdges] = await Promise.all([
-      owningOrgId
-        ? SELECT.from(Materials).where({ owning_organization_ID: owningOrgId })
-        : SELECT.from(Materials),
-      SELECT.from(MaterialComponents)
-    ]);
-    const materialsById = new Map(allMats.map((m) => [m.ID, m]));
-    const edgesByParent = new Map();
-    for (const e of allEdges) {
-      if (!edgesByParent.has(e.parent_material_ID)) edgesByParent.set(e.parent_material_ID, []);
-      edgesByParent.get(e.parent_material_ID).push(e);
-    }
-    for (const mc of publicOnly(materials)) {
-      const tree = await expandMaterialTree(mc.material_ID, mc.percentage, materialsById, edgesByParent);
-      if (tree) {
-        if (mc.notes) tree.notes = mc.notes;
-        materialsTree.push(tree);
-      }
-    }
-  }
-
-  return toConsumerDTO({ ...dpp, product }, {
-    materialsTree,
-    compliance,
-    care,
-    substances,
-    sustainability,
-    lifecycle
-  });
+  const ctx = await loadDPPContext(dpp);
+  return toConsumerDTO(dpp, ctx);
 }
 
 async function resolveDPPByToken(req, res) {

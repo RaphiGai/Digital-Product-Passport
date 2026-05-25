@@ -1,0 +1,5 @@
+ID;owning_organization_ID;name;country_iso2;city;address;contact_person;contact_email;identifier;archived
+bp-braga;org-greenline;Braga Factory Lda;PT;Braga;Rua das Industrias 12;Maria Silva;contact@braga.example;5601234567890;false
+bp-cotton-coop;org-greenline;Anatolia Cotton Coop;TR;Izmir;Bornova Mah. 3;Mehmet Yilmaz;sales@anatolia.example;8690000000001;false
+bp-oekotex;org-greenline;OEKO-TEX Service GmbH;DE;Zurich;Genferstrasse 23;Lukas Meier;office@oekotex.example;7610000000001;false
+bp-fashionista-supplier;org-fashionista;Veneto Textiles SpA;IT;Verona;Via Roma 88;Giulia Rossi;ops@veneto.example;8000000000001;false

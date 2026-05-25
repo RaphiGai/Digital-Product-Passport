@@ -1,6 +1,6 @@
-ID;email;display_name;organization_ID;role;external_user_id
-usr-alice;alice.admin@greenline.example;Alice Admin;org-greenline;admin;alice.admin
-usr-bob;bob.editor@greenline.example;Bob Editor;org-greenline;editor;bob.editor
-usr-carol;carol.viewer@greenline.example;Carol Viewer;org-greenline;viewer;carol.viewer
-usr-dan;dan.editor.b@fashionista.example;Dan Editor;org-fashionista;editor;dan.editor.b
-usr-eve;eve.authority@baua.example;Eve Authority;org-authority;authority;eve.authority
+ID;email;display_name;organization_ID;role;external_user_id;active
+usr-alice;alice.admin@greenline.example;Alice Admin;org-greenline;admin;alice.admin;true
+usr-bob;bob.advanced@greenline.example;Bob Advanced;org-greenline;advanced;bob.advanced;true
+usr-carol;carol.user@greenline.example;Carol User;org-greenline;user;carol.user;true
+usr-dave;dave.viewer@greenline.example;Dave Viewer;org-greenline;viewer;dave.viewer;true
+usr-dan;dan.advanced.b@fashionista.example;Dan Advanced;org-fashionista;advanced;dan.advanced.b;true

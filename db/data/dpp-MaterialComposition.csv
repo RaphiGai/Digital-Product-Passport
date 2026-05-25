@@ -1,8 +1,0 @@
-ID;dpp_ID;material_ID;percentage;notes;visibility
-mat-001;dpp-001;mat-org-cotton-tr;100.00;;public
-mat-002;dpp-002;mat-rec-cotton;60.00;;public
-mat-003;dpp-002;mat-polyester;40.00;;public
-mat-004;dpp-003;mat-hemp-fr;55.00;;public
-mat-005;dpp-003;mat-org-cotton-tr;45.00;;public
-mat-006;dpp-004;mat-cotton-in;95.00;;public
-mat-007;dpp-004;mat-elastane-cn;5.00;;public

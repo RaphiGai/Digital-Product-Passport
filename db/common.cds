@@ -7,63 +7,99 @@ type EmailAddr   : String(254);
 type URL         : String(500);
 type Sha256Hex   : String(64);
 
-type OrgType : String(20) enum {
-  brand;
-  manufacturer;
-  supplier;
-  distributor;
-  retailer;
-  logistics_provider;
-  recycler;
-  repair_service;
-  certifier;
-  authority;
+type ProductType : String(12) enum {
+  finished;
+  material;
+  component;
+}
+
+type ProductStatus : String(12) enum {
+  draft;
+  approved;
+  published;
+  archived;
+}
+
+type BatchStatus : String(12) enum {
+  draft;
+  approved;
+  archived;
+}
+
+type BOMStatus : String(12) enum {
+  active;
+  archived;
+}
+
+type ESPRComplianceStatus : String(16) enum {
+  draft;
+  in_review;
+  compliant;
+  non_compliant;
 }
 
 type DPPStatus : String(12) enum {
   draft;
+  approved;
   published;
-  superseded;
   archived;
 }
 
-type Visibility : String(16) enum {
-  public;
-  restricted;
-  internal;
-  authority_only;
+type DPPType : String(12) enum {
+  product;
+  material;
 }
 
-type Verification : String(20) enum {
-  declared;
-  documented;
-  third_party_verified;
+type Visibility : String(8) enum {
+  internal;
+  public;
 }
 
 type Granularity : String(8) enum {
   model;
   batch;
+  item;
 }
 
-type MaterialClass : String(20) enum {
-  natural_plant;
-  natural_animal;
-  synthetic;
-  regenerated;
+type ItemStatus : String(12) enum {
+  active;
+  sold;
+  repaired;
   recycled;
-  bio_based;
-  metal;
-  other;
+  disposed;
 }
 
-type ComplianceStandard : String(30) enum {
+type QRCodeStatus : String(10) enum {
+  active;
+  invalid;
+  replaced;
+}
+
+type UserRole : String(12) enum {
+  admin;
+  advanced;
+  user;
+  viewer;
+  authority;
+}
+
+type BusinessPartnerRole : String(24) enum {
+  supplier;
+  manufacturer;
+  recycler;
+  certification_body;
+  distributor;
+  retailer;
+  logistics_provider;
+}
+
+type ComplianceStandard : String(24) enum {
   ESPR;
   EU_Textile_Labelling;
   REACH;
   SCIP;
   CSDDD;
   CSRD;
-  AGEC_FR;
   GOTS;
   OEKO_TEX;
   BLUESIGN;
@@ -80,35 +116,20 @@ type DocumentType : String(20) enum {
   repair_manual;
 }
 
-type UserRole : String(20) enum {
-  admin;
-  editor;
-  viewer;
-  authority;
+type WarningSeverity : String(10) enum {
+  info;
+  warning;
+  blocking;
 }
 
-type LifecycleEventType : String(20) enum {
-  manufactured;
-  sold;
-  repaired;
-  resold;
-  refurbished;
-  recycled;
-  disposed;
+type IssueStatus : String(10) enum {
+  open;
+  resolved;
+  ignored;
 }
-
-type SupplyChainTier : String(8) enum {
-  tier1;
-  tier2;
-  tier3;
-  tier4;
-}
-
-type FacilityType : String(30);
-type AuditStatus  : String(30);
 
 // Generic string-id aspect (replacement for @sap/cds/common.cuid, which forces UUID).
-// We use human-readable IDs in sample data (e.g. `dpp-001`) and accept upstream
+// Allows human-readable IDs in sample data (e.g. `prod-001`) and accepts upstream
 // systems' identifiers as-is.
 aspect identified {
   key ID : String(36);

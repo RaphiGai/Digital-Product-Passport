@@ -9,19 +9,24 @@
             "roles": ["admin"],
             "attr": { "tenant": "ORG-A" }
           },
-          "bob.editor": {
+          "bob.advanced": {
             "password": "x",
-            "roles": ["editor"],
+            "roles": ["advanced"],
             "attr": { "tenant": "ORG-A" }
           },
-          "carol.viewer": {
+          "carol.user": {
+            "password": "x",
+            "roles": ["user"],
+            "attr": { "tenant": "ORG-A" }
+          },
+          "dave.viewer": {
             "password": "x",
             "roles": ["viewer"],
             "attr": { "tenant": "ORG-A" }
           },
-          "dan.editor.b": {
+          "dan.advanced.b": {
             "password": "x",
-            "roles": ["editor"],
+            "roles": ["advanced"],
             "attr": { "tenant": "ORG-B" }
           },
           "eve.authority": {

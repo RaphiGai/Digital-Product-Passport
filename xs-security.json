@@ -5,11 +5,15 @@
   "scopes": [
     {
       "name": "$XSAPPNAME.admin",
-      "description": "Organization administrator: full CRUD within own tenant"
+      "description": "Organization administrator: full CRUD within own tenant + user management"
     },
     {
-      "name": "$XSAPPNAME.editor",
-      "description": "DPP editor: create and update DPP data within own tenant"
+      "name": "$XSAPPNAME.advanced",
+      "description": "Company advanced user: full CRUD on products, BOM, DPPs within own tenant"
+    },
+    {
+      "name": "$XSAPPNAME.user",
+      "description": "Company user: read tenant data + create/update product items and DPPs"
     },
     {
       "name": "$XSAPPNAME.viewer",
@@ -35,9 +39,15 @@
       "attribute-references": ["tenant"]
     },
     {
-      "name": "Editor",
-      "description": "DPP editor (company user)",
-      "scope-references": ["$XSAPPNAME.editor"],
+      "name": "Advanced",
+      "description": "DPP advanced company user",
+      "scope-references": ["$XSAPPNAME.advanced"],
+      "attribute-references": ["tenant"]
+    },
+    {
+      "name": "User",
+      "description": "DPP company user",
+      "scope-references": ["$XSAPPNAME.user"],
       "attribute-references": ["tenant"]
     },
     {
@@ -59,9 +69,14 @@
       "role-template-references": ["$XSAPPNAME.Admin"]
     },
     {
-      "name": "DPP_Editor",
-      "description": "Grants DPP editor privileges",
-      "role-template-references": ["$XSAPPNAME.Editor"]
+      "name": "DPP_Advanced",
+      "description": "Grants DPP advanced company user privileges",
+      "role-template-references": ["$XSAPPNAME.Advanced"]
+    },
+    {
+      "name": "DPP_User",
+      "description": "Grants DPP company user privileges",
+      "role-template-references": ["$XSAPPNAME.User"]
     },
     {
       "name": "DPP_Viewer",
