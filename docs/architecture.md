@@ -394,6 +394,33 @@ For documentation templates that require ABAP-DDIC equivalents:
 
 ---
 
+## 6. Authorization — current state vs target state (May 2026)
+
+The diagrams and endpoint table in §2 describe the **target** authorization model: three application roles (`company_advanced`, `company_user`, `end_user`) plus tenant-isolation `where`-clauses, all resolved via XSUAA scopes that the BTP cockpit maps onto subaccount users.
+
+**Current state on the deployed BTP environment:**
+
+| Aspect | Target | Interim (now) |
+|---|---|---|
+| Authentication | XSUAA SSO via approuter | unchanged ✓ |
+| Service guard | per-entity `@restrict` with `to: [company_*]` and `where: tenant_id = $user.tenant` | service-level `@(requires: 'authenticated-user')` only — any logged-in SSO user can access all entities, no tenant filter |
+| Role assignment | Cockpit role-collection → JWT scope → `req.user.is(role)` | every SSO user gets the same effective view |
+| Tenant attribute | `tenant` attribute mapping in cockpit, consumed via `$user.tenant` | not enforced |
+
+**Why interim:** the BTP UCC learn-tenant we deploy to does not allow trainees to assign role collections in the cockpit, and three iterations of CAP 9 middleware hooks (`cds.middlewares.before.push`, `srv.before('*')`, `cds.on('served')`) failed to inject app-resolved roles into `req.user` before CAP's `@restrict` evaluation. To keep the demo usable, the service guard was temporarily relaxed; the role enum, the `Users` lookup helpers in `srv/server.js`, the `xs-security.json` scopes, and the BTP role collections are all still in place.
+
+**How to roll back to the target model**, once cockpit-side role collection assignment is available (UCC ticket or own sub-account):
+
+1. `git show 3f46dde:srv/dpp-service.cds > srv/dpp-service.cds`
+2. `git show 3f46dde:srv/authority-service.cds > srv/authority-service.cds`
+3. `git show 3f46dde:test/integration/auth-isolation.test.js > test/integration/auth-isolation.test.js`
+4. `git show 3f46dde:test/integration/bom-tree.test.js > test/integration/bom-tree.test.js`
+5. `npm test && mbt build && cf deploy mta_archives/dpp-capgemini_0.1.0.mtar`
+
+The role-resolution middleware in `srv/server.js` (`lookupAppUser` + `applyAppRoleToUser`) is kept exactly as written and will be re-engaged via a working hook once we have a reproducible attach point.
+
+---
+
 ## References
 
 - Catalogue: [Fashion_DPP_Object_Field_Catalogue.xlsm](../../Fashion_DPP_Object_Field_Catalogue.xlsm)

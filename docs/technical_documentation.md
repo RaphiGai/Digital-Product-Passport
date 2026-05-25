@@ -272,7 +272,7 @@ Three client classes (internal company users, public auditor/HTTP-clients, and a
 **Component responsibilities.**
 
 - **Application Router** — terminates user sessions and forwards JWTs to CAP services (production).
-- **XSUAA** — issues OAuth2 JWTs and exposes role-template-driven scopes (`admin`, `advanced`, `user`, `viewer`).
+- **XSUAA** — issues OAuth2 JWTs against the Capgemini identity provider. The application defines a single scope (`AuthenticatedUser`); the application role (`company_advanced`, `company_user`, `end_user`) is resolved by the backend from the `Users` table at request time.
 - **DPPService** — tenant-scoped CRUD for the 11 catalogue entities, plus DPP-lifecycle actions and Excel/PDF actions.
 - **Public Handler** — anonymous consumer route serving a visibility-filtered Consumer DTO and the QR PNG.
 - **Handler modules** — `product-handlers` (defaults, BOM cycle guard), `dpp-handlers` (workflow + snapshot + QR rotation), `import-handlers` (XLSX → UPSERT), `export-handlers` (XLSX writer), `pdf-handlers` (DPP-PDF + QR-Label), `public-handler`.
@@ -329,6 +329,8 @@ The editable source is [diagrams/btp-architecture.drawio](diagrams/btp-architect
 ## 2.6 Role / Capability Matrix
 
 XSUAA issues a single scope `$XSAPPNAME.AuthenticatedUser`. The application-internal role (`company_advanced`, `company_user`, `end_user`) and the `tenant` attribute are resolved by the backend from the `Users` table at request time, then applied by CAP's `@restrict` rules combined with a `where` clause that pins each query to `Organizations.tenant_id = $user.tenant`.
+
+> **Status note (May 2026).** The `@restrict` clauses below describe the target authorization model. On the deployed BTP UCC learn-tenant the service guard is temporarily relaxed to `requires: 'authenticated-user'` because cockpit-side role-collection assignment is not available to trainees and three CAP 9 middleware hooks could not inject app-resolved roles into `req.user` before `@restrict` was evaluated. The role enum, `Users` lookup, XSUAA scopes and BTP role collections all stay in place; rollback to the role-based model is a one-commit change (see [architecture.md §6](architecture.md#6-authorization--current-state-vs-target-state-may-2026)).
 
 | Capability | company_advanced | company_user | end_user | public (no auth) |
 |------------|------------------|--------------|----------|------------------|
