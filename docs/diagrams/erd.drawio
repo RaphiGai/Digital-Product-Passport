@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" version="22.0.0">
+  <diagram name="ERD" id="dpp-erd">
+    <mxGraphModel dx="1422" dy="868" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ====== Title ====== -->
+        <mxCell id="title" value="DPP Capgemini — Entity Relationship Diagram" style="text;html=1;fontSize=22;fontStyle=1;align=center;fontColor=#354A5F;" vertex="1" parent="1">
+          <mxGeometry x="380" y="20" width="840" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="11 entities · Crow's-foot notation · Data model deployed to HANA Cloud" style="text;html=1;fontSize=11;fontStyle=2;align=center;fontColor=#888;" vertex="1" parent="1">
+          <mxGeometry x="380" y="52" width="840" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ====== Layer Backgrounds (rendered first, behind entities) ====== -->
+        <mxCell id="lyr-org" value="Organisation Layer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;dashed=1;verticalAlign=top;align=left;fontStyle=2;fontColor=#0D47A1;spacingLeft=10;spacingTop=4;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="90" width="1520" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="lyr-prod" value="Product Layer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#F57C00;dashed=1;verticalAlign=top;align=left;fontStyle=2;fontColor=#E65100;spacingLeft=10;spacingTop=4;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="370" width="1520" height="540" as="geometry" />
+        </mxCell>
+        <mxCell id="lyr-dpp" value="Product Passport Layer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#6A1B9A;dashed=1;verticalAlign=top;align=left;fontStyle=2;fontColor=#4A148C;spacingLeft=10;spacingTop=4;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="930" width="1520" height="300" as="geometry" />
+        </mxCell>
+
+        <!-- ===================================================== -->
+        <!-- ORG layer entities -->
+        <!-- ===================================================== -->
+        <mxCell id="e-users" value="&lt;b style=&quot;font-size:13px;color:#0D47A1&quot;&gt;User&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 Identifier &lt;i&gt;(Primary Key)&lt;/i&gt;&lt;br&gt;Email&lt;br&gt;Display name&lt;br&gt;Role (advanced or standard)&lt;br&gt;Active flag&lt;br&gt;🔗 Belongs to Organisation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;fontColor=#0D47A1;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="100" y="130" width="240" height="190" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-org" value="&lt;b style=&quot;font-size:13px;color:#0D47A1&quot;&gt;Organisation&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 Identifier &lt;i&gt;(Primary Key)&lt;/i&gt;&lt;br&gt;Legal name&lt;br&gt;Trade name&lt;br&gt;Country&lt;br&gt;Global Location Number&lt;br&gt;Tenant Identifier &lt;i&gt;(Unique)&lt;/i&gt;&lt;br&gt;Platform tenant flag" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;fontColor=#0D47A1;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="680" y="130" width="240" height="200" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-bp" value="&lt;b style=&quot;font-size:13px;color:#0D47A1&quot;&gt;Business Partner&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 Identifier &lt;i&gt;(Primary Key)&lt;/i&gt;&lt;br&gt;Name&lt;br&gt;Country, City, Address&lt;br&gt;Contact person and email&lt;br&gt;External identifier (GLN, VAT, DUNS)&lt;br&gt;Archived flag&lt;br&gt;🔗 Owned by Organisation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;fontColor=#0D47A1;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="1010" y="130" width="280" height="200" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-bpr" value="&lt;b style=&quot;font-size:13px;color:#0D47A1&quot;&gt;Business Partner Role&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 Identifier &lt;i&gt;(Primary Key)&lt;/i&gt;&lt;br&gt;Role (factory, supplier, …)&lt;br&gt;🔗 Belongs to Business Partner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;fontColor=#0D47A1;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="130" width="220" height="130" as="geometry" />
+        </mxCell>
+
+        <!-- ===================================================== -->
+        <!-- PRODUCT layer entities -->
+        <!-- ===================================================== -->
+        <mxCell id="e-prod" value="&lt;b style=&quot;font-size:13px;color:#E65100&quot;&gt;Product&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 Identifier &lt;i&gt;(Primary Key)&lt;/i&gt;&lt;br&gt;Product type (finished or material)&lt;br&gt;Name, Brand, Category, Model&lt;br&gt;Description&lt;br&gt;Global Trade Item Number &lt;i&gt;(Unique)&lt;/i&gt;&lt;br&gt;Fibre composition&lt;br&gt;Care, repair, disposal instructions&lt;br&gt;Country of origin&lt;br&gt;Substances of concern&lt;br&gt;ESPR compliance state&lt;br&gt;Status (draft, archived, …)&lt;br&gt;🔗 Owned by Organisation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F57C00;fontColor=#E65100;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="660" y="420" width="280" height="280" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-var" value="&lt;b style=&quot;font-size:13px;color:#E65100&quot;&gt;Product Variant&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 Identifier &lt;i&gt;(Primary Key)&lt;/i&gt;&lt;br&gt;Colour, Size&lt;br&gt;Stock Keeping Unit &lt;i&gt;(Unique per product)&lt;/i&gt;&lt;br&gt;Global Trade Item Number&lt;br&gt;Weight in grams&lt;br&gt;Status&lt;br&gt;🔗 Belongs to Product" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F57C00;fontColor=#E65100;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="100" y="420" width="260" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-bat" value="&lt;b style=&quot;font-size:13px;color:#E65100&quot;&gt;Batch&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 Identifier &lt;i&gt;(Primary Key)&lt;/i&gt;&lt;br&gt;Batch number &lt;i&gt;(Unique per variant)&lt;/i&gt;&lt;br&gt;Production date&lt;br&gt;Country of origin&lt;br&gt;Production stage&lt;br&gt;CO2 footprint (kg)&lt;br&gt;Recycled content (percent)&lt;br&gt;Status&lt;br&gt;🔗 Produced from Product Variant&lt;br&gt;🔗 Manufactured by (Business Partner)&lt;br&gt;🔗 Supplied by (Business Partner)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F57C00;fontColor=#E65100;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="100" y="650" width="280" height="240" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-item" value="&lt;b style=&quot;font-size:13px;color:#E65100&quot;&gt;Product Item&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 Identifier &lt;i&gt;(Primary Key)&lt;/i&gt;&lt;br&gt;Serial number &lt;i&gt;(Unique per batch)&lt;/i&gt;&lt;br&gt;Unique Product Identifier &lt;i&gt;(Globally unique)&lt;/i&gt;&lt;br&gt;Item status&lt;br&gt;Created date&lt;br&gt;🔗 Belongs to Batch&lt;br&gt;🔗 Has Product Passport (one to one)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F57C00;fontColor=#E65100;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="660" y="720" width="280" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-bom" value="&lt;b style=&quot;font-size:13px;color:#E65100&quot;&gt;Bill of Materials&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 Identifier &lt;i&gt;(Primary Key)&lt;/i&gt;&lt;br&gt;Quantity&lt;br&gt;Unit (percent, kg, m, pieces)&lt;br&gt;Component role&lt;br&gt;Mandatory flag&lt;br&gt;Status&lt;br&gt;🔗 Parent Product&lt;br&gt;🔗 Component Product&lt;br&gt;🔗 Linked Product Passport &lt;i&gt;(optional)&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F57C00;fontColor=#E65100;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="1280" y="420" width="280" height="220" as="geometry" />
+        </mxCell>
+
+        <!-- ===================================================== -->
+        <!-- PASSPORT layer entities -->
+        <!-- ===================================================== -->
+        <mxCell id="e-dpp" value="&lt;b style=&quot;font-size:13px;color:#4A148C&quot;&gt;Product Passport&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 Identifier &lt;i&gt;(Primary Key)&lt;/i&gt;&lt;br&gt;Status (Draft → Approved → Published)&lt;br&gt;Granularity (item, batch or variant)&lt;br&gt;Passport type (product or item)&lt;br&gt;Visibility (internal or public)&lt;br&gt;Current version&lt;br&gt;Signed QR Token &lt;i&gt;(Unique)&lt;/i&gt;&lt;br&gt;QR payload URL · Public URL&lt;br&gt;Approved, published, archived timestamps&lt;br&gt;Aggregated snapshot &lt;i&gt;(frozen JSON)&lt;/i&gt;&lt;br&gt;Storytelling &lt;i&gt;(JSON array)&lt;/i&gt;&lt;br&gt;🔗 Describes Product&lt;br&gt;🔗 Linked to Product Item" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6A1B9A;fontColor=#4A148C;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="540" y="970" width="320" height="260" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-qr" value="&lt;b style=&quot;font-size:13px;color:#4A148C&quot;&gt;QR Code&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 Identifier &lt;i&gt;(Primary Key)&lt;/i&gt;&lt;br&gt;Encoded value&lt;br&gt;Image URL&lt;br&gt;Status (active or replaced)&lt;br&gt;Created timestamp&lt;br&gt;Replaced timestamp&lt;br&gt;🔗 Belongs to Product Passport" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6A1B9A;fontColor=#4A148C;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="970" width="260" height="200" as="geometry" />
+        </mxCell>
+
+        <!-- ====== Relationships (crow's foot) ====== -->
+        <mxCell id="r-org-users" value="owns&#10;1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;strokeColor=#1976D2;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e-org" target="e-users">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r-org-bp" value="owns&#10;1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;strokeColor=#1976D2;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e-org" target="e-bp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r-bp-bpr" value="has roles&#10;1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;strokeColor=#1976D2;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e-bp" target="e-bpr">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r-org-prod" value="owns&#10;1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;strokeColor=#F57C00;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e-org" target="e-prod">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r-prod-var" value="has variants&#10;1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;strokeColor=#F57C00;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e-prod" target="e-var">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r-var-bat" value="produced in&#10;1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;strokeColor=#F57C00;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e-var" target="e-bat">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r-bat-item" value="contains&#10;1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;strokeColor=#F57C00;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e-bat" target="e-item">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r-prod-bom-p" value="parent of&#10;1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;strokeColor=#F57C00;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e-prod" target="e-bom">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r-prod-bom-c" value="component in&#10;N : 1" style="endArrow=ERone;startArrow=ERmany;html=1;rounded=0;strokeColor=#F57C00;fontSize=10;labelBackgroundColor=#ffffff;dashed=1;" edge="1" parent="1" source="e-bom" target="e-prod">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1240" y="550" />
+              <mxPoint x="1240" y="780" />
+              <mxPoint x="990" y="780" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="r-bp-bat-fact" value="manufactured by&#10;1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;strokeColor=#1976D2;fontSize=10;labelBackgroundColor=#ffffff;dashed=1;" edge="1" parent="1" source="e-bp" target="e-bat">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="60" y="230" />
+              <mxPoint x="60" y="770" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r-bp-bat-supp" value="supplied by&#10;1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;strokeColor=#1976D2;fontSize=10;labelBackgroundColor=#ffffff;dashed=1;" edge="1" parent="1" source="e-bp" target="e-bat">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="20" y="240" />
+              <mxPoint x="20" y="780" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="r-item-dpp" value="one to one" style="endArrow=ERmandOne;startArrow=ERone;html=1;rounded=0;strokeColor=#6A1B9A;strokeWidth=2;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e-item" target="e-dpp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r-dpp-qr" value="QR history&#10;1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;strokeColor=#6A1B9A;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e-dpp" target="e-qr">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r-bom-dpp" value="optional link" style="endArrow=ERoneToMany;startArrow=ERmany;html=1;rounded=0;strokeColor=#6A1B9A;fontSize=10;labelBackgroundColor=#ffffff;dashed=1;" edge="1" parent="1" source="e-bom" target="e-dpp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r-prod-dpp" value="describes&#10;1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;rounded=0;strokeColor=#6A1B9A;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e-prod" target="e-dpp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ====== Legend ====== -->
+        <mxCell id="legend-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CCCCCC;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1250" width="1520" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-content" value="🔑 Primary key  |  🔗 Foreign key  |  (Unique) – unique constraint  |  Crow's-foot at the “many” end  |  Solid lines: mandatory relationship  |  Dashed lines: optional or cross-organisation reference" style="text;html=1;fontSize=10;fontColor=#666;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1250" width="1520" height="40" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

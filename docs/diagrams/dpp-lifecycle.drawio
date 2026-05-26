@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" version="22.0.0">
+  <diagram name="DPP Lifecycle" id="dpp-lifecycle">
+    <mxGraphModel dx="1422" dy="868" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ====== Title ====== -->
+        <mxCell id="title" value="Product Passport Lifecycle" style="text;html=1;fontSize=22;fontStyle=1;align=center;fontColor=#354A5F;" vertex="1" parent="1">
+          <mxGeometry x="380" y="20" width="640" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Status transitions: Draft → In Review → Approved → Published (re-publish allowed) → Archived  ·  Side effects on entering Published" style="text;html=1;fontSize=11;fontStyle=2;align=center;fontColor=#888;" vertex="1" parent="1">
+          <mxGeometry x="380" y="52" width="640" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ====== Initial Node ====== -->
+        <mxCell id="init" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="100" y="280" width="30" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ====== States ====== -->
+        <mxCell id="s-draft" value="&lt;b&gt;Draft&lt;/b&gt;&#10;&#10;Defaults applied:&#10;item granularity,&#10;draft status,&#10;version one" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontColor=#0D47A1;fontSize=11;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="200" y="240" width="180" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s-review" value="&lt;b&gt;In Review&lt;/b&gt;&#10;&#10;Manual workflow&#10;(planned for Sprint 2+)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FB8C00;fontColor=#E65100;fontSize=11;strokeWidth=2;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="100" width="180" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s-approved" value="&lt;b&gt;Approved&lt;/b&gt;&#10;&#10;Validation check passed,&#10;approval timestamp set" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2E7D32;fontColor=#1B5E20;fontSize=11;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="450" y="240" width="180" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s-published" value="&lt;b&gt;Published&lt;/b&gt;&#10;&#10;Public link is active,&#10;QR code rotated,&#10;data snapshot frozen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#6A1B9A;fontColor=#4A148C;fontSize=11;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="700" y="240" width="180" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s-archived" value="&lt;b&gt;Archived&lt;/b&gt;&#10;&#10;Archive timestamp set&#10;(soft delete)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFEBE9;strokeColor=#5D4037;fontColor=#3E2723;fontSize=11;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="950" y="240" width="180" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- Final state (double ellipse) -->
+        <mxCell id="final-outer" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="278" width="34" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="final-inner" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1238" y="286" width="18" height="18" as="geometry" />
+        </mxCell>
+
+        <!-- ====== Transitions ====== -->
+        <mxCell id="t-init-draft" value="Create passport" style="endArrow=classic;html=1;rounded=0;strokeColor=#333;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="init" target="s-draft">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-draft-app" value="Approve" style="endArrow=classic;html=1;rounded=0;strokeColor=#2E7D32;strokeWidth=2;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="s-draft" target="s-approved">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-draft-rev" value="Send for review" style="endArrow=classic;html=1;rounded=0;strokeColor=#FB8C00;fontSize=10;labelBackgroundColor=#ffffff;dashed=1;" edge="1" parent="1" source="s-draft" target="s-review">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-rev-app" value="Approve" style="endArrow=classic;html=1;rounded=0;strokeColor=#2E7D32;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="s-review" target="s-approved">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-app-pub" value="Publish&#10;(builds snapshot and&#10;rotates the QR code)" style="endArrow=classic;html=1;rounded=0;strokeColor=#6A1B9A;strokeWidth=2;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="s-approved" target="s-published">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-pub-pub" value="Re-publish&#10;(version increment)" style="endArrow=classic;html=1;rounded=0;strokeColor=#6A1B9A;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;curved=1;" edge="1" parent="1" source="s-published" target="s-published">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="790" y="180" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- All states → archived -->
+        <mxCell id="t-draft-arch" value="Archive" style="endArrow=classic;html=1;rounded=0;strokeColor=#5D4037;fontSize=10;labelBackgroundColor=#ffffff;dashed=1;" edge="1" parent="1" source="s-draft" target="s-archived">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="290" y="430" />
+              <mxPoint x="1040" y="430" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t-app-arch" value="Archive" style="endArrow=classic;html=1;rounded=0;strokeColor=#5D4037;fontSize=10;labelBackgroundColor=#ffffff;dashed=1;" edge="1" parent="1" source="s-approved" target="s-archived">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="540" y="400" />
+              <mxPoint x="1040" y="400" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t-pub-arch" value="Archive" style="endArrow=classic;html=1;rounded=0;strokeColor=#5D4037;strokeWidth=2;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="s-published" target="s-archived">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t-rev-arch" value="Archive" style="endArrow=classic;html=1;rounded=0;strokeColor=#5D4037;fontSize=10;labelBackgroundColor=#ffffff;dashed=1;" edge="1" parent="1" source="s-review" target="s-archived">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1040" y="150" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="t-arch-final" value="" style="endArrow=classic;html=1;rounded=0;strokeColor=#333;" edge="1" parent="1" source="s-archived" target="final-outer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ====== Annotations / Notes ====== -->
+        <mxCell id="n-validate" value="📋 Readiness check&#10;&#10;Both Approve and Publish require:&#10;&#10;• Product reference must exist&#10;• Product name, brand, category and&#10;  fibre composition must be filled&#10;• A linked Product Item must exist&#10;  when granularity is &quot;item&quot;&#10;• The unique product identifier&#10;  on the item must be present" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#F57C00;fontColor=#5D4037;fontSize=10;align=left;spacingLeft=10;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="220" y="450" width="320" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="n-publish" value="✨ Side effects on entering &quot;Published&quot;&#10;&#10;• Publication timestamp set&#10;• Signed QR token created&#10;• QR payload URL set&#10;• Public URL set&#10;• Aggregated data snapshot stored&#10;• Previous QR code marked as replaced&#10;• New active QR code recorded&#10;&#10;Re-publish: version increment,&#10;token and snapshot refreshed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#6A1B9A;fontColor=#4A148C;fontSize=10;align=left;spacingLeft=10;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="600" y="430" width="320" height="200" as="geometry" />
+        </mxCell>
+
+        <mxCell id="n-archive" value="🗄 Archive (soft delete)&#10;&#10;• Archive timestamp set&#10;• No physical deletion&#10;• Public endpoint returns&#10;  &quot;not found&quot;&#10;• Historical record kept&#10;  for audit purposes" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFEBE9;strokeColor=#5D4037;fontColor=#3E2723;fontSize=10;align=left;spacingLeft=10;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="980" y="450" width="240" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="n-rbac" value="🔐 Access control: only the advanced company role can trigger lifecycle actions (Approve, Publish, Archive, Regenerate Token). Standard company users receive an authorization error." style="text;html=1;fontSize=10;fontStyle=2;fontColor=#888;align=center;" vertex="1" parent="1">
+          <mxGeometry x="200" y="640" width="1020" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ====== Legend ====== -->
+        <mxCell id="legend-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CCCCCC;" vertex="1" parent="1">
+          <mxGeometry x="60" y="700" width="1280" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-content" value="State-machine notation  ·  Filled circle: initial state  ·  Bullseye: final state  ·  Solid arrows: implemented transitions  ·  Dashed arrows: planned for Sprint 2+ or optional" style="text;html=1;fontSize=10;fontColor=#666;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="700" width="1280" height="50" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -13,12 +13,152 @@ The schema is strictly aligned with the **Fashion DPP Object Field Catalogue** (
 - SAP Cloud Application Programming Model (CAP), Node.js, `@sap/cds` ^9
 - CDS data model, OData V4 services, auto-generated OpenAPI / Swagger
 - SQLite (development) / SAP HANA Cloud (production on SAP BTP)
-- XSUAA authentication with three roles: `company_advanced`, `company_user`, `end_user` (XSUAA issues a single `AuthenticatedUser` scope; the backend resolves the application role + tenant from the `Users` table)
+- XSUAA authentication with two application roles (`company_advanced`, `company_user`). The platform issues a single scope; the backend resolves the role and tenant from the `Users` table.
 - Public consumer endpoint (`/public/dpp/:token`, no login) with HMAC-signed QR-code PNG
-- Excel import/export (XLSX) and PDF export (DPP + QR label) via PDFKit
 - Jest unit tests + `cds.test` integration tests
 
-# 1. Technical Data Model (Data Schema)
+This document follows the four required architecture deliverables:
+
+1. **BTP Architecture** — where the application runs on the SAP Business Technology Platform
+2. **Software Architecture** — internal structure, services, endpoints
+3. **Semantic Model** — conceptual entity relationships
+4. **Technical Data Model** — physical database schema as deployed
+
+# 1. BTP Architecture
+
+Deployment topology on SAP Business Technology Platform. The diagram embeds the official SAP BTP Solution Diagrams icons (Apache-2.0, <https://github.com/SAP/btp-solution-diagrams>).
+
+![BTP architecture](diagrams/btp-architecture.png)
+
+## 1.1 Platform services in use
+
+| Service | Role | Status |
+|---|---|---|
+| **SAP HANA Cloud** | Stores all 11 catalogue tables in an isolated database container | In use |
+| **Cloud Foundry Runtime** | Hosts the backend service application | In use |
+| **Authorization and Trust Management (XSUAA)** | Issues and verifies authentication tokens. Single application scope; role and tenant resolved inside the application from the user table. | In use |
+| **Application Router** | Terminates the user session and serves the static UI | In use |
+| **Runtime Secrets** (user-provided service) | Holds the signing key for QR tokens and the public base URL | One-time setup per space |
+| Destination Service | Future ERP integration | Out of scope for the MVP |
+| Document Management Service | Future compliance attachments | Sprint 2+ |
+| Alert Notification | Future operations monitoring | Sprint 2+ |
+| Application Logging | Future centralised logs | Sprint 2+ |
+
+## 1.2 Subaccount coordinates
+
+| Parameter | Description |
+|---|---|
+| Subaccount | Dedicated subaccount in region eu10-004 |
+| Cloud Foundry Org | Provisioned by the platform team |
+| Cloud Foundry Space | Dev (current) — staging and production planned |
+| Public route | Application router URL on the SAP Cloud domain — the same URL is written into every QR code so consumer scans resolve correctly |
+
+# 2. Software Architecture
+
+Layers: client → BTP platform → API layer (authenticated OData and public REST) → business logic → supporting libraries → database. The platform also surfaces a Swagger UI and a health check endpoint.
+
+![Software architecture](diagrams/software-architecture.png)
+
+## 2.1 Component overview
+
+**Client layer**
+
+- A SAPUI5 or Fiori Elements UI is planned for Sprint 2+; the current MVP exposes the backend directly via OData
+- Consumers reach the system from a mobile browser via QR scan
+- Market surveillance authorities use any HTTP client and the same public token URL as consumers
+
+**BTP platform layer**
+
+- Application Router handles single sign-on and serves the static UI
+- Authorization and Trust Service (XSUAA) issues and verifies tokens
+- Runtime Secrets are stored in a user-provided service and injected at boot
+
+**API layer**
+
+- Authenticated OData V4 service exposing 11 entity projections, 4 lifecycle actions and 1 QR-image function on the passport
+- Public REST endpoints for the consumer view, the QR image and the health check
+- A role and tenant resolver looks up the caller in the user table and applies tenant scope before any handler runs
+
+**Business logic layer**
+
+- Product logic — applies defaults, runs the bill-of-materials cycle check, archives products
+- Passport lifecycle logic — approves, publishes, archives passports; rotates QR codes; builds aggregated snapshots
+- Public view logic — verifies the signed QR token and assembles the consumer payload
+- Identity logic — returns the caller's identity to the UI
+
+**Supporting libraries**
+
+- Signed token library (creates and verifies the QR token)
+- Secret loader (injects runtime secrets into the backend)
+
+**Database**
+
+- SAP HANA Cloud, single isolated database container, 11 catalogue tables
+
+## 2.2 Endpoint inventory
+
+| Method | Path | Required role | Purpose |
+|--------|------|---------------|---------|
+| GET | `/odata/v4/dpp/$metadata` | any authenticated | Service metadata |
+| GET / POST / PATCH / DELETE | `/odata/v4/dpp/<entity>` | role-restricted | CRUD on the 11 catalogue entities (tenant-scoped) |
+| POST | `/odata/v4/dpp/DPPs(id)/DPPService.approveDPP` | company_advanced | draft → approved (with validation) |
+| POST | `/odata/v4/dpp/DPPs(id)/DPPService.publishDPP` | company_advanced | approved → published + snapshot + QR rotation |
+| POST | `/odata/v4/dpp/DPPs(id)/DPPService.archiveDPP` | company_advanced | → archived |
+| POST | `/odata/v4/dpp/DPPs(id)/DPPService.regenerateQRToken` | company_advanced | new HMAC token, previous → replaced |
+| GET | `/odata/v4/dpp/DPPs(id)/DPPService.generateQRCode` | company_advanced | Base64 PNG |
+| GET | `/odata/v4/dpp/me()` | any authenticated | Caller's identity, role and organisation |
+| GET | `/public/dpp/:token` | none | Consumer / authority DTO (JSON) |
+| GET | `/public/dpp/:token/qr.png` | none | Printable QR PNG |
+| GET | `/$api-docs/odata/v4/dpp` | none | Swagger UI |
+| GET | `/healthz` | none | Liveness probe |
+
+# 3. Semantic Model (Entity Relationship)
+
+The semantic view of the data model — concepts and relationships, without implementation detail. Foreign-key columns, audit timestamps and operational marker fields are intentionally omitted (they are present in the Technical Data Model in section 4). The structural shape is identical to the technical view, but the attribute lists are reduced to those that carry business meaning.
+
+Organizations sit at the top of the master-data tree; they own Users, Business Partners, and Products. A Product fans out through Product Variants → Batches → Product Items, and each Product Item owns a 1:1 Product Passport. The Product Passport keeps a history of QR Codes (latest = active). Product BOMs link a parent Product to a component Product (back to the same entity), so the entire chain repeats recursively for materials and components.
+
+![Semantic ER diagram](diagrams/erd.png)
+
+## 3.1 Business-relevant attributes per entity
+
+- **Organisation** — Identifier, Legal name, Trade name, Country, Global Location Number, Tenant key.
+- **User** — Identifier, Email, Display name, Role.
+- **Business Partner** — Identifier, Name, Country, Contact person, External identifier (GLN / VAT / DUNS).
+- **Business Partner Role** — Identifier, Role type.
+- **Product** — Identifier, Product type (finished or material), Name, Brand, Category, Global Trade Item Number, Fibre composition, Country of origin, ESPR compliance state.
+- **Product Variant** — Identifier, Colour, Size, Stock Keeping Unit, Weight.
+- **Batch** — Identifier, Batch number, Production date, Country of origin, Production stage, CO2 footprint, Recycled content.
+- **Product Item** — Identifier, Serial number, Unique Product Identifier.
+- **Product BOM** — Identifier, Quantity, Unit, Component role, Mandatory flag.
+- **Product Passport** — Identifier, Status, Granularity, Visibility, Signed token, Public link, Frozen snapshot, Storytelling.
+- **QR Code** — Identifier, Encoded value, Lifecycle status.
+
+The full column-level details with HANA data types and constraints are in section 4.
+
+## 3.2 Cardinalities
+
+Cross-referenced with the official field catalogue (sheet 5):
+
+| Relationship | Cardinality | Catalogue reference |
+|---|---|---|
+| Organisation → Users | one to many | R2 |
+| Organisation → Products | one to many | R3 |
+| Business Partner → Business Partner Roles | one to many | R4 |
+| Product → Product Variants | one to many | R5 |
+| Product Variant → Batches | one to many | R6 |
+| Batch → Product Items | one to many | R7 |
+| Product Item → Product Passport | one to one | R8 |
+| Product Passport → QR Codes | one active plus history | R9 |
+| Product → Bill of Materials (as parent) | one to many | R10 |
+| Bill of Materials → Product (as component) | many to one | R11 |
+| Bill of Materials → Product Passport (linked material) | many to optional one | R12 |
+
+# 4. Technical Data Model (Data Schema)
+
+The physical schema as deployed to SAP HANA Cloud. The diagram below shows all 11 tables with their columns, HANA SQL data types, constraints, and foreign-key references.
+
+![Technical Data Model](diagrams/technical-data-model.png)
 
 The data model is declared in CDS (SAP Cloud Application Programming Model) and lives under `db/`. It is split into four files:
 
@@ -27,7 +167,7 @@ The data model is declared in CDS (SAP Cloud Application Programming Model) and 
 - `db/product.cds` — Products, Variants, Batches, Items, BOM
 - `db/dpp.cds` — Digital Product Passport and QR Codes
 
-## 1.1 Types and Enumerations (`common.cds`)
+## 4.1 Types and Enumerations (`common.cds`)
 
 | Type | Definition | Purpose |
 |------|------------|---------|
@@ -48,12 +188,12 @@ The data model is declared in CDS (SAP Cloud Application Programming Model) and 
 | `Granularity` | enum | model, batch, item |
 | `QRCodeStatus` | enum | active, invalid, replaced |
 | `ESPRComplianceStatus` | enum | draft, in_review, compliant, non_compliant |
-| `UserRole` | enum | company_advanced, company_user, end_user |
+| `UserRole` | enum | company_advanced, company_user |
 | `BusinessPartnerRole` | enum | supplier, manufacturer, recycler, certification_body, distributor, retailer, logistics_provider |
 
 The `identified` aspect provides a readable `String(36)` key instead of a UUID. This is a deliberate choice so that sample IDs such as `dpp-12345` and upstream system identifiers can be kept unchanged.
 
-## 1.2 Company, User and Business Partner Entities (`org.cds`)
+## 4.2 Company, User and Business Partner Entities (`org.cds`)
 
 ### Organizations (Company)
 
@@ -84,7 +224,7 @@ n:1 to Organizations; UNIQUE constraint on `(email, organization)`; `external_us
 | organization | Association to Organizations | not null |
 | role | UserRole | not null |
 | external_user_id | String(120) | XSUAA subject mapping |
-| active | Boolean | default true (US1.10 Deactivate User) |
+| active | Boolean | default true |
 
 ### BusinessPartners
 
@@ -106,7 +246,7 @@ External economic operators (factories, suppliers, certification bodies). Tenant
 
 ### BusinessPartnerRoles
 
-Bridge table — one partner may simultaneously act as supplier, manufacturer, recycler, etc. (US2.3).
+Bridge table — one partner may simultaneously act as supplier, manufacturer, recycler, etc.
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -116,7 +256,7 @@ Bridge table — one partner may simultaneously act as supplier, manufacturer, r
 
 UNIQUE on `(partner, role)`.
 
-## 1.3 Product Hierarchy (`product.cds`)
+## 4.3 Product Hierarchy (`product.cds`)
 
 The catalogue-aligned hierarchy is **Product → ProductVariant → Batch → ProductItem → DPP + QR**. BOM lines link a parent product to a component product (back to the same `Products` entity), so the chain repeats recursively for materials/components.
 
@@ -189,7 +329,7 @@ The serialised, uniquely identifiable physical item. Each item gets its own DPP.
 | upi | String(60) | UNIQUE global — Unique Product Identity (catalogue R61) |
 | item_status | ItemStatus | default `active` |
 | created_date | Date | |
-| dpp | Association to DPPs | linked after `publishDPP` |
+| dpp | Association to DPPs | linked after publish |
 
 ### ProductBOMs
 
@@ -204,12 +344,12 @@ Bill of Materials: an edge between a parent Product and a component Product. The
 | unit | String(8) | `%`, `kg`, `m`, `pcs` |
 | component_role | String(60) | e.g. "Main fabric" |
 | is_mandatory | Boolean | default true |
-| linked_dpp | Association to DPPs | optional link to a material DPP (US4.9) |
+| linked_dpp | Association to DPPs | optional link to a material DPP |
 | status | BOMStatus | default `active` |
 
 UNIQUE on `(parent, component)`. Self-loops and transitive cycles are rejected by handler.
 
-## 1.4 Digital Product Passport (`dpp.cds`)
+## 4.4 Digital Product Passport (`dpp.cds`)
 
 ### DPPs
 
@@ -231,12 +371,12 @@ The central passport entity. Item-level by default but supports model- and batch
 | approved_at, published_at, archived_at | Timestamp | lifecycle markers |
 | valid_from | Date | |
 | last_updated | Timestamp | |
-| aggregated_snapshot | LargeString | JSON snapshot built on `publishDPP` |
+| aggregated_snapshot | LargeString | JSON snapshot built on publish |
 | storytelling | LargeString | optional JSON array of `{title, body, media_url, media_type}` |
 
 ### QRCodes
 
-History of every QR token ever minted for a DPP. The most recent row has `status='active'`; previous rows are kept with `status='replaced'` for traceability (US6.8).
+History of every QR token ever minted for a DPP. The most recent row has `status='active'`; previous rows are kept with `status='replaced'` for traceability.
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -248,7 +388,7 @@ History of every QR token ever minted for a DPP. The most recent row has `status
 | created_at | Timestamp | |
 | replaced_at | Timestamp | |
 
-## 1.5 Uniqueness and Integrity Constraints
+## 4.5 Uniqueness and Integrity Constraints
 
 - `Organizations.tenant_id` UNIQUE
 - `Users (email, organization)` UNIQUE
@@ -261,126 +401,17 @@ History of every QR token ever minted for a DPP. The most recent row has `status
 - `ProductBOMs (parent, component)` UNIQUE — no duplicate BOM edges, no self-loops, no cycles
 - `DPPs.qr_token` UNIQUE
 
-# 2. Architecture Diagrams
+## 4.6 CDS → HANA → ABAP type mapping
 
-## 2.1 Software Architecture
-
-Three client classes (internal company users, public auditor/HTTP-clients, and anonymous consumers) connect to a CAP runtime hosted on SAP BTP Cloud Foundry. Authenticated traffic flows through the Application Router and XSUAA; the public consumer route bypasses authentication and is mounted directly on the Express bootstrap. Persistence targets SQLite for local development and SAP HANA Cloud in production.
-
-![Software architecture](diagrams/software-architecture.png)
-
-**Component responsibilities.**
-
-- **Application Router** — terminates user sessions and forwards JWTs to CAP services (production).
-- **XSUAA** — issues OAuth2 JWTs against the Capgemini identity provider. The application defines a single scope (`AuthenticatedUser`); the application role (`company_advanced`, `company_user`, `end_user`) is resolved by the backend from the `Users` table at request time.
-- **DPPService** — tenant-scoped CRUD for the 11 catalogue entities, plus DPP-lifecycle actions and Excel/PDF actions.
-- **Public Handler** — anonymous consumer route serving a visibility-filtered Consumer DTO and the QR PNG.
-- **Handler modules** — `product-handlers` (defaults, BOM cycle guard), `dpp-handlers` (workflow + snapshot + QR rotation), `import-handlers` (XLSX → UPSERT), `export-handlers` (XLSX writer), `pdf-handlers` (DPP-PDF + QR-Label), `public-handler`.
-- **Lib modules** — `token.js` (HMAC-SHA256), `excel-templates.js` (column metadata + parser/validator), `pdf-renderer.js` (PDFKit + qrcode).
-- **Persistence** — SQLite locally, SAP HANA Cloud in production; the CDS model is portable across both.
-
-## 2.2 ER Diagram (Data Model)
-
-Organizations sit at the top of the master-data tree; they own Users, BusinessPartners, and Products. A Product fans out through ProductVariants → Batches → ProductItems, and each ProductItem owns a 1:1 DPP. The DPP keeps a history of QRCodes (latest = active). ProductBOMs link a parent Product to a component Product (back to the same entity), so the entire chain repeats recursively for materials and components.
-
-![ER diagram](diagrams/erd.png)
-
-**Key entity attributes (compact view).**
-
-- **Organizations** — `ID` (PK), `tenant_id` (UNIQUE), `legal_name`, `country_iso2`, `website_url`, `contact_email`.
-- **Products** — `ID` (PK), `product_type`, `name`, `brand`, `category`, `country_of_origin`, `substances_of_concern`, `espr_compliance`, `status`, `owning_organization` (FK).
-- **ProductVariants** — `ID` (PK), `product` (FK), `color`, `size`, `sku` (UNIQUE per product), `gtin`, `status`.
-- **Batches** — `ID` (PK), `variant` (FK), `batch_number` (UNIQUE per variant), `production_date`, `factory`/`supplier` (FK), `country_of_origin`, `co2_footprint_kg`, `recycled_content_pct`, `status`.
-- **ProductItems** — `ID` (PK), `batch` (FK), `serial_number`, `upi` (UNIQUE), `item_status`, `dpp` (FK).
-- **ProductBOMs** — `parent` (FK), `component` (FK), `quantity`, `unit`, `component_role`, `linked_dpp` (FK); UNIQUE on the edge, no cycles allowed.
-- **DPPs** — `ID` (PK), `product` (FK), `item` (FK), `status`, `visibility`, `current_version`, `qr_token` (UNIQUE), `public_url`, `aggregated_snapshot` (JSON), `published_at`, `archived_at`.
-- **QRCodes** — `dpp` (FK), `qr_value`, `status` (`active`/`invalid`/`replaced`), `created_at`, `replaced_at`.
-
-## 2.3 DPP Lifecycle (State Machine)
-
-DPP status moves from `draft` (or optionally `in_review`) to `approved`, then `published`. Re-publishing increments `current_version`. Any state can be moved to `archived`. The catalogue mandates these five status values (Sheet 3 R79).
-
-![DPP lifecycle](diagrams/dpp-lifecycle.png)
-
-The `approveDPP` and `publishDPP` actions both invoke the inline validator `checkDPPReady`, which rejects with HTTP 400 if mandatory product or item fields are missing. On `publishDPP`, the handler additionally builds an aggregated JSON snapshot, stores it in `DPPs.aggregated_snapshot`, rotates the active QR (`status='active'` → `'replaced'` for the previous one, new active row inserted), and updates `DPPs.qr_token` / `qr_payload_url` / `public_url`.
-
-## 2.4 Sprint-1 Demo Workflow
-
-The end-to-end happy-path sequence used as the MVP acceptance test (Epics document, Sprint-1 demo scenario). A company advanced user creates the supply-chain stack from Business Partner down to Item, then approves and publishes the DPP. The published QR code resolves anonymously to the Consumer DTO.
-
-![Sprint-1 demo sequence](diagrams/sprint1-demo-sequence.png)
-
-**Token format.**
-
-```
-<uuid-v4>.<base64url(HMAC-SHA256(QR_TOKEN_HMAC_SECRET, uuid))>
-```
-
-The HMAC prefix lets the public route reject forged tokens in constant time (`timingSafeEqual`) before any database lookup. Sensitive fields (tenant, audit columns, internal counters) are intentionally excluded from the Consumer DTO.
-
-## 2.5 BTP Deployment Architecture
-
-Deployment topology onto SAP BTP Cloud Foundry. The diagram embeds the official SAP BTP Solution Diagrams icons (Apache-2.0, <https://github.com/SAP/btp-solution-diagrams>) for Cloud Foundry Runtime, HANA Cloud, XSUAA, and the out-of-scope services (Destination, Document Management, Alert Notification, Application Logging).
-
-![BTP architecture](diagrams/btp-architecture.png)
-
-The editable source is [diagrams/btp-architecture.drawio](diagrams/btp-architecture.drawio); the SVG export is in [diagrams/btp-architecture.svg](diagrams/btp-architecture.svg). See [diagrams/README.md](diagrams/README.md) for the rendering workflow and the URLs of the embedded icons.
-
-## 2.6 Role / Capability Matrix
-
-XSUAA issues a single scope `$XSAPPNAME.AuthenticatedUser`. The application-internal role (`company_advanced`, `company_user`, `end_user`) and the `tenant` attribute are resolved by the backend from the `Users` table at request time, then applied by CAP's `@restrict` rules combined with a `where` clause that pins each query to `Organizations.tenant_id = $user.tenant`.
-
-> **Status note (May 2026).** The `@restrict` clauses below describe the target authorization model. On the deployed BTP UCC learn-tenant the service guard is temporarily relaxed to `requires: 'authenticated-user'` because cockpit-side role-collection assignment is not available to trainees and three CAP 9 middleware hooks could not inject app-resolved roles into `req.user` before `@restrict` was evaluated. The role enum, `Users` lookup, XSUAA scopes and BTP role collections all stay in place; rollback to the role-based model is a one-commit change (see [architecture.md §6](architecture.md#6-authorization--current-state-vs-target-state-may-2026)).
-
-| Capability | company_advanced | company_user | end_user | public (no auth) |
-|------------|------------------|--------------|----------|------------------|
-| Read tenant DPPs / Products / Batches / Items via DPPService | yes | yes | — | — |
-| Create / update / delete master data | yes | — | — | — |
-| Approve / publish / archive DPP | yes | — | — | — |
-| Manage Users | yes | — | — | — |
-| Excel import (Products / Batches / BOM) | yes | — | — | — |
-| Excel / PDF export | yes | yes | — | — |
-| Cross-tenant read-only via AuthorityService | — | — | yes | — |
-| Read published, public-visible DPP via QR token | — | — | — | yes |
-
-# 3. Endpoints
-
-| Method | Path | Required Role | Purpose |
-|--------|------|---------------|---------|
-| GET | `/odata/v4/dpp/$metadata` | any authenticated | Service metadata |
-| GET / POST / PATCH / DELETE | `/odata/v4/dpp/<entity>` | role-restricted | CRUD on the 11 catalogue entities |
-| POST | `/odata/v4/dpp/DPPs(id)/DPPService.approveDPP` | company_advanced | draft → approved (with validation) |
-| POST | `/odata/v4/dpp/DPPs(id)/DPPService.publishDPP` | company_advanced | approved → published + snapshot + QR rotation |
-| POST | `/odata/v4/dpp/DPPs(id)/DPPService.archiveDPP` | company_advanced | → archived |
-| POST | `/odata/v4/dpp/DPPs(id)/DPPService.regenerateQRToken` | company_advanced | new HMAC token, previous → replaced |
-| GET | `/odata/v4/dpp/DPPs(id)/DPPService.generateQRCode` | company_advanced | Base64 PNG |
-| GET | `/odata/v4/dpp/DPPs(id)/DPPService.exportDPPasPDF` | company_advanced | DPP rendered as PDF |
-| GET | `/odata/v4/dpp/DPPs(id)/DPPService.generateQRLabel` | company_advanced | printable label PDF |
-| POST | `/odata/v4/dpp/importProducts` | company_advanced | Excel XLSX UPSERT |
-| POST | `/odata/v4/dpp/importBatches` | company_advanced | Excel XLSX UPSERT |
-| POST | `/odata/v4/dpp/importBOM` | company_advanced | Excel XLSX UPSERT |
-| GET | `/odata/v4/dpp/downloadTemplate(template=...)` | company_advanced / company_user | XLSX template |
-| GET | `/odata/v4/dpp/exportProducts()` | company_advanced / company_user | XLSX export |
-| GET | `/odata/v4/dpp/exportBOM()` | company_advanced / company_user | XLSX export |
-| GET | `/odata/v4/dpp/exportDPP(dppId=...)` | company_advanced / company_user | single-DPP XLSX |
-| GET | `/odata/v4/dpp/exportDPPs(dppIds=...)` | company_advanced / company_user | bulk-DPP XLSX |
-| GET | `/odata/v4/dpp/exportTraceability()` | company_advanced / company_user | multi-sheet XLSX (Products→BOM) |
-| GET | `/odata/v4/authority/<entity>` | end_user | Cross-tenant read-only |
-| GET | `/public/dpp/:token` | none | Consumer DTO (JSON) |
-| GET | `/public/dpp/:token/qr.png` | none | printable QR PNG |
-| GET | `/$api-docs/odata/v4/dpp` | — | Swagger UI |
-| GET | `/healthz` | none | liveness probe |
-
-# 4. Mock Users (Local Development)
-
-Basic-Auth, password `x`. Configured via `.cdsrc.json` under `requires.auth.[development].users`.
-
-| User | Role | Tenant |
-|------|------|--------|
-| alice.advanced | company_advanced | ORG-A (Greenline) |
-| carol.user | company_user | ORG-A |
-| dan.advanced.b | company_advanced | ORG-B (Fashionista) |
-| eve.enduser | end_user | — (cross-tenant via AuthorityService only) |
-| kka_learn_235 | company_advanced | ORG-A (BTP shared learn-tenant) |
-
-`alice.advanced` covers most company-internal scenarios. `dan.advanced.b` verifies tenant isolation between ORG-A and ORG-B. `eve.enduser` is required for `/odata/v4/authority`. `kka_learn_235` is provided for SAP BTP learn-tenant demos.
+| Modelling type | HANA SQL | ABAP equivalent | Notes |
+|---|---|---|---|
+| `String(n)` | `NVARCHAR(n)` | `CHAR(n)` or `SSTRING` | UTF-16 in HANA |
+| `LargeString` | `NCLOB` | `STRING` | Up to 2 GB |
+| `Boolean` | `BOOLEAN` | `BOOLE_D` or `ABAP_BOOL` | |
+| `Integer` | `INTEGER` | `INT4` | 32-bit signed |
+| `Integer64` | `BIGINT` | `INT8` | 64-bit signed |
+| `Decimal(p,s)` | `DECIMAL(p,s)` | `DEC(p,s)` | |
+| `Date` | `DATE` | `DATS` | YYYYMMDD |
+| `Time` | `TIME` | `TIMS` | HHMMSS |
+| `Timestamp` | `TIMESTAMP` | `TIMESTAMPL` | 100 ns precision |
+| `UUID` | `NVARCHAR(36)` | `SYSUUID_C32` or `SYSUUID_X16` | |

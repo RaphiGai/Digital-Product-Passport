@@ -1,429 +1,364 @@
 # DPP Capgemini — Architecture Documentation
 
-Versioned alongside the code. Diagram sources live in [docs/diagrams/](diagrams/) and render natively in GitHub, GitLab, and VS Code (`> Markdown: Open Preview`). For PNG/SVG export instructions see [diagrams/README.md](diagrams/README.md).
+This document covers the four core architecture deliverables for the requirements presentation, ordered top-down from platform to schema:
+
+1. [BTP Architecture](#1-btp-architecture) — deployment on SAP Business Technology Platform
+2. [Software Architecture](#2-software-architecture) — OData services, business logic, libraries, UI
+3. [Semantic Model](#3-semantic-model-entity-relationship) — conceptual entity relationships
+4. [Technical Data Model](#4-technical-data-model) — physical schema as deployed
+
+Supplementary material (solution context, deployment topology, passport lifecycle, demo sequence, access control) lives in [appendix.md](appendix.md). Diagram sources are in [docs/diagrams/](diagrams/) as editable draw.io files using the official [SAP BTP Solution Diagrams](https://sap.github.io/btp-solution-diagrams/) icon set (Apache-2.0).
 
 ---
 
 ## 1. BTP Architecture
 
-Deployment topology on SAP Business Technology Platform. The diagram embeds the official SAP BTP Solution Diagrams icons (Apache-2.0, <https://github.com/SAP/btp-solution-diagrams>).
+Deployment topology on SAP Business Technology Platform — subaccount, Cloud Foundry org and space, MTA modules and resources, bindings. Uses the official BTP solution diagram icon set.
 
-![BTP architecture](diagrams/btp-architecture.png)
+![BTP Architecture](diagrams/btp-architecture.png)
 
-Editable source: [diagrams/btp-architecture.drawio](diagrams/btp-architecture.drawio) · SVG export: [diagrams/btp-architecture.svg](diagrams/btp-architecture.svg)
+Editable source: [diagrams/btp-architecture.drawio](diagrams/btp-architecture.drawio)
 
-### BTP services in use
+### 1.1 Platform services in use
 
 | Service | Role | Status |
 |---|---|---|
-| **SAP HANA Cloud** | Persistent store for all 11 entities via HDI container | ✅ via `@cap-js/hana` |
-| **Cloud Foundry Runtime** | Hosts the `dpp-capgemini-srv` Node.js app | ✅ deployable via `mta.yaml` |
-| **XSUAA** | OAuth2/JWT issuer; issues a single `AuthenticatedUser` scope. Role + tenant are resolved app-internally from the `Users` table. | ✅ via `xs-security.json` |
-| **Application Router** | XSUAA token termination + static UI serving | ✅ enabled in production profile |
-| Destination Service | ERP / S/4HANA integration | ⛔ Out-of-Scope MVP |
-| Document Management Service | Compliance document storage | ⛔ Sprint 2+ |
-| Alert Notification, App Logging | Ops monitoring | ⛔ Sprint 2+ |
+| **SAP HANA Cloud** | Stores all 11 catalogue tables in an isolated database container | In use |
+| **Cloud Foundry Runtime** | Hosts the backend service application | In use |
+| **Authorization and Trust Management (XSUAA)** | Issues and verifies authentication tokens. Single application scope; role and tenant resolved inside the application from the user table. | In use |
+| **Application Router** | Terminates the user session and serves the static UI | In use |
+| **Runtime Secrets** (user-provided service) | Holds the signing key for QR tokens and the public base URL | One-time setup per space |
+| Destination Service | Future ERP integration | Out of scope for the MVP |
+| Document Management Service | Future compliance attachments | Sprint 2+ |
+| Alert Notification | Future operations monitoring | Sprint 2+ |
+| Application Logging | Future centralised logs | Sprint 2+ |
+
+### 1.2 Subaccount coordinates
+
+| Parameter | Description |
+|---|---|
+| Subaccount | Dedicated subaccount in region eu10-004 |
+| Cloud Foundry Org | Provisioned by the platform team |
+| Cloud Foundry Space | Dev (current) — staging and production planned |
+| Public route | Application router URL on the SAP Cloud domain — the same URL is written into every QR code so consumer scans resolve correctly |
+
+### 1.3 Why the application enforces access control instead of the platform
+
+The development tenant blocks the assignment of role collections in the platform cockpit, and the framework hook variants we tried failed to inject database-resolved roles into the request context in time for the declarative authorisation to evaluate. Rather than fight the timing, the entire access-control layer was moved into the service handlers. The platform exposes a single application scope; everything beyond that is resolved from the user table at request time.
+
+The detailed access-control specification is in [appendix.md](appendix.md).
 
 ---
 
 ## 2. Software Architecture
 
-```mermaid
-%%{init: {'theme':'neutral', 'themeVariables': { 'fontSize': '13px'}}}%%
-graph TB
-    classDef client     fill:#e3f2fd,stroke:#1976d2,color:#0d47a1
-    classDef btp        fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
-    classDef app        fill:#fff8e1,stroke:#f57c00,color:#e65100
-    classDef handler    fill:#f3e5f5,stroke:#6a1b9a,color:#4a148c
-    classDef lib        fill:#fce4ec,stroke:#c2185b,color:#880e4f
-    classDef db         fill:#fbe9e7,stroke:#bf360c,color:#3e2723
+Layers: client → BTP platform → API layer (authenticated OData and public REST) → business logic → supporting libraries → database. The platform also surfaces a Swagger UI and a health check endpoint.
 
-    subgraph CL["Client Layer"]
-        UI["SAPUI5 / Fiori Elements<br/>(TBD)"]
-        QR["Mobile Browser<br/>via QR-Scan"]
-        AUD["HTTP Client<br/>(Auditor / Behörde)"]
-    end
-    class UI,QR,AUD client
+![Software Architecture](diagrams/software-architecture.png)
 
-    subgraph CF["SAP BTP — Cloud Foundry"]
-        APPROUTER["Application Router"]
-        XSUAA["XSUAA<br/>Authorization & Trust"]
-        class APPROUTER,XSUAA btp
+Editable source: [diagrams/software-architecture.drawio](diagrams/software-architecture.drawio)
 
-        subgraph SRV["dpp-capgemini-srv (Node.js, CAP)"]
-            ODATA["DPPService<br/>OData V4<br/>/odata/v4/dpp"]
-            REST["Public REST<br/>/public/dpp/:token<br/>/healthz"]
-            class ODATA,REST app
+### 2.1 Component overview
 
-            subgraph H["Handler Layer (srv/handlers/)"]
-                PH["product-handlers<br/>defaults · BOM cycle"]
-                DH["dpp-handlers<br/>approve/publish/<br/>archive · snapshot ·<br/>QR rotation"]
-                IH["import-handlers<br/>XLSX → UPSERT"]
-                EH["export-handlers<br/>XLSX writer"]
-                PDH["pdf-handlers<br/>DPP-PDF · QR-Label"]
-                PUH["public-handler<br/>token verify ·<br/>consumer DTO"]
-            end
-            class PH,DH,IH,EH,PDH,PUH handler
+**Client layer**
 
-            subgraph L["Lib Layer (srv/lib/)"]
-                TOK["token.js<br/>HMAC-SHA256"]
-                XLS["excel-templates<br/>columns · parser ·<br/>validator"]
-                PDF["pdf-renderer<br/>PDFKit · QRCode"]
-            end
-            class TOK,XLS,PDF lib
-        end
-    end
+- A SAPUI5 or Fiori Elements UI is planned for Sprint 2+; the current MVP exposes the backend directly via OData
+- Consumers reach the system from a mobile browser via QR scan
+- Market surveillance authorities use any HTTP client and the same public token URL as consumers
 
-    HANA[("SAP HANA Cloud<br/>HDI Container<br/>11 catalogue tables")]
-    class HANA db
+**BTP platform layer**
 
-    UI -->|"OData V4 + JWT"| APPROUTER
-    AUD -->|"OData V4 + JWT"| APPROUTER
-    QR -->|"HTTP GET<br/>(no auth)"| REST
-    APPROUTER -->|"JWT verify"| XSUAA
-    APPROUTER -->|"forward"| ODATA
+- Application Router handles single sign-on and serves the static UI
+- Authorization and Trust Service (XSUAA) issues and verifies tokens
+- Runtime Secrets are stored in a user-provided service and injected at boot
 
-    ODATA --> PH
-    ODATA --> DH
-    ODATA --> IH
-    ODATA --> EH
-    ODATA --> PDH
-    REST  --> PUH
+**API layer**
 
-    DH  --> TOK
-    PUH --> TOK
-    IH  --> XLS
-    EH  --> XLS
-    PDH --> PDF
+- Authenticated OData V4 service exposing 11 entity projections, 4 lifecycle actions and 1 QR-image function on the passport
+- Public REST endpoints for the consumer view, the QR image and the health check
+- A role and tenant resolver looks up the caller in the user table and applies tenant scope before any handler runs
 
-    PH  -->|"CDS query"| HANA
-    DH  -->|"CDS query"| HANA
-    IH  -->|"INSERT/UPDATE"| HANA
-    EH  -->|"SELECT"| HANA
-    PDH -->|"SELECT"| HANA
-    PUH -->|"SELECT"| HANA
-```
+**Business logic layer**
 
-Source: [diagrams/software-architecture.mmd](diagrams/software-architecture.mmd)
+- Product logic — applies defaults, runs the bill-of-materials cycle check, archives products
+- Passport lifecycle logic — approves, publishes, archives passports; rotates QR codes; builds aggregated snapshots
+- Public view logic — verifies the signed QR token and assembles the consumer payload
+- Identity logic — returns the caller's identity to the UI
 
-### OData / REST endpoint inventory
+**Supporting libraries**
 
-| Path | Verb | Function | Auth |
+- Signed token library (creates and verifies the QR token)
+- Secret loader (injects runtime secrets into the backend)
+
+**Database**
+
+- SAP HANA Cloud, single isolated database container, 11 catalogue tables
+
+### 2.2 Endpoint inventory
+
+| Path | Verb | What it does | Who can call it |
 |---|---|---|---|
-| `/odata/v4/dpp` | GET/POST/PATCH/DELETE | 11 entity projections | XSUAA scope |
-| `/odata/v4/dpp/DPPs(id)/DPPService.approveDPP` | POST | draft → approved | company_advanced |
-| `/odata/v4/dpp/DPPs(id)/DPPService.publishDPP` | POST | approved → published + Snapshot + QR | company_advanced |
-| `/odata/v4/dpp/DPPs(id)/DPPService.archiveDPP` | POST | → archived | company_advanced |
-| `/odata/v4/dpp/DPPs(id)/DPPService.regenerateQRToken` | POST | new HMAC token | company_advanced |
-| `/odata/v4/dpp/DPPs(id)/DPPService.generateQRCode` | GET | Base64-PNG inline | company_advanced |
-| `/odata/v4/dpp/DPPs(id)/DPPService.exportDPPasPDF` | GET | PDF | company_advanced |
-| `/odata/v4/dpp/DPPs(id)/DPPService.generateQRLabel` | GET | printable label PDF | company_advanced |
-| `/odata/v4/dpp/importProducts` | POST | Excel UPSERT | company_advanced |
-| `/odata/v4/dpp/importBatches` | POST | Excel UPSERT | company_advanced |
-| `/odata/v4/dpp/importBOM` | POST | Excel UPSERT | company_advanced |
-| `/odata/v4/dpp/downloadTemplate(template=...)` | GET | XLSX template | company_advanced / company_user |
-| `/odata/v4/dpp/exportProducts()` | GET | XLSX export | company_advanced / company_user |
-| `/odata/v4/dpp/exportBOM()` | GET | XLSX export | company_advanced / company_user |
-| `/odata/v4/dpp/exportDPP(dppId=...)` | GET | single DPP XLSX | company_advanced / company_user |
-| `/odata/v4/dpp/exportDPPs(dppIds=...)` | GET | bulk DPP XLSX | company_advanced / company_user |
-| `/odata/v4/dpp/exportTraceability()` | GET | multi-sheet XLSX | company_advanced / company_user |
-| `/odata/v4/authority/<entity>` | GET | Cross-tenant read-only | end_user |
-| `/public/dpp/:token` | GET | consumer DTO (JSON) | none |
-| `/public/dpp/:token/qr.png` | GET | QR PNG | none |
-| `/healthz` | GET | health check | none |
-
-### DPP lifecycle
-
-```mermaid
-%%{init: {'theme':'neutral', 'themeVariables': { 'fontSize': '13px'}}}%%
-stateDiagram-v2
-    [*] --> draft : POST /DPPs
-
-    draft --> approved : approveDPP()<br/>(mandatory fields OK)
-    draft --> in_review : manual transition<br/>(future workflow)
-    in_review --> approved : approveDPP()
-
-    approved --> published : publishDPP()<br/>+ buildSnapshot<br/>+ rotateActiveQRCode
-
-    published --> published : publishDPP()<br/>(version++ on re-publish)
-
-    draft --> archived : archiveDPP()
-    in_review --> archived : archiveDPP()
-    approved --> archived : archiveDPP()
-    published --> archived : archiveDPP()
-
-    archived --> [*]
-```
-
-Source: [diagrams/dpp-lifecycle.mmd](diagrams/dpp-lifecycle.mmd)
-
-### Sprint-1 demo flow
-
-The end-to-end happy-path sequence used as the MVP acceptance test (see [Epics and user stories.pdf](../../Epics%20and%20user%20stories.pdf), Sprint-1 demo scenario):
-
-Source: [diagrams/sprint1-demo-sequence.mmd](diagrams/sprint1-demo-sequence.mmd)
+| `/odata/v4/dpp` | GET / POST / PATCH / DELETE | Read or write any of the 11 catalogue entities | Authenticated users (tenant-scoped) |
+| `/odata/v4/dpp/DPPs(id)/DPPService.approveDPP` | POST | Move the passport from Draft to Approved | Advanced company user |
+| `/odata/v4/dpp/DPPs(id)/DPPService.publishDPP` | POST | Publish the passport, build a snapshot and rotate the QR code | Advanced company user |
+| `/odata/v4/dpp/DPPs(id)/DPPService.archiveDPP` | POST | Soft-delete the passport | Advanced company user |
+| `/odata/v4/dpp/DPPs(id)/DPPService.regenerateQRToken` | POST | Create a new signed QR token (old one is invalidated) | Advanced company user |
+| `/odata/v4/dpp/DPPs(id)/DPPService.generateQRCode` | GET | Generate the QR code as an inline image | Advanced company user |
+| `/odata/v4/dpp/me` | GET | Return the caller's identity, role and organisation | Any authenticated user |
+| `/public/dpp/:token` | GET | Public consumer view of a published passport | Public (no login) |
+| `/public/dpp/:token/qr.png` | GET | Printable QR image for a published passport | Public (no login) |
+| `/healthz` | GET | Liveness probe | Public (no login) |
+| `/$api-docs/odata/v4/dpp` | GET | Swagger UI for the OData service | Public (no login) |
 
 ---
 
-## 3. Semantic Model (Entity-Relationship)
+## 3. Semantic Model (Entity Relationship)
 
-```mermaid
-%%{init: {'theme':'neutral', 'themeVariables': { 'fontSize': '12px'}}}%%
-erDiagram
-    Organizations ||--o{ Users : "owns"
-    Organizations ||--o{ BusinessPartners : "owns"
-    Organizations ||--o{ Products : "owns"
+The conceptual data model — 11 entities with their attributes and foreign key relationships, drawn in crow's-foot notation. The semantic view omits foreign-key columns, audit timestamps and operational marker fields; the full schema detail is in section 4.
 
-    BusinessPartners ||--o{ BusinessPartnerRoles : "has roles"
-    BusinessPartners ||--o{ Batches : "factory"
-    BusinessPartners ||--o{ Batches : "supplier"
+![Entity Relationship Diagram](diagrams/erd.png)
 
-    Products ||--o{ ProductVariants : "has variants"
-    Products ||--o{ ProductBOMs : "parent of"
-    Products ||--o{ ProductBOMs : "component in"
+Editable source: [diagrams/erd.mmd](diagrams/erd.mmd)
 
-    ProductVariants ||--o{ Batches : "produced in"
-    Batches ||--o{ ProductItems : "contains"
-    ProductItems ||--o| DPPs : "1:1 DPP"
+### 3.1 Cardinalities
 
-    DPPs ||--o{ QRCodes : "QR history"
-    ProductBOMs }o--o| DPPs : "linked material DPP"
-```
+Cross-referenced with the official field catalogue (sheet 5):
 
-Full attribute-level ERD in [diagrams/erd.mmd](diagrams/erd.mmd).
-
-Cardinalities — cross-referenced with the official Field Catalogue (`Fashion_DPP_Object_Field_Catalogue.xlsm`, Sheet 5):
-
-| Relation | Cardinality | Catalogue Ref |
+| Relationship | Cardinality | Catalogue reference |
 |---|---|---|
-| Organizations → Users | 1:N | R2 |
-| Organizations → Products | 1:N | R3 |
-| BusinessPartners → BusinessPartnerRoles | 1:N | R4 |
-| Products → ProductVariants | 1:N | R5 |
-| ProductVariants → Batches | 1:N | R6 |
-| Batches → ProductItems | 1:N | R7 |
-| ProductItems → DPPs | 1:1 | R8 |
-| DPPs → QRCodes | 1:N (1 active + history) | R9 |
-| Products → ProductBOMs (as parent) | 1:N | R10 |
-| ProductBOMs → Products (as component) | N:1 | R11 |
-| ProductBOMs → DPPs (linked material) | N:0..1 | R12 |
+| Organisation → Users | one to many | R2 |
+| Organisation → Products | one to many | R3 |
+| Business Partner → Business Partner Roles | one to many | R4 |
+| Product → Product Variants | one to many | R5 |
+| Product Variant → Batches | one to many | R6 |
+| Batch → Product Items | one to many | R7 |
+| Product Item → Product Passport | one to one | R8 |
+| Product Passport → QR Codes | one active plus history | R9 |
+| Product → Bill of Materials (as parent) | one to many | R10 |
+| Bill of Materials → Product (as component) | many to one | R11 |
+| Bill of Materials → Product Passport (linked material) | many to optional one | R12 |
+
+### 3.2 Traceability chain
+
+The semantic core of the model is the traceability chain from a physical article back through production to the original product definition:
+
+```
+Organisation
+   owns → Product → has variants → Batch → contains → Product Item
+                                                          ↓ one to one
+                                                  Product Passport → QR Code history
+
+   Product → Bill of Materials → optional link to → upstream Product Passport
+```
+
+A single physical item can be traced backwards via batch, variant and product to the brand, and recursively into the supply chain through the bill-of-materials links (for example a finished t-shirt linking to the passport of the cotton fabric it was made from).
+
+### 3.3 Key invariants
+
+- Organisations own users, business partners and products by tenant
+- A product item carries a globally unique product identifier
+- A product passport is exactly one for one product item (when at item granularity)
+- Only one QR code is active per passport at any time; older ones are kept as history
+- A bill-of-materials edge has both a parent and a component product; the component may live in a different organisation (cross-tenant supplier reference)
 
 ---
 
-## 4. Technical Model — Table Schema
+## 4. Technical Data Model
 
-> The implementation uses **SAP CAP / CDS**, not ABAP DDIC. Tables compile to **SAP HANA Cloud** (prod) or **SQLite** (dev). Each column below is given with its CDS type, deployed HANA SQL type, and an ABAP DDIC equivalent for documentation templates that require it.
+The physical schema as deployed to SAP HANA Cloud — 11 tables with columns, data types and constraints.
 
-### 4.1 ORG layer
+![Technical Data Model](diagrams/technical-data-model.png)
 
-#### `DPP_ORGANIZATIONS`
-| Column | CDS Type | HANA Type | Constraints |
+Editable source: [diagrams/technical-data-model.mmd](diagrams/technical-data-model.mmd)
+
+Schema tables in detail follow in sections 4.1 to 4.4. For per-field business semantics see [technical_documentation.md](technical_documentation.md).
+
+### 4.1 Organisation layer
+
+#### Organizations
+| Column | Type | Database type | Constraints |
 |---|---|---|---|
-| ID | String(36) | NVARCHAR(36) | PK |
-| legal_name | String(120) | NVARCHAR(120) | NOT NULL |
-| trade_name | String(120) | NVARCHAR(120) | |
-| country_iso2 | String(2) | NVARCHAR(2) | |
-| city | String(80) | NVARCHAR(80) | |
-| gln | String(13) | NVARCHAR(13) | |
-| website_url | String(500) | NVARCHAR(500) | |
-| contact_email | String(254) | NVARCHAR(254) | |
-| tenant_id | String(64) | NVARCHAR(64) | NOT NULL, UNIQUE |
-| is_platform_tenant | Boolean | BOOLEAN | DEFAULT FALSE |
+| ID | String (36) | NVARCHAR(36) | Primary key |
+| legal_name | String (120) | NVARCHAR(120) | Required |
+| trade_name | String (120) | NVARCHAR(120) | |
+| country_iso2 | String (2) | NVARCHAR(2) | |
+| city | String (80) | NVARCHAR(80) | |
+| gln | String (13) | NVARCHAR(13) | Global Location Number |
+| website_url | String (500) | NVARCHAR(500) | |
+| contact_email | String (254) | NVARCHAR(254) | |
+| tenant_id | String (64) | NVARCHAR(64) | Required, unique |
+| is_platform_tenant | Boolean | BOOLEAN | Defaults to false |
 
-#### `DPP_USERS`
-| Column | CDS Type | HANA Type | Constraints |
+#### Users
+| Column | Type | Database type | Constraints |
 |---|---|---|---|
-| ID | String(36) | NVARCHAR(36) | PK |
-| email | String(254) | NVARCHAR(254) | NOT NULL; UNIQUE per organization |
-| display_name | String(120) | NVARCHAR(120) | |
-| organization_ID | String(36) | NVARCHAR(36) | NOT NULL, FK → ORGANIZATIONS |
-| role | String(20) | NVARCHAR(20) | NOT NULL — enum company_advanced/company_user/end_user |
-| external_user_id | String(120) | NVARCHAR(120) | IdP mapping |
-| active | Boolean | BOOLEAN | DEFAULT TRUE |
+| ID | String (36) | NVARCHAR(36) | Primary key |
+| email | String (254) | NVARCHAR(254) | Required, unique per organisation |
+| display_name | String (120) | NVARCHAR(120) | |
+| organization_ID | String (36) | NVARCHAR(36) | Required, foreign key to Organizations |
+| role | String (20) | NVARCHAR(20) | Required, enum of advanced or standard company user |
+| external_user_id | String (120) | NVARCHAR(120) | Identity provider mapping |
+| active | Boolean | BOOLEAN | Defaults to true |
 
-#### `DPP_BUSINESS_PARTNERS`
-| Column | CDS Type | HANA Type | Constraints |
+#### Business Partners
+| Column | Type | Database type | Constraints |
 |---|---|---|---|
-| ID | String(36) | NVARCHAR(36) | PK |
-| owning_organization_ID | String(36) | NVARCHAR(36) | NOT NULL, FK |
-| name | String(120) | NVARCHAR(120) | NOT NULL |
-| country_iso2 | String(2) | NVARCHAR(2) | |
-| city | String(80) | NVARCHAR(80) | |
-| address | String(200) | NVARCHAR(200) | |
-| contact_person | String(120) | NVARCHAR(120) | |
-| contact_email | String(254) | NVARCHAR(254) | |
-| identifier | String(40) | NVARCHAR(40) | GLN/VAT/DUNS |
-| archived | Boolean | BOOLEAN | DEFAULT FALSE |
+| ID | String (36) | NVARCHAR(36) | Primary key |
+| owning_organization_ID | String (36) | NVARCHAR(36) | Required, foreign key |
+| name | String (120) | NVARCHAR(120) | Required |
+| country_iso2 | String (2) | NVARCHAR(2) | |
+| city | String (80) | NVARCHAR(80) | |
+| address | String (200) | NVARCHAR(200) | |
+| contact_person | String (120) | NVARCHAR(120) | |
+| contact_email | String (254) | NVARCHAR(254) | |
+| identifier | String (40) | NVARCHAR(40) | GLN, VAT or DUNS |
+| archived | Boolean | BOOLEAN | Defaults to false |
 
-#### `DPP_BUSINESS_PARTNER_ROLES`
-| Column | CDS Type | HANA Type | Constraints |
+#### Business Partner Roles
+| Column | Type | Database type | Constraints |
 |---|---|---|---|
-| ID | String(36) | NVARCHAR(36) | PK |
-| partner_ID | String(36) | NVARCHAR(36) | NOT NULL, FK |
-| role | String(24) | NVARCHAR(24) | NOT NULL — enum |
+| ID | String (36) | NVARCHAR(36) | Primary key |
+| partner_ID | String (36) | NVARCHAR(36) | Required, foreign key |
+| role | String (24) | NVARCHAR(24) | Required, enum |
 
-Constraint: `UNIQUE (partner_ID, role)`.
+Constraint: unique on partner_ID and role together.
 
-### 4.2 PRODUCT layer
+### 4.2 Product layer
 
-#### `DPP_PRODUCTS`
-| Column | CDS Type | HANA Type | Constraints |
+#### Products
+| Column | Type | Database type | Constraints |
 |---|---|---|---|
-| ID | String(36) | NVARCHAR(36) | PK |
-| owning_organization_ID | String(36) | NVARCHAR(36) | NOT NULL, FK |
-| product_type | String(12) | NVARCHAR(12) | NOT NULL DEFAULT 'finished' — enum |
-| name | String(120) | NVARCHAR(120) | NOT NULL |
-| brand | String(120) | NVARCHAR(120) | |
-| category | String(60) | NVARCHAR(60) | |
-| model | String(120) | NVARCHAR(120) | |
-| description | String(500) | NVARCHAR(500) | |
-| gtin | String(14) | NVARCHAR(14) | UNIQUE per org |
-| fibre_composition | String(500) | NVARCHAR(500) | |
-| care_instructions | String(500) | NVARCHAR(500) | |
-| repair_instructions | String(500) | NVARCHAR(500) | |
-| disposal_instructions | String(500) | NVARCHAR(500) | |
-| country_of_origin | String(2) | NVARCHAR(2) | ISO-2 |
-| substances_of_concern | String(500) | NVARCHAR(500) | REACH/SCIP text |
-| espr_compliance | String(16) | NVARCHAR(16) | enum |
-| status | String(12) | NVARCHAR(12) | DEFAULT 'draft' — enum |
+| ID | String (36) | NVARCHAR(36) | Primary key |
+| owning_organization_ID | String (36) | NVARCHAR(36) | Required, foreign key |
+| product_type | String (12) | NVARCHAR(12) | Required, defaults to finished good |
+| name | String (120) | NVARCHAR(120) | Required |
+| brand | String (120) | NVARCHAR(120) | |
+| category | String (60) | NVARCHAR(60) | |
+| model | String (120) | NVARCHAR(120) | |
+| description | String (500) | NVARCHAR(500) | |
+| gtin | String (14) | NVARCHAR(14) | Global Trade Item Number, unique per organisation |
+| fibre_composition | String (500) | NVARCHAR(500) | |
+| care_instructions | String (500) | NVARCHAR(500) | |
+| repair_instructions | String (500) | NVARCHAR(500) | |
+| disposal_instructions | String (500) | NVARCHAR(500) | |
+| country_of_origin | String (2) | NVARCHAR(2) | |
+| substances_of_concern | String (500) | NVARCHAR(500) | REACH or SCIP text |
+| espr_compliance | String (16) | NVARCHAR(16) | Enum |
+| status | String (12) | NVARCHAR(12) | Defaults to draft |
 
-#### `DPP_PRODUCT_VARIANTS`
-| Column | CDS Type | HANA Type | Constraints |
+#### Product Variants
+| Column | Type | Database type | Constraints |
 |---|---|---|---|
-| ID | String(36) | NVARCHAR(36) | PK |
-| product_ID | String(36) | NVARCHAR(36) | NOT NULL, FK |
-| color | String(40) | NVARCHAR(40) | |
-| size | String(20) | NVARCHAR(20) | |
-| sku | String(40) | NVARCHAR(40) | UNIQUE per product |
-| gtin | String(14) | NVARCHAR(14) | |
+| ID | String (36) | NVARCHAR(36) | Primary key |
+| product_ID | String (36) | NVARCHAR(36) | Required, foreign key |
+| color | String (40) | NVARCHAR(40) | |
+| size | String (20) | NVARCHAR(20) | |
+| sku | String (40) | NVARCHAR(40) | Stock Keeping Unit, unique per product |
+| gtin | String (14) | NVARCHAR(14) | |
 | weight_g | Integer | INTEGER | |
-| status | String(10) | NVARCHAR(10) | DEFAULT 'active' — enum |
+| status | String (10) | NVARCHAR(10) | Defaults to active |
 
-#### `DPP_BATCHES`
-| Column | CDS Type | HANA Type | Constraints |
+#### Batches
+| Column | Type | Database type | Constraints |
 |---|---|---|---|
-| ID | String(36) | NVARCHAR(36) | PK |
-| variant_ID | String(36) | NVARCHAR(36) | NOT NULL, FK |
-| batch_number | String(40) | NVARCHAR(40) | UNIQUE per variant |
+| ID | String (36) | NVARCHAR(36) | Primary key |
+| variant_ID | String (36) | NVARCHAR(36) | Required, foreign key |
+| batch_number | String (40) | NVARCHAR(40) | Unique per variant |
 | production_date | Date | DATE | |
-| factory_ID | String(36) | NVARCHAR(36) | FK → BusinessPartners |
-| supplier_ID | String(36) | NVARCHAR(36) | FK → BusinessPartners |
-| country_of_origin | String(2) | NVARCHAR(2) | |
-| production_stage | String(60) | NVARCHAR(60) | |
-| co2_footprint_kg | Decimal(10,3) | DECIMAL(10,3) | |
-| recycled_content_pct | Decimal(5,2) | DECIMAL(5,2) | |
-| status | String(12) | NVARCHAR(12) | DEFAULT 'draft' — enum |
+| factory_ID | String (36) | NVARCHAR(36) | Foreign key to Business Partners |
+| supplier_ID | String (36) | NVARCHAR(36) | Foreign key to Business Partners |
+| country_of_origin | String (2) | NVARCHAR(2) | |
+| production_stage | String (60) | NVARCHAR(60) | |
+| co2_footprint_kg | Decimal (10, 3) | DECIMAL(10, 3) | |
+| recycled_content_pct | Decimal (5, 2) | DECIMAL(5, 2) | |
+| status | String (12) | NVARCHAR(12) | Defaults to draft |
 
-#### `DPP_PRODUCT_ITEMS`
-| Column | CDS Type | HANA Type | Constraints |
+#### Product Items
+| Column | Type | Database type | Constraints |
 |---|---|---|---|
-| ID | String(36) | NVARCHAR(36) | PK |
-| batch_ID | String(36) | NVARCHAR(36) | NOT NULL, FK |
-| serial_number | String(40) | NVARCHAR(40) | UNIQUE per batch |
-| upi | String(60) | NVARCHAR(60) | UNIQUE global |
-| item_status | String(12) | NVARCHAR(12) | DEFAULT 'active' — enum |
+| ID | String (36) | NVARCHAR(36) | Primary key |
+| batch_ID | String (36) | NVARCHAR(36) | Required, foreign key |
+| serial_number | String (40) | NVARCHAR(40) | Unique per batch |
+| upi | String (60) | NVARCHAR(60) | Unique Product Identifier, globally unique |
+| item_status | String (12) | NVARCHAR(12) | Defaults to active |
 | created_date | Date | DATE | |
-| dpp_ID | String(36) | NVARCHAR(36) | FK → DPPs |
+| dpp_ID | String (36) | NVARCHAR(36) | Foreign key |
 
-#### `DPP_PRODUCT_BOMS`
-| Column | CDS Type | HANA Type | Constraints |
+#### Product BOMs
+| Column | Type | Database type | Constraints |
 |---|---|---|---|
-| ID | String(36) | NVARCHAR(36) | PK |
-| parent_ID | String(36) | NVARCHAR(36) | NOT NULL, FK → Products |
-| component_ID | String(36) | NVARCHAR(36) | NOT NULL, FK → Products |
-| quantity | Decimal(10,3) | DECIMAL(10,3) | |
-| unit | String(8) | NVARCHAR(8) | % / kg / m / pcs |
-| component_role | String(60) | NVARCHAR(60) | |
-| is_mandatory | Boolean | BOOLEAN | DEFAULT TRUE |
-| linked_dpp_ID | String(36) | NVARCHAR(36) | FK → DPPs |
-| status | String(12) | NVARCHAR(12) | DEFAULT 'active' — enum |
+| ID | String (36) | NVARCHAR(36) | Primary key |
+| parent_ID | String (36) | NVARCHAR(36) | Required, foreign key to Products |
+| component_ID | String (36) | NVARCHAR(36) | Required, foreign key to Products |
+| quantity | Decimal (10, 3) | DECIMAL(10, 3) | |
+| unit | String (8) | NVARCHAR(8) | Percent, kg, m or pieces |
+| component_role | String (60) | NVARCHAR(60) | |
+| is_mandatory | Boolean | BOOLEAN | Defaults to true |
+| linked_dpp_ID | String (36) | NVARCHAR(36) | Foreign key, optional |
+| status | String (12) | NVARCHAR(12) | Defaults to active |
 
-Constraint: `UNIQUE (parent_ID, component_ID)` — prevents duplicate BOM edges.
+Constraint: unique on parent_ID and component_ID together — prevents duplicate BOM edges.
 
-### 4.3 DPP layer
+### 4.3 Product Passport layer
 
-#### `DPP_DPPS`
-| Column | CDS Type | HANA Type | Constraints |
+#### DPPs
+| Column | Type | Database type | Constraints |
 |---|---|---|---|
-| ID | String(36) | NVARCHAR(36) | PK |
-| product_ID | String(36) | NVARCHAR(36) | NOT NULL, FK |
-| item_ID | String(36) | NVARCHAR(36) | FK |
-| granularity | String(8) | NVARCHAR(8) | DEFAULT 'item' — enum |
-| dpp_type | String(12) | NVARCHAR(12) | DEFAULT 'product' — enum |
-| status | String(12) | NVARCHAR(12) | DEFAULT 'draft' — enum |
-| visibility | String(8) | NVARCHAR(8) | DEFAULT 'internal' — enum |
-| current_version | Integer | INTEGER | DEFAULT 1 |
-| qr_token | String(128) | NVARCHAR(128) | UNIQUE — HMAC-signed |
-| qr_payload_url | String(500) | NVARCHAR(500) | |
-| public_url | String(500) | NVARCHAR(500) | |
+| ID | String (36) | NVARCHAR(36) | Primary key |
+| product_ID | String (36) | NVARCHAR(36) | Required, foreign key |
+| item_ID | String (36) | NVARCHAR(36) | Foreign key |
+| granularity | String (8) | NVARCHAR(8) | Defaults to item |
+| dpp_type | String (12) | NVARCHAR(12) | Defaults to product |
+| status | String (12) | NVARCHAR(12) | Defaults to draft |
+| visibility | String (8) | NVARCHAR(8) | Defaults to internal |
+| current_version | Integer | INTEGER | Defaults to 1 |
+| qr_token | String (128) | NVARCHAR(128) | Unique, signed |
+| qr_payload_url | String (500) | NVARCHAR(500) | |
+| public_url | String (500) | NVARCHAR(500) | |
 | approved_at | Timestamp | TIMESTAMP | |
 | published_at | Timestamp | TIMESTAMP | |
 | archived_at | Timestamp | TIMESTAMP | |
 | valid_from | Date | DATE | |
 | last_updated | Timestamp | TIMESTAMP | |
-| aggregated_snapshot | LargeString | NCLOB | JSON snapshot |
-| storytelling | LargeString | NCLOB | JSON array |
+| aggregated_snapshot | Large string | NCLOB | JSON snapshot frozen at publication |
+| storytelling | Large string | NCLOB | JSON array |
 
-#### `DPP_QR_CODES`
-| Column | CDS Type | HANA Type | Constraints |
+#### QR Codes
+| Column | Type | Database type | Constraints |
 |---|---|---|---|
-| ID | String(36) | NVARCHAR(36) | PK |
-| dpp_ID | String(36) | NVARCHAR(36) | NOT NULL, FK |
-| qr_value | String(500) | NVARCHAR(500) | Encoded URL |
-| qr_image_url | String(500) | NVARCHAR(500) | |
-| status | String(10) | NVARCHAR(10) | DEFAULT 'active' — enum |
+| ID | String (36) | NVARCHAR(36) | Primary key |
+| dpp_ID | String (36) | NVARCHAR(36) | Required, foreign key |
+| qr_value | String (500) | NVARCHAR(500) | Encoded URL |
+| qr_image_url | String (500) | NVARCHAR(500) | |
+| status | String (10) | NVARCHAR(10) | Defaults to active |
 | created_at | Timestamp | TIMESTAMP | |
 | replaced_at | Timestamp | TIMESTAMP | |
 
-### 4.4 CDS → HANA SQL → ABAP DDIC mapping
+### 4.4 Type mapping reference
 
-For documentation templates that require ABAP-DDIC equivalents:
+For documentation templates that require an ABAP equivalent:
 
-| CDS | HANA SQL | ABAP DDIC | Notes |
+| Modelling type | HANA SQL | ABAP equivalent | Notes |
 |---|---|---|---|
-| `String(n)` | `NVARCHAR(n)` | `CHAR(n)` / `SSTRING` | UTF-16 in HANA |
-| `LargeString` | `NCLOB` | `STRING` | up to 2 GB |
-| `Boolean` | `BOOLEAN` | `BOOLE_D` / `ABAP_BOOL` | |
-| `Integer` | `INTEGER` | `INT4` | 32-bit signed |
-| `Integer64` | `BIGINT` | `INT8` | 64-bit signed |
-| `Decimal(p,s)` | `DECIMAL(p,s)` | `DEC(p,s)` | |
-| `Date` | `DATE` | `DATS` | YYYYMMDD |
-| `Time` | `TIME` | `TIMS` | HHMMSS |
-| `Timestamp` | `TIMESTAMP` | `TIMESTAMPL` | 100 ns precision |
-| `UUID` | `NVARCHAR(36)` | `SYSUUID_C32` / `SYSUUID_X16` | |
-
----
-
-## 6. Authorization — current state vs target state (May 2026)
-
-The diagrams and endpoint table in §2 describe the **target** authorization model: three application roles (`company_advanced`, `company_user`, `end_user`) plus tenant-isolation `where`-clauses, all resolved via XSUAA scopes that the BTP cockpit maps onto subaccount users.
-
-**Current state on the deployed BTP environment:**
-
-| Aspect | Target | Interim (now) |
-|---|---|---|
-| Authentication | XSUAA SSO via approuter | unchanged ✓ |
-| Service guard | per-entity `@restrict` with `to: [company_*]` and `where: tenant_id = $user.tenant` | service-level `@(requires: 'authenticated-user')` only — any logged-in SSO user can access all entities, no tenant filter |
-| Role assignment | Cockpit role-collection → JWT scope → `req.user.is(role)` | every SSO user gets the same effective view |
-| Tenant attribute | `tenant` attribute mapping in cockpit, consumed via `$user.tenant` | not enforced |
-
-**Why interim:** the BTP UCC learn-tenant we deploy to does not allow trainees to assign role collections in the cockpit, and three iterations of CAP 9 middleware hooks (`cds.middlewares.before.push`, `srv.before('*')`, `cds.on('served')`) failed to inject app-resolved roles into `req.user` before CAP's `@restrict` evaluation. To keep the demo usable, the service guard was temporarily relaxed; the role enum, the `Users` lookup helpers in `srv/server.js`, the `xs-security.json` scopes, and the BTP role collections are all still in place.
-
-**How to roll back to the target model**, once cockpit-side role collection assignment is available (UCC ticket or own sub-account):
-
-1. `git show 3f46dde:srv/dpp-service.cds > srv/dpp-service.cds`
-2. `git show 3f46dde:srv/authority-service.cds > srv/authority-service.cds`
-3. `git show 3f46dde:test/integration/auth-isolation.test.js > test/integration/auth-isolation.test.js`
-4. `git show 3f46dde:test/integration/bom-tree.test.js > test/integration/bom-tree.test.js`
-5. `npm test && mbt build && cf deploy mta_archives/dpp-capgemini_0.1.0.mtar`
-
-The role-resolution middleware in `srv/server.js` (`lookupAppUser` + `applyAppRoleToUser`) is kept exactly as written and will be re-engaged via a working hook once we have a reproducible attach point.
+| String of length n | NVARCHAR(n) | CHAR(n) or SSTRING | UTF-16 in HANA |
+| Large string | NCLOB | STRING | Up to 2 GB |
+| Boolean | BOOLEAN | BOOLE_D or ABAP_BOOL | |
+| Integer | INTEGER | INT4 | 32-bit signed |
+| Long integer | BIGINT | INT8 | 64-bit signed |
+| Decimal of precision p and scale s | DECIMAL(p, s) | DEC(p, s) | |
+| Date | DATE | DATS | YYYYMMDD |
+| Time | TIME | TIMS | HHMMSS |
+| Timestamp | TIMESTAMP | TIMESTAMPL | 100 ns precision |
+| Unique identifier | NVARCHAR(36) | SYSUUID_C32 or SYSUUID_X16 | |
 
 ---
 
 ## References
 
-- Catalogue: [Fashion_DPP_Object_Field_Catalogue.xlsm](../../Fashion_DPP_Object_Field_Catalogue.xlsm)
+- Field catalogue: [Fashion_DPP_Object_Field_Catalogue.xlsm](../../Fashion_DPP_Object_Field_Catalogue.xlsm)
 - Requirements: [SS26_Capgemini_requirements_presentation.docx.pdf](../../SS26_Capgemini_requirements_presentation.docx.pdf)
-- User Stories: [Epics and user stories.pdf](../../Epics%20and%20user%20stories.pdf)
+- User stories: [Epics and user stories.pdf](../../Epics%20and%20user%20stories.pdf)
 - BTP Solution Diagrams icon set: <https://sap.github.io/btp-solution-diagrams/>
+- Diagram editing workflow: [diagrams/README.md](diagrams/README.md)
+- Per-field business semantics and lifecycle details: [technical_documentation.md](technical_documentation.md)
+- Supplementary material (solution context, deployment topology, lifecycle, demo sequence, access control): [appendix.md](appendix.md)

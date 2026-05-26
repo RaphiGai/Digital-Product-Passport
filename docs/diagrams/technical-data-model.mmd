@@ -1,0 +1,163 @@
+%%{init: {'theme':'neutral', 'themeVariables': { 'fontSize': '12px'}}}%%
+erDiagram
+
+    %% Organisation layer
+    organizations      ||--o{ users                  : "organization_ID"
+    organizations      ||--o{ business_partners      : "owning_organization_ID"
+    organizations      ||--o{ products               : "owning_organization_ID"
+    business_partners  ||--o{ business_partner_roles : "partner_ID"
+
+    %% Product layer
+    products           ||--o{ product_variants       : "product_ID"
+    product_variants   ||--o{ batches                : "variant_ID"
+    batches            ||--o{ product_items          : "batch_ID"
+    business_partners  ||--o{ batches                : "factory_ID"
+    business_partners  ||--o{ batches                : "supplier_ID"
+    products           ||--o{ product_boms           : "parent_ID"
+    product_boms       }o--|| products               : "component_ID"
+
+    %% Passport layer
+    products           ||--o{ dpps                   : "product_ID"
+    product_items      ||--o| dpps                   : "dpp_ID"
+    dpps               ||--o{ qr_codes               : "dpp_ID"
+    product_boms       }o--o| dpps                   : "linked_dpp_ID"
+
+    organizations {
+        nvarchar_36  ID                   PK
+        nvarchar_120 legal_name              "Required"
+        nvarchar_120 trade_name
+        nvarchar_2   country_iso2
+        nvarchar_80  city
+        nvarchar_13  gln
+        nvarchar_500 website_url
+        nvarchar_254 contact_email
+        nvarchar_64  tenant_id            UK "Required"
+        boolean      is_platform_tenant      "Default false"
+    }
+
+    users {
+        nvarchar_36  ID                   PK
+        nvarchar_254 email                   "Required, Unique per org"
+        nvarchar_120 display_name
+        nvarchar_20  role                    "Required, enum"
+        nvarchar_120 external_user_id
+        boolean      active                  "Default true"
+        nvarchar_36  organization_ID      FK "Required"
+    }
+
+    business_partners {
+        nvarchar_36  ID                   PK
+        nvarchar_120 name                    "Required"
+        nvarchar_2   country_iso2
+        nvarchar_80  city
+        nvarchar_200 address
+        nvarchar_120 contact_person
+        nvarchar_254 contact_email
+        nvarchar_40  identifier              "GLN, VAT or DUNS"
+        boolean      archived                "Default false"
+        nvarchar_36  owning_organization_ID FK "Required"
+    }
+
+    business_partner_roles {
+        nvarchar_36  ID                   PK
+        nvarchar_24  role                    "Required, enum, Unique with partner_ID"
+        nvarchar_36  partner_ID           FK "Required"
+    }
+
+    products {
+        nvarchar_36  ID                   PK
+        nvarchar_12  product_type            "Required, enum, Default finished"
+        nvarchar_120 name                    "Required"
+        nvarchar_120 brand
+        nvarchar_60  category
+        nvarchar_120 model
+        nvarchar_500 description
+        nvarchar_14  gtin                    "Unique per organisation"
+        nvarchar_500 fibre_composition
+        nvarchar_500 care_instructions
+        nvarchar_500 repair_instructions
+        nvarchar_500 disposal_instructions
+        nvarchar_2   country_of_origin
+        nvarchar_500 substances_of_concern
+        nvarchar_16  espr_compliance         "enum"
+        nvarchar_12  status                  "enum, Default draft"
+        nvarchar_36  owning_organization_ID FK "Required"
+    }
+
+    product_variants {
+        nvarchar_36  ID                   PK
+        nvarchar_40  color
+        nvarchar_20  size
+        nvarchar_40  sku                     "Unique per product"
+        nvarchar_14  gtin
+        integer      weight_g
+        nvarchar_10  status                  "enum, Default active"
+        nvarchar_36  product_ID           FK "Required"
+    }
+
+    batches {
+        nvarchar_36   ID                  PK
+        nvarchar_40   batch_number           "Unique per variant"
+        date          production_date
+        nvarchar_2    country_of_origin
+        nvarchar_60   production_stage
+        decimal_10_3  co2_footprint_kg
+        decimal_5_2   recycled_content_pct
+        nvarchar_12   status                 "enum, Default draft"
+        nvarchar_36   variant_ID          FK "Required"
+        nvarchar_36   factory_ID          FK "to business_partners"
+        nvarchar_36   supplier_ID         FK "to business_partners"
+    }
+
+    product_items {
+        nvarchar_36  ID                   PK
+        nvarchar_40  serial_number           "Unique per batch"
+        nvarchar_60  upi                  UK "globally unique"
+        nvarchar_12  item_status             "enum, Default active"
+        date         created_date
+        nvarchar_36  batch_ID             FK "Required"
+        nvarchar_36  dpp_ID               FK
+    }
+
+    product_boms {
+        nvarchar_36   ID                  PK
+        decimal_10_3  quantity
+        nvarchar_8    unit                   "percent, kg, m, pieces"
+        nvarchar_60   component_role
+        boolean       is_mandatory           "Default true"
+        nvarchar_12   status                 "enum, Default active"
+        nvarchar_36   parent_ID           FK "to products, Required"
+        nvarchar_36   component_ID        FK "to products, Required"
+        nvarchar_36   linked_dpp_ID       FK "to dpps, optional"
+    }
+
+    dpps {
+        nvarchar_36   ID                  PK
+        nvarchar_8    granularity            "enum, Default item"
+        nvarchar_12   dpp_type               "enum, Default product"
+        nvarchar_12   status                 "enum, Default draft"
+        nvarchar_8    visibility             "enum, Default internal"
+        integer       current_version        "Default 1"
+        nvarchar_128  qr_token            UK "HMAC signed"
+        nvarchar_500  qr_payload_url
+        nvarchar_500  public_url
+        timestamp     approved_at
+        timestamp     published_at
+        timestamp     archived_at
+        date          valid_from
+        timestamp     last_updated
+        nclob         aggregated_snapshot    "JSON snapshot at publication"
+        nclob         storytelling           "JSON array"
+        nvarchar_36   product_ID          FK "Required"
+        nvarchar_36   item_ID             FK
+    }
+
+    qr_codes {
+        nvarchar_36   ID                  PK
+        nvarchar_500  qr_value               "Encoded URL"
+        nvarchar_500  qr_image_url
+        nvarchar_10   status                 "enum, Default active"
+        timestamp     created_at
+        timestamp     replaced_at
+        nvarchar_36   dpp_ID              FK "Required"
+    }

@@ -1,0 +1,171 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Solution Context" id="solution-context">
+    <mxGraphModel dx="1664" dy="914" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;fontSize=22;fontStyle=1;align=center;fontColor=#354A5F;" value="DPP Capgemini — Solution Context" vertex="1">
+          <mxGeometry height="32" width="760" x="320" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" parent="1" style="text;html=1;fontSize=11;fontStyle=2;align=center;fontColor=#888;" value="High-level actors, system boundary, and external systems — Icons: SAP BTP Solution Diagrams (Apache-2.0)" vertex="1">
+          <mxGeometry height="20" width="760" x="320" y="52" as="geometry" />
+        </mxCell>
+        <mxCell id="actor-brand" parent="1" style="shape=mxgraph.gcp2.colored.user;html=1;labelPosition=right;align=left;spacingLeft=14;verticalLabelPosition=middle;verticalAlign=middle;fontSize=11;" value="Brand or Manufacturer&#xa;(advanced company user)&#xa;&#xa;• Maintain master data&#xa;• Create, approve and publish&#xa;  the product passport&#xa;• Generate QR codes" vertex="1">
+          <mxGeometry height="70" width="60" x="90" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="actor-staff" parent="1" style="shape=mxgraph.gcp2.colored.user;html=1;labelPosition=right;align=left;spacingLeft=14;verticalLabelPosition=middle;verticalAlign=middle;fontSize=11;fillColor=#E8F5E9;strokeColor=#2E7D32;" value="Internal Employee&#xa;(standard company user)&#xa;&#xa;• Read-only on own tenant data&#xa;• View QR codes and passports" vertex="1">
+          <mxGeometry height="70" width="60" x="90" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="actor-consumer" parent="1" style="shape=mxgraph.android.phone2;html=1;labelPosition=right;align=left;spacingLeft=14;verticalLabelPosition=middle;verticalAlign=middle;fontSize=11;strokeColor=#1976D2;fillColor=#E3F2FD;" value="Consumer&#xa;(unauthenticated)&#xa;&#xa;Scan the QR code and view the&#xa;public product passport in a&#xa;mobile browser" vertex="1">
+          <mxGeometry height="90" width="55" x="90" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="btp-boundary" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F9FC;strokeColor=#0a6ed1;strokeWidth=3;verticalAlign=top;align=center;" value="" vertex="1">
+          <mxGeometry height="640" width="640" x="400" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="btp-icon" parent="1" style="shape=image;html=1;verticalAlign=middle;aspect=fixed;image=https://raw.githubusercontent.com/SAP/btp-solution-diagrams/main/assets/shape-libraries-and-editable-presets/svg/10017-sap-btp_cloud-foundry-runtime_sd.svg;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="475" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="btp-label" parent="1" style="text;html=1;fontSize=14;fontStyle=1;fontColor=#0a6ed1;verticalAlign=middle;align=left;" value="SAP Business Technology Platform" vertex="1">
+          <mxGeometry height="40" width="400" x="525" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="dpp-system" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0854A0;strokeWidth=2;verticalAlign=top;" value="" vertex="1">
+          <mxGeometry height="280" width="560" x="440" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="dpp-system-title" parent="1" style="text;html=1;fontSize=14;fontStyle=1;fontColor=#0854A0;align=center;" value="DPP Capgemini — Digital Product Passport (Fashion)" vertex="1">
+          <mxGeometry height="24" width="560" x="440" y="195" as="geometry" />
+        </mxCell>
+        <mxCell id="dpp-system-sub" parent="1" style="text;html=1;fontSize=11;fontStyle=2;fontColor=#666;align=center;" value="EU ESPR-aligned · CAP and Node.js · OData V4 and public REST" vertex="1">
+          <mxGeometry height="20" width="560" x="440" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="cap-1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontColor=#0D47A1;fontSize=11;" value="Master Data Management&#xa;(Organisation, Business Partner,&#xa;Product, Bill of Materials)" vertex="1">
+          <mxGeometry height="60" width="220" x="470" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="cap-2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#F57C00;fontColor=#E65100;fontSize=11;" value="Product Passport Lifecycle&#xa;Draft to Published to Archived" vertex="1">
+          <mxGeometry height="60" width="220" x="710" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="cap-3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#6A1B9A;fontColor=#4A148C;fontSize=11;" value="QR Code and Signed Token&#xa;Public Consumer View" vertex="1">
+          <mxGeometry height="60" width="220" x="470" y="335" as="geometry" />
+        </mxCell>
+        <mxCell id="cap-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE4EC;strokeColor=#C2185B;fontColor=#880E4F;fontSize=11;" value="Access Control&#xa;Tenant isolation and role-based access" vertex="1">
+          <mxGeometry height="60" width="220" x="710" y="335" as="geometry" />
+        </mxCell>
+        <mxCell id="svc-tier" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#CCC;dashed=1;verticalAlign=top;align=left;fontStyle=2;fontColor=#666;spacingLeft=10;spacingTop=2;fontSize=10;" value="Platform services in use" vertex="1">
+          <mxGeometry height="120" width="600" x="420" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="svc-hana" parent="1" style="shape=image;html=1;verticalAlign=middle;aspect=fixed;image=https://raw.githubusercontent.com/SAP/btp-solution-diagrams/main/assets/shape-libraries-and-editable-presets/svg/20083-sap-hana-cloud_sd.svg;" value="" vertex="1">
+          <mxGeometry height="48" width="48" x="450" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="svc-hana-lbl" parent="1" style="text;html=1;fontSize=10;align=center;" value="HANA Cloud&#xa;Database" vertex="1">
+          <mxGeometry height="30" width="90" x="430" y="572" as="geometry" />
+        </mxCell>
+        <mxCell id="svc-uaa" parent="1" style="shape=image;html=1;verticalAlign=middle;aspect=fixed;image=https://raw.githubusercontent.com/SAP/btp-solution-diagrams/main/assets/shape-libraries-and-editable-presets/svg/31015-sap-authorization-and-trust-management-service_sd.svg;" value="" vertex="1">
+          <mxGeometry height="48" width="48" x="600" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="svc-uaa-lbl" parent="1" style="text;html=1;fontSize=10;align=center;" value="Authorization&#xa;and Trust" vertex="1">
+          <mxGeometry height="30" width="90" x="580" y="572" as="geometry" />
+        </mxCell>
+        <mxCell id="svc-cf" parent="1" style="shape=image;html=1;verticalAlign=middle;aspect=fixed;image=https://raw.githubusercontent.com/SAP/btp-solution-diagrams/main/assets/shape-libraries-and-editable-presets/svg/10017-sap-btp_cloud-foundry-runtime_sd.svg;" value="" vertex="1">
+          <mxGeometry height="48" width="48" x="750" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="svc-cf-lbl" parent="1" style="text;html=1;fontSize=10;align=center;" value="Cloud Foundry&#xa;Runtime" vertex="1">
+          <mxGeometry height="30" width="90" x="730" y="572" as="geometry" />
+        </mxCell>
+        <mxCell id="svc-approuter" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00C19E;strokeColor=#008F77;fontColor=#FFFFFF;fontSize=10;fontStyle=1;" value="Application Router&#xa;(Static and Auth)" vertex="1">
+          <mxGeometry height="48" width="110" x="890" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="svc-approuter-lbl" parent="1" style="text;html=1;fontSize=10;align=center;" value="Application Router" vertex="1">
+          <mxGeometry height="30" width="130" x="880" y="572" as="geometry" />
+        </mxCell>
+        <mxCell id="compl-box" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FB8C00;dashed=0;verticalAlign=top;align=left;fontSize=11;fontStyle=1;fontColor=#E65100;spacingLeft=10;spacingTop=4;" value="EU compliance context" vertex="1">
+          <mxGeometry height="60" width="600" x="420" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="compl-txt" parent="1" style="text;html=1;fontSize=10;fontStyle=0;fontColor=#5D4037;align=left;verticalAlign=top;spacingLeft=10;spacingTop=4;" value="ESPR Regulation (EU 2024/1781) · mandatory passport fields for textiles · Market Surveillance (EU 2019/1020)&#xa;Sprint 1 MVP scope: item granularity · signed QR token · public token endpoint" vertex="1">
+          <mxGeometry height="46" width="590" x="420" y="638" as="geometry" />
+        </mxCell>
+        <mxCell id="ext-group" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#999;dashed=1;verticalAlign=top;align=left;fontStyle=1;fontColor=#666;spacingLeft=10;spacingTop=4;" value="External and future systems" vertex="1">
+          <mxGeometry height="640" width="240" x="1100" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="ext-doc" parent="1" style="shape=image;html=1;verticalAlign=middle;aspect=fixed;image=https://raw.githubusercontent.com/SAP/btp-solution-diagrams/main/assets/shape-libraries-and-editable-presets/svg/31027-sap-document-management-service_sd.svg;opacity=60;" value="" vertex="1">
+          <mxGeometry height="48" width="48" x="1130" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="ext-doc-lbl" parent="1" style="text;html=1;fontSize=10;fontColor=#999;align=left;" value="Document Management&#xa;Compliance attachments&#xa;Sprint 2+" vertex="1">
+          <mxGeometry height="60" width="140" x="1188" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="ext-alert" parent="1" style="shape=image;html=1;verticalAlign=middle;aspect=fixed;image=https://raw.githubusercontent.com/SAP/btp-solution-diagrams/main/assets/shape-libraries-and-editable-presets/svg/31060-sap-alert-notification-service-for-sap-btp_sd.svg;opacity=60;" value="" vertex="1">
+          <mxGeometry height="48" width="48" x="1130" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="ext-alert-lbl" parent="1" style="text;html=1;fontSize=10;fontColor=#999;align=left;" value="Alert Notification&#xa;Operations monitoring&#xa;Sprint 2+" vertex="1">
+          <mxGeometry height="60" width="140" x="1188" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="ext-log" parent="1" style="shape=image;html=1;verticalAlign=middle;aspect=fixed;image=https://raw.githubusercontent.com/SAP/btp-solution-diagrams/main/assets/shape-libraries-and-editable-presets/svg/20062-sap-application-logging-service-for-sap-btp_sd.svg;opacity=60;" value="" vertex="1">
+          <mxGeometry height="48" width="48" x="1130" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="ext-log-lbl" parent="1" style="text;html=1;fontSize=10;fontColor=#999;align=left;" value="Application Logging&#xa;Centralised logs&#xa;Sprint 2+" vertex="1">
+          <mxGeometry height="60" width="140" x="1188" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="e-brand" edge="1" parent="1" source="actor-brand" style="endArrow=classic;html=1;rounded=0;strokeColor=#1976D2;strokeWidth=2;fontSize=10;labelBackgroundColor=#ffffff;" target="dpp-system" value="Authenticated access&#xa;(web UI or API client)">
+          <mxGeometry relative="1" x="0.4436" y="3" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-staff" edge="1" parent="1" source="actor-staff" style="endArrow=classic;html=1;rounded=0;strokeColor=#1976D2;strokeWidth=2;fontSize=10;labelBackgroundColor=#ffffff;align=center;verticalAlign=middle;fontFamily=Helvetica;fontColor=default;" target="dpp-system" value="Authenticated access&#xa;(read-only)">
+          <mxGeometry relative="1" x="0.4484" y="3" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-authority" edge="1" parent="1" source="actor-authority" style="endArrow=classic;html=1;rounded=0;strokeColor=#F57C00;strokeWidth=2;fontSize=10;labelBackgroundColor=#ffffff;" target="dpp-system" value="Public consumer link&#xa;(no login)">
+          <mxGeometry relative="1" x="0.4339" y="3" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-doc" edge="1" parent="1" source="dpp-system" style="endArrow=classic;html=1;rounded=0;strokeColor=#BBB;strokeWidth=1;fontSize=9;dashed=1;labelBackgroundColor=#ffffff;entryX=-0.001;entryY=0.343;entryDx=0;entryDy=0;entryPerimeter=0;" target="ext-group" value="Future integration">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CCCCCC;" value="" vertex="1">
+          <mxGeometry height="80" width="1280" x="60" y="780" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-title" parent="1" style="text;html=1;fontSize=11;fontStyle=1;fontColor=#666;align=left;" value="Legend" vertex="1">
+          <mxGeometry height="20" width="100" x="80" y="785" as="geometry" />
+        </mxCell>
+        <mxCell id="lg-blue" edge="1" parent="1" style="endArrow=classic;html=1;strokeColor=#1976D2;strokeWidth=2;fontSize=9;labelBackgroundColor=#ffffff;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="280" y="826" as="sourcePoint" />
+            <mxPoint x="400" y="826" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lg-blue-lbl" parent="1" style="text;html=1;fontSize=10;fontColor=#333;align=left;" value="Authenticated user access" vertex="1">
+          <mxGeometry height="20" width="200" x="405" y="816" as="geometry" />
+        </mxCell>
+        <mxCell id="lg-orange" edge="1" parent="1" style="endArrow=classic;html=1;strokeColor=#F57C00;strokeWidth=2;fontSize=10;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="610" y="826" as="sourcePoint" />
+            <mxPoint x="730" y="826" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lg-orange-lbl" parent="1" style="text;html=1;fontSize=10;fontColor=#333;align=left;" value="Public access (no login)" vertex="1">
+          <mxGeometry height="20" width="200" x="735" y="816" as="geometry" />
+        </mxCell>
+        <mxCell id="lg-dashed" edge="1" parent="1" style="endArrow=classic;html=1;strokeColor=#BBB;strokeWidth=1;fontSize=10;dashed=1;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="940" y="826" as="sourcePoint" />
+            <mxPoint x="1060" y="826" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lg-dashed-lbl" parent="1" style="text;html=1;fontSize=10;fontColor=#333;align=left;" value="Out of scope for MVP (Sprint 2+)" vertex="1">
+          <mxGeometry height="20" width="220" x="1065" y="816" as="geometry" />
+        </mxCell>
+        <mxCell id="actor-authority" parent="1" style="shape=mxgraph.gcp2.colored.user;html=1;labelPosition=right;align=left;spacingLeft=14;verticalLabelPosition=middle;verticalAlign=middle;fontSize=11;fillColor=#FFF8E1;strokeColor=#F57C00;" value="Market Surveillance Authority&#xa;(unauthenticated)&#xa;&#xa;EU ESPR compliance check&#xa;via the public token link" vertex="1">
+          <mxGeometry height="70" width="60" x="90" y="590" as="geometry" />
+        </mxCell>
+        <mxCell id="actors-group" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#999;dashed=1;verticalAlign=top;align=left;fontStyle=1;fontColor=#666;spacingLeft=10;spacingTop=4;" value="Actors" vertex="1">
+          <mxGeometry height="640" width="260" x="60" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="e-consumer" edge="1" parent="1" source="actor-consumer" style="endArrow=classic;html=1;rounded=0;strokeColor=#F57C00;strokeWidth=2;fontSize=10;labelBackgroundColor=#ffffff;align=center;verticalAlign=middle;fontFamily=Helvetica;fontColor=default;" target="dpp-system" value="Public consumer link&#xa;(no login)">
+          <mxGeometry relative="1" x="0.4619" y="3" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

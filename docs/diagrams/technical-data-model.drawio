@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" version="22.0.0">
+  <diagram name="Technical Data Model" id="tech-data-model">
+    <mxGraphModel dx="1422" dy="868" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1500" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ====== Title ====== -->
+        <mxCell id="title" value="DPP Capgemini — Technical Data Model" style="text;html=1;fontSize=22;fontStyle=1;align=center;fontColor=#354A5F;" vertex="1" parent="1">
+          <mxGeometry x="480" y="20" width="840" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Physical schema as deployed to SAP HANA Cloud · Column data types and constraints · 11 catalogue tables" style="text;html=1;fontSize=11;fontStyle=2;align=center;fontColor=#888;" vertex="1" parent="1">
+          <mxGeometry x="480" y="52" width="840" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ====== Layer Backgrounds ====== -->
+        <mxCell id="lyr-org" value="Organisation Layer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;dashed=1;verticalAlign=top;align=left;fontStyle=2;fontColor=#0D47A1;spacingLeft=10;spacingTop=4;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="90" width="1720" height="290" as="geometry" />
+        </mxCell>
+        <mxCell id="lyr-prod" value="Product Layer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#F57C00;dashed=1;verticalAlign=top;align=left;fontStyle=2;fontColor=#E65100;spacingLeft=10;spacingTop=4;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="400" width="1720" height="650" as="geometry" />
+        </mxCell>
+        <mxCell id="lyr-dpp" value="Product Passport Layer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#6A1B9A;dashed=1;verticalAlign=top;align=left;fontStyle=2;fontColor=#4A148C;spacingLeft=10;spacingTop=4;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1070" width="1720" height="350" as="geometry" />
+        </mxCell>
+
+        <!-- ===================================================== -->
+        <!-- ORG layer tables -->
+        <!-- ===================================================== -->
+        <mxCell id="t-users" value="&lt;b style=&quot;font-size:13px;color:#0D47A1&quot;&gt;Users&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 ID — NVARCHAR(36) — PK&lt;br&gt;email — NVARCHAR(254) — Required, Unique per org&lt;br&gt;display_name — NVARCHAR(120)&lt;br&gt;role — NVARCHAR(20) — Required, enum&lt;br&gt;external_user_id — NVARCHAR(120)&lt;br&gt;active — BOOLEAN — Default true&lt;br&gt;🔗 organization_ID — NVARCHAR(36) — FK, Required" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;fontColor=#0D47A1;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="80" y="130" width="320" height="220" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-org" value="&lt;b style=&quot;font-size:13px;color:#0D47A1&quot;&gt;Organizations&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 ID — NVARCHAR(36) — PK&lt;br&gt;legal_name — NVARCHAR(120) — Required&lt;br&gt;trade_name — NVARCHAR(120)&lt;br&gt;country_iso2 — NVARCHAR(2)&lt;br&gt;city — NVARCHAR(80)&lt;br&gt;gln — NVARCHAR(13)&lt;br&gt;website_url — NVARCHAR(500)&lt;br&gt;contact_email — NVARCHAR(254)&lt;br&gt;tenant_id — NVARCHAR(64) — Required, Unique&lt;br&gt;is_platform_tenant — BOOLEAN — Default false" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;fontColor=#0D47A1;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="700" y="130" width="340" height="240" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-bp" value="&lt;b style=&quot;font-size:13px;color:#0D47A1&quot;&gt;Business Partners&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 ID — NVARCHAR(36) — PK&lt;br&gt;name — NVARCHAR(120) — Required&lt;br&gt;country_iso2 — NVARCHAR(2)&lt;br&gt;city — NVARCHAR(80)&lt;br&gt;address — NVARCHAR(200)&lt;br&gt;contact_person — NVARCHAR(120)&lt;br&gt;contact_email — NVARCHAR(254)&lt;br&gt;identifier — NVARCHAR(40)&lt;br&gt;archived — BOOLEAN — Default false&lt;br&gt;🔗 owning_organization_ID — NVARCHAR(36) — FK, Required" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;fontColor=#0D47A1;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="130" width="340" height="240" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-bpr" value="&lt;b style=&quot;font-size:13px;color:#0D47A1&quot;&gt;Business Partner Roles&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 ID — NVARCHAR(36) — PK&lt;br&gt;role — NVARCHAR(24) — Required, enum&lt;br&gt;🔗 partner_ID — NVARCHAR(36) — FK, Required&lt;hr size=&quot;1&quot;&gt;&lt;i style=&quot;font-size:9px&quot;&gt;Constraint: unique (partner_ID, role)&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;fontColor=#0D47A1;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1460" y="130" width="300" height="160" as="geometry" />
+        </mxCell>
+
+        <!-- ===================================================== -->
+        <!-- PRODUCT layer tables -->
+        <!-- ===================================================== -->
+        <mxCell id="t-prod" value="&lt;b style=&quot;font-size:13px;color:#E65100&quot;&gt;Products&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 ID — NVARCHAR(36) — PK&lt;br&gt;product_type — NVARCHAR(12) — Required, enum, Default finished&lt;br&gt;name — NVARCHAR(120) — Required&lt;br&gt;brand — NVARCHAR(120)&lt;br&gt;category — NVARCHAR(60)&lt;br&gt;model — NVARCHAR(120)&lt;br&gt;description — NVARCHAR(500)&lt;br&gt;gtin — NVARCHAR(14) — Unique per org&lt;br&gt;fibre_composition — NVARCHAR(500)&lt;br&gt;care_instructions — NVARCHAR(500)&lt;br&gt;repair_instructions — NVARCHAR(500)&lt;br&gt;disposal_instructions — NVARCHAR(500)&lt;br&gt;country_of_origin — NVARCHAR(2)&lt;br&gt;substances_of_concern — NVARCHAR(500)&lt;br&gt;espr_compliance — NVARCHAR(16) — enum&lt;br&gt;status — NVARCHAR(12) — enum, Default draft&lt;br&gt;🔗 owning_organization_ID — NVARCHAR(36) — FK, Required" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F57C00;fontColor=#E65100;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="640" y="440" width="380" height="380" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-var" value="&lt;b style=&quot;font-size:13px;color:#E65100&quot;&gt;Product Variants&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 ID — NVARCHAR(36) — PK&lt;br&gt;color — NVARCHAR(40)&lt;br&gt;size — NVARCHAR(20)&lt;br&gt;sku — NVARCHAR(40) — Unique per product&lt;br&gt;gtin — NVARCHAR(14)&lt;br&gt;weight_g — INTEGER&lt;br&gt;status — NVARCHAR(10) — enum, Default active&lt;br&gt;🔗 product_ID — NVARCHAR(36) — FK, Required" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F57C00;fontColor=#E65100;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="80" y="440" width="340" height="220" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-bat" value="&lt;b style=&quot;font-size:13px;color:#E65100&quot;&gt;Batches&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 ID — NVARCHAR(36) — PK&lt;br&gt;batch_number — NVARCHAR(40) — Unique per variant&lt;br&gt;production_date — DATE&lt;br&gt;country_of_origin — NVARCHAR(2)&lt;br&gt;production_stage — NVARCHAR(60)&lt;br&gt;co2_footprint_kg — DECIMAL(10, 3)&lt;br&gt;recycled_content_pct — DECIMAL(5, 2)&lt;br&gt;status — NVARCHAR(12) — enum, Default draft&lt;br&gt;🔗 variant_ID — NVARCHAR(36) — FK, Required&lt;br&gt;🔗 factory_ID — NVARCHAR(36) — FK to BP&lt;br&gt;🔗 supplier_ID — NVARCHAR(36) — FK to BP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F57C00;fontColor=#E65100;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="80" y="700" width="340" height="270" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-item" value="&lt;b style=&quot;font-size:13px;color:#E65100&quot;&gt;Product Items&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 ID — NVARCHAR(36) — PK&lt;br&gt;serial_number — NVARCHAR(40) — Unique per batch&lt;br&gt;upi — NVARCHAR(60) — Unique global&lt;br&gt;item_status — NVARCHAR(12) — enum, Default active&lt;br&gt;created_date — DATE&lt;br&gt;🔗 batch_ID — NVARCHAR(36) — FK, Required&lt;br&gt;🔗 dpp_ID — NVARCHAR(36) — FK" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F57C00;fontColor=#E65100;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="640" y="850" width="340" height="200" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-bom" value="&lt;b style=&quot;font-size:13px;color:#E65100&quot;&gt;Product BOMs&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 ID — NVARCHAR(36) — PK&lt;br&gt;quantity — DECIMAL(10, 3)&lt;br&gt;unit — NVARCHAR(8)&lt;br&gt;component_role — NVARCHAR(60)&lt;br&gt;is_mandatory — BOOLEAN — Default true&lt;br&gt;status — NVARCHAR(12) — enum, Default active&lt;br&gt;🔗 parent_ID — NVARCHAR(36) — FK to Products, Required&lt;br&gt;🔗 component_ID — NVARCHAR(36) — FK to Products, Required&lt;br&gt;🔗 linked_dpp_ID — NVARCHAR(36) — FK to DPPs (optional)&lt;hr size=&quot;1&quot;&gt;&lt;i style=&quot;font-size:9px&quot;&gt;Constraint: unique (parent_ID, component_ID)&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F57C00;fontColor=#E65100;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1280" y="440" width="380" height="280" as="geometry" />
+        </mxCell>
+
+        <!-- ===================================================== -->
+        <!-- PASSPORT layer tables -->
+        <!-- ===================================================== -->
+        <mxCell id="t-dpp" value="&lt;b style=&quot;font-size:13px;color:#4A148C&quot;&gt;DPPs&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 ID — NVARCHAR(36) — PK&lt;br&gt;granularity — NVARCHAR(8) — enum, Default item&lt;br&gt;dpp_type — NVARCHAR(12) — enum, Default product&lt;br&gt;status — NVARCHAR(12) — enum, Default draft&lt;br&gt;visibility — NVARCHAR(8) — enum, Default internal&lt;br&gt;current_version — INTEGER — Default 1&lt;br&gt;qr_token — NVARCHAR(128) — Unique, HMAC-signed&lt;br&gt;qr_payload_url — NVARCHAR(500)&lt;br&gt;public_url — NVARCHAR(500)&lt;br&gt;approved_at — TIMESTAMP&lt;br&gt;published_at — TIMESTAMP&lt;br&gt;archived_at — TIMESTAMP&lt;br&gt;valid_from — DATE&lt;br&gt;last_updated — TIMESTAMP&lt;br&gt;aggregated_snapshot — NCLOB — JSON snapshot&lt;br&gt;storytelling — NCLOB — JSON array&lt;br&gt;🔗 product_ID — NVARCHAR(36) — FK, Required&lt;br&gt;🔗 item_ID — NVARCHAR(36) — FK" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6A1B9A;fontColor=#4A148C;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="1110" width="400" height="290" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t-qr" value="&lt;b style=&quot;font-size:13px;color:#4A148C&quot;&gt;QR Codes&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 ID — NVARCHAR(36) — PK&lt;br&gt;qr_value — NVARCHAR(500) — Encoded URL&lt;br&gt;qr_image_url — NVARCHAR(500)&lt;br&gt;status — NVARCHAR(10) — enum, Default active&lt;br&gt;created_at — TIMESTAMP&lt;br&gt;replaced_at — TIMESTAMP&lt;br&gt;🔗 dpp_ID — NVARCHAR(36) — FK, Required" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6A1B9A;fontColor=#4A148C;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;spacingRight=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="1110" width="380" height="220" as="geometry" />
+        </mxCell>
+
+        <!-- ====== Foreign Key edges (no cardinality — physical view only shows FK direction) ====== -->
+        <mxCell id="fk-org-users" style="endArrow=open;html=1;rounded=0;strokeColor=#1976D2;strokeWidth=1;dashed=0;" edge="1" parent="1" source="t-users" target="t-org">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fk-org-bp" style="endArrow=open;html=1;rounded=0;strokeColor=#1976D2;strokeWidth=1;" edge="1" parent="1" source="t-bp" target="t-org">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fk-bp-bpr" style="endArrow=open;html=1;rounded=0;strokeColor=#1976D2;strokeWidth=1;" edge="1" parent="1" source="t-bpr" target="t-bp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fk-org-prod" style="endArrow=open;html=1;rounded=0;strokeColor=#F57C00;strokeWidth=1;" edge="1" parent="1" source="t-prod" target="t-org">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fk-prod-var" style="endArrow=open;html=1;rounded=0;strokeColor=#F57C00;strokeWidth=1;" edge="1" parent="1" source="t-var" target="t-prod">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fk-var-bat" style="endArrow=open;html=1;rounded=0;strokeColor=#F57C00;strokeWidth=1;" edge="1" parent="1" source="t-bat" target="t-var">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fk-bat-item" style="endArrow=open;html=1;rounded=0;strokeColor=#F57C00;strokeWidth=1;" edge="1" parent="1" source="t-item" target="t-bat">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fk-bp-bat-fact" value="factory_ID" style="endArrow=open;html=1;rounded=0;strokeColor=#1976D2;strokeWidth=1;dashed=1;fontSize=9;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="t-bat" target="t-bp">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="20" y="800" />
+              <mxPoint x="20" y="250" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fk-bp-bat-supp" value="supplier_ID" style="endArrow=open;html=1;rounded=0;strokeColor=#1976D2;strokeWidth=1;dashed=1;fontSize=9;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="t-bat" target="t-bp">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="50" y="830" />
+              <mxPoint x="50" y="260" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fk-prod-bom" value="parent_ID" style="endArrow=open;html=1;rounded=0;strokeColor=#F57C00;strokeWidth=1;fontSize=9;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="t-bom" target="t-prod">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fk-prod-bom-c" value="component_ID" style="endArrow=open;html=1;rounded=0;strokeColor=#F57C00;strokeWidth=1;dashed=1;fontSize=9;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="t-bom" target="t-prod">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1700" y="500" />
+              <mxPoint x="1700" y="900" />
+              <mxPoint x="1100" y="900" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fk-item-dpp" style="endArrow=open;html=1;rounded=0;strokeColor=#6A1B9A;strokeWidth=2;" edge="1" parent="1" source="t-item" target="t-dpp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fk-prod-dpp" style="endArrow=open;html=1;rounded=0;strokeColor=#6A1B9A;strokeWidth=1;" edge="1" parent="1" source="t-dpp" target="t-prod">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fk-bom-dpp" value="linked_dpp_ID" style="endArrow=open;html=1;rounded=0;strokeColor=#6A1B9A;strokeWidth=1;dashed=1;fontSize=9;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="t-bom" target="t-dpp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="fk-qr-dpp" style="endArrow=open;html=1;rounded=0;strokeColor=#6A1B9A;strokeWidth=1;" edge="1" parent="1" source="t-qr" target="t-dpp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ====== Type mapping legend ====== -->
+        <mxCell id="legend-types" value="&lt;b&gt;Type mapping (CDS → HANA SQL)&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;String(n) → NVARCHAR(n) — UTF-16 in HANA&lt;br&gt;LargeString → NCLOB — up to 2 GB&lt;br&gt;Boolean → BOOLEAN&lt;br&gt;Integer → INTEGER — 32-bit signed&lt;br&gt;Decimal(p, s) → DECIMAL(p, s)&lt;br&gt;Date → DATE — YYYYMMDD&lt;br&gt;Timestamp → TIMESTAMP — 100 ns precision&lt;br&gt;UUID → NVARCHAR(36)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#CCCCCC;fontColor=#333;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1440" width="500" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-symbols" value="&lt;b&gt;Symbols&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;🔑 — Primary key&lt;br&gt;🔗 — Foreign key&lt;br&gt;Required — NOT NULL constraint&lt;br&gt;Unique — UNIQUE constraint&lt;br&gt;enum — Value restricted to a fixed list&lt;br&gt;Default — Default value applied on insert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#CCCCCC;fontColor=#333;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="580" y="1440" width="380" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-edges" value="&lt;b&gt;Edges&lt;/b&gt;&lt;hr size=&quot;1&quot;&gt;Solid arrow — foreign key reference, child to parent&lt;br&gt;Thick solid — one-to-one foreign key (item → passport)&lt;br&gt;Dashed arrow — optional reference or cross-organisation&lt;br&gt;Label on arrow — column name when not obvious" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#CCCCCC;fontColor=#333;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="1440" width="500" height="160" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -29,19 +29,16 @@ graph TB
             subgraph H["Handler Layer (srv/handlers/)"]
                 PH["product-handlers<br/>defaults · BOM cycle"]
                 DH["dpp-handlers<br/>approve/publish/<br/>archive · snapshot ·<br/>QR rotation"]
-                IH["import-handlers<br/>XLSX → UPSERT"]
-                EH["export-handlers<br/>XLSX writer"]
-                PDH["pdf-handlers<br/>DPP-PDF · QR-Label"]
+                MH["me-handler<br/>caller identity"]
                 PUH["public-handler<br/>token verify ·<br/>consumer DTO"]
             end
-            class PH,DH,IH,EH,PDH,PUH handler
+            class PH,DH,MH,PUH handler
 
             subgraph L["Lib Layer (srv/lib/)"]
                 TOK["token.js<br/>HMAC-SHA256"]
-                XLS["excel-templates<br/>columns · parser ·<br/>validator"]
-                PDF["pdf-renderer<br/>PDFKit · QRCode"]
+                SEC["secrets<br/>UPS loader"]
             end
-            class TOK,XLS,PDF lib
+            class TOK,SEC lib
         end
     end
 
@@ -58,20 +55,13 @@ graph TB
 
     ODATA --> PH
     ODATA --> DH
-    ODATA --> IH
-    ODATA --> EH
-    ODATA --> PDH
+    ODATA --> MH
     REST  --> PUH
 
     DH  --> TOK
     PUH --> TOK
-    IH  --> XLS
-    EH  --> XLS
-    PDH --> PDF
 
     PH  -->|"CDS query"| HANA
     DH  -->|"CDS query"| HANA
-    IH  -->|"INSERT/UPDATE"| HANA
-    EH  -->|"SELECT"| HANA
-    PDH -->|"SELECT"| HANA
+    MH  -->|"SELECT"| HANA
     PUH -->|"SELECT"| HANA

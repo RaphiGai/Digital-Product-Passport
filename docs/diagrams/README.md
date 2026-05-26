@@ -1,82 +1,106 @@
 # Architecture Diagrams
 
-All diagrams are version-controlled source files (no PNG/SVG checked in by default — render on demand).
+All architecture diagrams are editable draw.io files and use the official [SAP BTP Solution Diagrams](https://sap.github.io/btp-solution-diagrams/) icon set (Apache-2.0). The draw.io sources are the authoritative version; PNG and SVG exports are generated from draw.io on demand.
 
 ## Inventory
 
-| File | Type | Rendered by | Description |
+The eight diagrams are grouped into two sets:
+
+### Core deliverables (required for the requirements presentation)
+
+These four diagrams correspond directly to the four required deliverables in [../architecture.md](../architecture.md).
+
+| # | File | Maps to | Contents |
 |---|---|---|---|
-| [erd.mmd](erd.mmd) | Mermaid ERD | GitHub / VS Code / `mmdc` | All 11 entities with attributes + FK relationships |
-| [software-architecture.mmd](software-architecture.mmd) | Mermaid Flowchart | GitHub / VS Code / `mmdc` | Component diagram: Client → BTP → Handlers → Libs → DB |
-| [dpp-lifecycle.mmd](dpp-lifecycle.mmd) | Mermaid State | GitHub / VS Code / `mmdc` | DPP status transitions draft → in_review → approved → published → archived |
-| [sprint1-demo-sequence.mmd](sprint1-demo-sequence.mmd) | Mermaid Sequence | GitHub / VS Code / `mmdc` | End-to-end Sprint-1 demo workflow |
-| [btp-architecture.drawio](btp-architecture.drawio) | draw.io XML | diagrams.net / VS Code Draw.io Extension | BTP deployment topology |
+| 1 | [technical-data-model.drawio](technical-data-model.drawio) | Technical Data Model | Physical schema as deployed to HANA Cloud: 11 tables with columns, data types and constraints |
+| 2 | [software-architecture.drawio](software-architecture.drawio) | Software Architecture | Component view: client → BTP platform → OData and REST → business logic → libraries → database |
+| 3 | [erd.drawio](erd.drawio) | Semantic Model (Entity Relationship) | 11 entities with attributes and foreign key relations (crow's-foot notation) |
+| 4 | [btp-architecture.drawio](btp-architecture.drawio) | BTP Architecture | Deployment topology on SAP BTP: subaccount, Cloud Foundry, MTA modules, authorization service, HANA database, runtime secrets |
 
-## How to render
+### Supplementary diagrams (appendix)
 
-### Mermaid (`.mmd`)
+These four diagrams support [../appendix.md](../appendix.md). They are useful for sprint demos, internal documentation and operational handover, but are not part of the four required deliverables.
 
-**Inline (zero install):**
-- **GitHub / GitLab** — render natively when embedded in `.md` via ```` ```mermaid ```` fences (already done in [../architecture.md](../architecture.md)).
-- **VS Code** — install extension *Markdown Preview Mermaid Support* (`bierner.markdown-mermaid`), then `Ctrl+Shift+V` on the `.md` file.
-- **JetBrains IDEs** — built-in since 2023.
-- **Web** — paste source into <https://mermaid.live> for a live editor + PNG/SVG export.
+| # | File | Maps to | Contents |
+|---|---|---|---|
+| 5 | [solution-context.drawio](solution-context.drawio) | Appendix A — Solution Context | High-level context: actors → SAP BTP system → external and future systems |
+| 6 | [deployment-topology.drawio](deployment-topology.drawio) | Appendix B — Deployment Topology | Build pipeline, three deployment modules and three resources, bindings and public route |
+| 7 | [dpp-lifecycle.drawio](dpp-lifecycle.drawio) | Appendix C — Product Passport Lifecycle | Status transitions: Draft → In Review → Approved → Published → Archived |
+| 8 | [sprint1-demo-sequence.drawio](sprint1-demo-sequence.drawio) | Appendix D — Sprint-1 Demo Sequence | End-to-end Sprint-1 demo workflow (master data → lifecycle → consumer scan) |
 
-**Batch-export to SVG/PNG via CLI:**
-```bash
-# No global install needed:
-npx -p @mermaid-js/mermaid-cli mmdc -i docs/diagrams/erd.mmd -o docs/diagrams/erd.svg
-npx -p @mermaid-js/mermaid-cli mmdc -i docs/diagrams/software-architecture.mmd -o docs/diagrams/software-architecture.svg
-npx -p @mermaid-js/mermaid-cli mmdc -i docs/diagrams/dpp-lifecycle.mmd -o docs/diagrams/dpp-lifecycle.svg
-npx -p @mermaid-js/mermaid-cli mmdc -i docs/diagrams/sprint1-demo-sequence.mmd -o docs/diagrams/sprint1-demo-sequence.svg
-```
+The previous Mermaid sources (`.mmd` files) are kept as a text-only reference for diff-friendly reviews, but they are **no longer authoritative**.
 
-Output format follows the file extension (`.svg`, `.png`, `.pdf`).
+## Editing in the user interface
 
-### draw.io (`.drawio`)
+Three options, all of which load the official SAP BTP icons directly from the public icon repository — no local installation needed:
 
-**Open / edit:**
-- **diagrams.net** (web) — <https://app.diagrams.net> → *File → Open from…* → pick the local file.
-- **draw.io Desktop** — <https://github.com/jgraph/drawio-desktop/releases>
-- **VS Code** — install extension *Draw.io Integration* (`hediet.vscode-drawio`), then open the `.drawio` file directly.
+### Option A — draw.io in the browser (recommended, zero installation)
 
-**Export to PNG/SVG/PDF:**
-1. Open the file in any editor above
-2. *File → Export as → SVG / PNG / PDF*
+1. Open <https://app.diagrams.net>
+2. Choose *File → Open from… → Device*
+3. Pick the desired `.drawio` file
+4. Edit, then *File → Save* (overwrites the local file)
 
-**Official SAP BTP icons (already embedded):**
+### Option B — draw.io extension for VS Code
 
-The drawio file references the **official SAP BTP Solution Diagrams stencil set** by URL — when you open the file, the icons stream directly from <https://github.com/SAP/btp-solution-diagrams> (Apache-2.0 licensed):
+1. Install the extension [Draw.io Integration](https://marketplace.visualstudio.com/items?itemName=hediet.vscode-drawio) (`hediet.vscode-drawio`)
+2. Open the `.drawio` file directly in the editor
+3. Edit visually with all stencils available
 
-| BTP service | Icon file |
+### Option C — draw.io Desktop
+
+1. Installer: <https://github.com/jgraph/drawio-desktop/releases>
+2. Open the `.drawio` file with a double click
+
+### Loading the full BTP stencil library
+
+To make every BTP service icon available for drag-and-drop:
+
+1. In draw.io: *Extras → Edit Diagram → Edit Shape Library*
+2. *Add by URL* — load one of the following libraries:
+
+| Library | URL |
+|---|---|
+| All BTP service icons | `https://raw.githubusercontent.com/SAP/btp-solution-diagrams/main/assets/shape-libraries-and-editable-presets/draw.io/20-02-99-sap-btp-service-icons-all/` |
+| Generic icons (users, devices, personas) | `https://raw.githubusercontent.com/SAP/btp-solution-diagrams/main/assets/shape-libraries-and-editable-presets/draw.io/20-03-generic-icons/sap-generic-icons-size-M-200302.xml` |
+
+A selection of icons already referenced in the diagrams (loaded directly via URL — no local cache required):
+
+| BTP service | SVG file |
 |---|---|
 | Cloud Foundry Runtime | `10017-sap-btp_cloud-foundry-runtime_sd.svg` |
 | HANA Cloud | `20083-sap-hana-cloud_sd.svg` |
-| Authorization & Trust (XSUAA) | `31015-sap-authorization-and-trust-management-service_sd.svg` |
-| Destination Service (OOS) | `20080-sap-destination-service_sd.svg` |
-| Document Management (OOS) | `31027-sap-document-management-service_sd.svg` |
-| Alert Notification (OOS) | `31060-sap-alert-notification-service-for-sap-btp_sd.svg` |
-| Application Logging (OOS) | `20062-sap-application-logging-service-for-sap-btp_sd.svg` |
+| Authorization and Trust Management | `31015-sap-authorization-and-trust-management-service_sd.svg` |
+| Destination Service | `20080-sap-destination-service_sd.svg` |
+| Document Management Service | `31027-sap-document-management-service_sd.svg` |
+| Alert Notification Service | `31060-sap-alert-notification-service-for-sap-btp_sd.svg` |
+| Application Logging Service | `20062-sap-application-logging-service-for-sap-btp_sd.svg` |
 
-To **edit the diagram with the full stencil library** (drag-and-drop new icons), load the official drawio library in diagrams.net:
+The Application Router has no dedicated icon (it is a Cloud Foundry sub-component) and is drawn as a mint-coloured rectangle. The Runtime Secrets (user-provided service) likewise has no official icon and is drawn as a purple rectangle with a padlock symbol.
 
-1. *Extras → Edit Diagram → Edit Shape Library*
-2. Add by URL — paste the raw URL of either:
-   - `https://raw.githubusercontent.com/SAP/btp-solution-diagrams/main/assets/shape-libraries-and-editable-presets/draw.io/20-02-99-sap-btp-service-icons-all/` (all BTP service icons)
-   - `https://raw.githubusercontent.com/SAP/btp-solution-diagrams/main/assets/shape-libraries-and-editable-presets/draw.io/20-03-generic-icons/sap-generic-icons-size-M-200302.xml` (generic users / devices / personas)
+## Exporting to PNG, SVG or PDF
 
-The Application Router has no dedicated icon in the SAP catalogue (it is a Cloud Foundry sub-component) and is rendered as a coloured rectangle following SAP brand colours.
+From draw.io: *File → Export as → SVG / PNG / PDF*
+
+Recommended convention for images embedded in the markdown documents:
+
+- Format: **PNG** (width 1400 pixels or more, white background, border 10)
+- Filename: `<basename>.png` (same stem as the `.drawio` file)
+- Commit to the repository: yes — the markdown documents link to them
+
+## Update workflow
+
+1. Open the `.drawio` file in any of the three editors and edit
+2. Save (overwrites the `.drawio` file)
+3. *File → Export as PNG* (options: border 10, white background)
+4. Save the export next to the `.drawio` file as `<basename>.png`
+5. If the content is referenced in [../architecture.md](../architecture.md) or [../appendix.md](../appendix.md), keep the text in sync
+6. Commit both files together: `<basename>.drawio` and `<basename>.png`
 
 ## File naming convention
 
-- `.mmd` — Mermaid source (text)
-- `.drawio` — draw.io XML (text)
-- `.svg` / `.png` — rendered exports (generated, gitignore by default)
-
-## Updating diagrams
-
-When the schema or architecture changes:
-
-1. Update the matching `.mmd` / `.drawio` source file
-2. The `architecture.md` master document embeds Mermaid sources verbatim — keep both in sync (or refactor to use file-includes via a build step)
-3. Re-render exports if used outside of GitHub/VS Code
+- `.drawio` — authoritative editable source (XML text, version-friendly)
+- `.png` — render output for embedding in markdown and PDF (regenerate when the diagram changes)
+- `.svg` — optional render output for high-resolution display
+- `.mmd` — legacy Mermaid sources (read-only reference)
+- `icons-cache/` — locally mirrored BTP icons for offline use (optional — the `.drawio` files reference the icons via URL)
