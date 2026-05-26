@@ -8,9 +8,8 @@ Backend for an EU-ESPR–oriented Digital Product Passport (DPP) for the fashion
 | --- | --- |
 | Approuter (SSO entry point) | https://cf-procode-bas-dev-dpp-approuter.cfapps.eu10-004.hana.ondemand.com |
 | Swagger DPPService | …/$api-docs/odata/v4/dpp |
-| Swagger AuthorityService | …/$api-docs/odata/v4/authority |
 | Liveness probe | …/healthz |
-| Consumer view (no login) | …/public/dpp/&lt;qr_token&gt; |
+| Consumer / authority view (no login) | …/public/dpp/&lt;qr_token&gt; |
 
 BTP target: subaccount `yf81xg-ggkygbp7r`, region `eu10-004`, CF org `CF_ProCode_BAS`, space `dev`.
 
@@ -19,11 +18,11 @@ BTP target: subaccount `yf81xg-ggkygbp7r`, region `eu10-004`, CF org `CF_ProCode
 - SAP Cloud Application Programming Model (CAP), Node.js, `@sap/cds` ^9
 - CDS data model, OData V4 services, auto-generated OpenAPI/Swagger
 - SQLite (development) / SAP HANA Cloud (production on SAP BTP)
-- XSUAA authentication via the approuter (3 application roles — `company_advanced`, `company_user`, `end_user`)
-- Public consumer endpoint (`/public/dpp/:token`) with HMAC-signed QR token and PNG generation
+- XSUAA authentication via the approuter (2 application roles — `company_advanced`, `company_user`)
+- Public consumer / authority endpoint (`/public/dpp/:token`) with HMAC-signed QR token and PNG generation — single read-only view for end consumers and market-surveillance authorities (no login required)
 - Jest unit + `cds.test` integration tests
 
-> **Authorization status (May 2026):** the `@restrict` clauses in `srv/dpp-service.cds` and `srv/authority-service.cds` are temporarily relaxed to `requires: 'authenticated-user'` because role-collection assignment is not available on the BTP UCC learn-tenant. The full role + tenant model lives in `db/common.cds` (`UserRole`) and `xs-security.json` and will be re-enabled in one commit once cockpit assignment is possible (see [docs/architecture.md](docs/architecture.md) §6 for details).
+> **Authorization (May 2026):** App role (`company_advanced` / `company_user`) and tenant scoping are enforced **programmatically in service handlers** ([srv/dpp-service.js](srv/dpp-service.js), [srv/handlers/auth-helpers.js](srv/handlers/auth-helpers.js)) and resolved by DB lookup against the `Users` table — not via `@restrict`. The service-level guard `requires: 'authenticated-user'` is only the logged-in gate. This sidesteps a CAP 9 middleware-timing issue and lets us manage roles in the app without BTP cockpit role-collection assignment (see [docs/architecture.md](docs/architecture.md) §6).
 
 ## Quick start (local development)
 
@@ -45,18 +44,16 @@ Mock users for local mocked auth (Basic Auth, password `x`):
 | `alice.advanced`  | company_advanced  | ORG-A               |
 | `carol.user`      | company_user      | ORG-A               |
 | `dan.advanced.b`  | company_advanced  | ORG-B (Fashionista) |
-| `eve.enduser`     | end_user          | — (cross-tenant)    |
 
 Role + tenant are seeded into `db/data/dpp-Users.csv` and into the matching mocked-auth entries in `.cdsrc.json`.
 
 ## Endpoints
 
 - `GET /odata/v4/dpp/$metadata` — OData V4 metadata for the company-facing service
-- `GET /odata/v4/authority/$metadata` — cross-tenant read-only view
-- `GET /public/dpp/:token` — consumer view (no auth, visibility-filtered)
+- `GET /odata/v4/dpp/me()` — caller identity + role + organisation (returns 403 when the user has no active `Users` row); intended for frontend role-based UI rendering
+- `GET /public/dpp/:token` — consumer / authority view (no auth, visibility-filtered)
 - `GET /public/dpp/:token/qr.png` — printable QR code PNG
 - `GET /$api-docs/odata/v4/dpp` — Swagger UI for the DPP service
-- `GET /$api-docs/odata/v4/authority` — Swagger UI for the authority service
 - `GET /healthz` — Liveness probe
 
 ## Deploy to BTP
@@ -65,7 +62,22 @@ Role + tenant are seeded into `db/data/dpp-Users.csv` and into the matching mock
 mbt build
 cf login -a https://api.cf.eu10-004.hana.ondemand.com --sso \
         -o CF_ProCode_BAS -s dev
+
+# One-time per space: create the user-provided service that holds runtime
+# secrets (HMAC key + public base URL). The MTA expects it to exist.
+cf cups dpp-secrets -p '{
+  "QR_TOKEN_HMAC_SECRET": "<32+ char random string>",
+  "PUBLIC_BASE_URL":      "https://<your-approuter-host>"
+}'
+
 cf deploy mta_archives/dpp-capgemini_0.1.0.mtar
+```
+
+Rotate the secret later without redeploying:
+
+```bash
+cf uups dpp-secrets -p '{"QR_TOKEN_HMAC_SECRET":"<new value>","PUBLIC_BASE_URL":"https://…"}'
+cf restart dpp-srv
 ```
 
 Requires `mbt`, `cf` CLI (with the multiapps plugin), and Node.js ≥ 20. Step-by-step setup is documented in [docs/architecture.md](docs/architecture.md) §1.

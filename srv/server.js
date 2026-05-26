@@ -1,77 +1,9 @@
 'use strict';
 
+require('./lib/secrets').load();
+
 const cds = require('@sap/cds');
 const publicHandler = require('./handlers/public-handler');
-
-/**
- * App-internal RBAC: identity comes from XSUAA (or mocked-auth in dev), but
- * the role + tenant attribute are looked up from the `Users` table by
- * `external_user_id` (preferred) or `email`. This lets us manage users via
- * the app itself instead of relying on XSUAA Role Collection assignments
- * in the BTP cockpit.
- *
- * The lookup is wired on every served service via `srv.before('*')` — it
- * runs after CAP's auth middleware (so req.user.id is populated) and before
- * the @restrict check. If the looked-up user is inactive or missing, we
- * leave req.user untouched so @restrict will deny the request.
- */
-
-const ROLE_LOOKUP_CACHE = new Map();
-const ROLE_LOOKUP_TTL_MS = 30 * 1000;
-
-function cacheGet(key) {
-  const entry = ROLE_LOOKUP_CACHE.get(key);
-  if (!entry) return null;
-  if (entry.expires < Date.now()) {
-    ROLE_LOOKUP_CACHE.delete(key);
-    return null;
-  }
-  return entry.value;
-}
-
-function cacheSet(key, value) {
-  ROLE_LOOKUP_CACHE.set(key, { value, expires: Date.now() + ROLE_LOOKUP_TTL_MS });
-}
-
-async function lookupAppUser(userId) {
-  if (!userId) return null;
-  const cached = cacheGet(userId);
-  if (cached) return cached;
-
-  const { Users, Organizations } = cds.entities('dpp');
-  // Try external_user_id first (XSUAA `sub` is usually the user id without domain),
-  // then fall back to email (some IdPs emit only the email).
-  let user = await SELECT.one.from(Users).where({ external_user_id: userId });
-  if (!user) user = await SELECT.one.from(Users).where({ email: userId });
-  if (!user || user.active === false) {
-    cacheSet(userId, null);
-    return null;
-  }
-
-  let tenantId = null;
-  if (user.organization_ID) {
-    const org = await SELECT.one.from(Organizations).where({ ID: user.organization_ID });
-    tenantId = org?.tenant_id || null;
-  }
-  const result = { role: user.role, tenantId, displayName: user.display_name };
-  cacheSet(userId, result);
-  return result;
-}
-
-function applyAppRoleToUser(user, lookup) {
-  if (!user || !lookup) return;
-  // CAP looks at user._roles for role-checks; offer both object + array shapes.
-  user._roles = { [lookup.role]: 1 };
-  user.roles = [lookup.role];
-  const originalIs = typeof user.is === 'function' ? user.is.bind(user) : () => false;
-  user.is = (role) => role === lookup.role || originalIs(role);
-  user.has = user.is;
-  user.attr = user.attr || {};
-  if (lookup.tenantId && !user.attr.tenant) {
-    // XSUAA attributes are typically arrays; CAP also accepts plain strings.
-    user.attr.tenant = lookup.tenantId;
-  }
-}
 
 // Swagger UI is loaded lazily so test environments without the dev-only
 // dependency installed can still boot.
@@ -93,7 +25,6 @@ const MOCK_USERS_NOTE = [
   '| `alice.advanced`  | company_advanced  | ORG-A               |',
   '| `carol.user`      | company_user      | ORG-A               |',
   '| `dan.advanced.b`  | company_advanced  | ORG-B (Fashionista) |',
-  '| `eve.enduser`     | end_user          | — (cross-tenant)    |',
   '',
   'Roles are resolved by the backend from the `Users` table — these mock users mirror the seeded DB rows.'
 ].join('\n');
@@ -180,6 +111,13 @@ function postprocessOpenApiProd(req, res, next) {
 
 // Express mounts that must live outside of CAP's auth middleware (e.g. the
 // public consumer endpoint) are wired here on the `bootstrap` event.
+//
+// NOTE on RBAC: app-role + tenant resolution against the `Users` table is
+// done inline in `srv/handlers/auth-helpers.js#resolveAppUserInline`, invoked
+// from the `srv.before('*')` gate in `srv/dpp-service.js`. We previously tried
+// to attach the same lookup as an Express middleware via
+// `cds.middlewares.before.push(...)` in CAP 9 — that push is silently dropped
+// for OData requests, so the inline approach is the only reliable wire-up.
 cds.on('bootstrap', (app) => {
   app.get('/healthz', (_req, res) => res.json({ status: 'ok', service: 'dpp-capgemini' }));
 
@@ -198,49 +136,5 @@ cds.on('bootstrap', (app) => {
     console.warn('cds-swagger-ui-express not installed — /swagger is disabled');
   }
 });
-
-const APP_ROLES = ['company_advanced', 'company_user', 'end_user'];
-
-// Express middleware that runs after CAP's auth + ctx_user (so req.user.id
-// is populated) and before service dispatch (where @restrict is enforced).
-// Only fires for OData paths; /public, /healthz, /$api-docs pass through.
-async function rbacMiddleware(req, _res, next) {
-  const path = req.path || req.url || '';
-  if (!path.startsWith('/odata/')) return next();
-  if (!req.user || !req.user.id) return next();
-  // If a mocked-auth dev user already carries one of our app roles, leave
-  // it alone. We deliberately don't check `roles.length > 0` because
-  // XSUAA seeds it with platform scopes like `AuthenticatedUser` that
-  // mean nothing to our @restrict clauses.
-  const alreadyHasAppRole = typeof req.user.is === 'function' &&
-    APP_ROLES.some((r) => req.user.is(r));
-  if (alreadyHasAppRole) return next();
-
-  console.log(`[rbac] resolve '${req.user.id}' on ${req.method} ${path}`);
-  try {
-    const lookup = await lookupAppUser(req.user.id);
-    if (lookup) {
-      applyAppRoleToUser(req.user, lookup);
-      if (cds.context && cds.context.user) applyAppRoleToUser(cds.context.user, lookup);
-      console.log(`[rbac] '${req.user.id}' → role=${lookup.role} tenant=${lookup.tenantId || '(none)'}`);
-    } else {
-      console.warn(`[rbac] no Users row for '${req.user.id}' — request will be denied by @restrict`);
-    }
-  } catch (err) {
-    console.error('[rbac] user lookup failed:', err.message);
-  }
-  next();
-}
-
-// Push into CAP's middleware chain. Force-init the array first (CAP populates
-// it lazily on first access) so our push is guaranteed to land in the live
-// list that cds.serve will consume.
-const _force = cds.middlewares.before;
-if (Array.isArray(_force)) {
-  _force.push(rbacMiddleware);
-  console.log('[rbac] middleware registered in cds.middlewares.before');
-} else {
-  console.warn('[rbac] cds.middlewares.before is not an array — RBAC lookup not attached');
-}
 
 module.exports = cds.server;
