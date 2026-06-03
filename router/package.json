@@ -1,0 +1,15 @@
+{
+  "name": "dpp-frontend-approuter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Approuter for DPP Studio (frontend) — serves the SPA from the HTML5 repo and forwards /odata + /public to the backend",
+  "dependencies": {
+    "@sap/approuter": "^21.0.0"
+  },
+  "scripts": {
+    "start": "node node_modules/@sap/approuter/approuter.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

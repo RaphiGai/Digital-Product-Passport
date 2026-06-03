@@ -1,0 +1,14 @@
+node_modules/
+dist/
+resources/
+mta_archives/
+*.mtar
+.env
+.env.local
+.env.*.local
+default-env.json
+*-key.txt
+.DS_Store
+*.log
+coverage/
+.vite/

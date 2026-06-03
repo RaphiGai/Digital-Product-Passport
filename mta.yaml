@@ -1,0 +1,92 @@
+_schema-version: '3.3'
+ID: dpp-frontend
+version: 0.1.0
+description: DPP Studio — React frontend deployed via the SAP BTP HTML5 Application Repository
+
+parameters:
+  enable-parallel-deployments: true
+
+# ---------------------------------------------------------------------------
+# Deploy prerequisites (see README):
+#  1. Backend MTA (dpp-capgemini) is deployed first → note the dpp-srv route.
+#  2. Set that route in the `srv-api` destination URL below (BACKEND_SRV_URL).
+#  3. The shared XSUAA instance `dpp-uaa` already exists in the target space.
+# ---------------------------------------------------------------------------
+
+modules:
+  # ---- React build (Vite → dist) ----
+  - name: dpp-ui
+    type: html5
+    path: app
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci || npm install
+        - npm run build
+      supported-platforms: []
+      build-result: dist
+
+  # ---- Uploads the built UI into the HTML5 Application Repository (app-host) ----
+  - name: dpp-ui-deployer
+    type: com.sap.application.content
+    path: .
+    requires:
+      - name: dpp-html5-host
+        parameters:
+          content-target: true
+    build-parameters:
+      build-result: resources
+      requires:
+        - name: dpp-ui
+          artifacts:
+            - dist
+          target-path: resources/
+
+  # ---- Approuter: serves the SPA from the HTML5 repo, forwards API to the backend ----
+  - name: dpp-approuter
+    type: approuter.nodejs
+    path: router
+    parameters:
+      keep-existing-routes: true
+      memory: 256M
+      disk-quota: 512M
+    requires:
+      - name: dpp-uaa
+      - name: dpp-html5-runtime
+      # Inline destination to the backend CAP service (mirrors the backend's own
+      # approuter wiring). forwardAuthToken sends the XSUAA JWT to dpp-srv, which
+      # accepts it because both bind the SAME dpp-uaa instance (same xsappname).
+      # TODO before deploy: replace BACKEND_SRV_URL with the deployed dpp-srv route,
+      #   e.g. https://dpp-srv-dev.cfapps.eu10-004.hana.ondemand.com
+      - name: srv-api
+        group: destinations
+        properties:
+          name: srv-api
+          url: BACKEND_SRV_URL
+          forwardAuthToken: true
+    provides:
+      - name: fe-app-api
+        properties:
+          app-protocol: ${protocol}
+          app-uri: ${default-uri}
+
+resources:
+  # HTML5 Application Repository — storage (app-host) + runtime (app-runtime)
+  - name: dpp-html5-host
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-plan: app-host
+
+  - name: dpp-html5-runtime
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-plan: app-runtime
+
+  # SHARED XSUAA — bind the EXISTING backend instance (do NOT re-declare as managed).
+  # Identical xsappname/audience → the forwarded JWT is accepted by dpp-srv.
+  - name: dpp-uaa
+    type: org.cloudfoundry.existing-service
+    parameters:
+      service-name: dpp-uaa

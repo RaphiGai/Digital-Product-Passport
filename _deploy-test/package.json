@@ -1,0 +1,15 @@
+{
+  "name": "dpp-frontend-approuter-test",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Test deploy: standalone approuter serving the DPP Studio SPA + consumer view",
+  "dependencies": {
+    "@sap/approuter": "^21.0.0"
+  },
+  "scripts": {
+    "start": "node approuter.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
