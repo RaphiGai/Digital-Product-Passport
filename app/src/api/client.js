@@ -137,6 +137,15 @@ export function odataUpdate(entitySet, key, payload) {
 }
 
 /**
+ * Delete an entity by key.
+ * @param {string} entitySet
+ * @param {string} key
+ */
+export function odataDelete(entitySet, key) {
+  return request(`${ODATA_BASE}/${entitySet}(${keyLiteral(key)})`, { method: 'DELETE' });
+}
+
+/**
  * Invoke a bound action, e.g. callAction('DPPs', id, 'publishDPP', { change_reason }).
  * @param {string} entitySet
  * @param {string} key
@@ -179,6 +188,8 @@ function buildQuery(q) {
   if (q.top != null) params.set('$top', String(q.top));
   if (q.skip != null) params.set('$skip', String(q.skip));
   if (q.count) params.set('$count', 'true');
-  const s = params.toString();
+  // URLSearchParams encodes spaces as '+', which the OData $filter parser rejects.
+  // Replace with %20 (safe: literal '+' in a value is already encoded as %2B).
+  const s = params.toString().replace(/\+/g, '%20');
   return s ? `?${s}` : '';
 }

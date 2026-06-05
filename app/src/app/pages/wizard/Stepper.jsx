@@ -1,13 +1,7 @@
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-const WIZARD_STEPS = [
-  'Product model',
-  'Add variant',
-  'Bill of materials',
-  'Production batch',
-  'Generate DPP'
-];
+const WIZARD_STEPS = ['Product model', 'Add variants', 'Bill of materials'];
 
 /**
  * @param {{ current: number }} props  current is 1-based; lower steps render as completed.

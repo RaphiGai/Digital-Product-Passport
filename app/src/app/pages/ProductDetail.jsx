@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { odataGet } from '@/api/client';
 import { useAction } from '@/api/hooks';
 import { Card, CardTitle } from '@/ui/Card';
@@ -96,8 +96,13 @@ export function ProductDetail() {
       </div>
 
       <Card className="p-0">
-        <div className="px-5 pt-5">
+        <div className="flex items-center justify-between px-5 pt-5">
           <CardTitle>Variants</CardTitle>
+          <RequireRole role="company_advanced">
+            <Link to={`/products/${id}/variants/new`}>
+              <Button variant="outline" size="sm">Add variant</Button>
+            </Link>
+          </RequireRole>
         </div>
         <div className="mt-3">
           <DataTable
@@ -105,11 +110,25 @@ export function ProductDetail() {
               { header: 'SKU', cell: (v) => v.sku ?? v.ID },
               { header: 'Color', cell: (v) => v.color ?? '—' },
               { header: 'Size', cell: (v) => v.size ?? '—' },
-              { header: 'GTIN', cell: (v) => v.gtin ?? '—' },
-              { header: 'Status', cell: (v) => <StatusBadge status={v.status} /> }
+              { header: 'Status', cell: (v) => <StatusBadge status={v.status} /> },
+              {
+                header: '',
+                cell: (v) => (
+                  <RequireRole role="company_advanced">
+                    <div className="flex justify-end gap-2">
+                      <Link to={`/products/${id}/variants/${v.ID}`}>
+                        <Button variant="outline" size="sm">Edit</Button>
+                      </Link>
+                      <Link to={`/products/${id}/variants/${v.ID}/batches`}>
+                        <Button variant="ghost" size="sm">Batches</Button>
+                      </Link>
+                    </div>
+                  </RequireRole>
+                )
+              }
             ]}
             rows={p.variants ?? []}
-            empty="No variants yet. (Adding variants is part of the next wizard step.)"
+            empty="No variants yet — use “Add variant”."
           />
         </div>
       </Card>

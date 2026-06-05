@@ -4,6 +4,9 @@ import { Dashboard } from './pages/Dashboard';
 import { Products } from './pages/Products';
 import { ProductDetail } from './pages/ProductDetail';
 import { CreateProduct } from './pages/CreateProduct';
+import { AddVariant } from './pages/AddVariant';
+import { VariantEdit } from './pages/VariantEdit';
+import { BatchView } from './pages/BatchView';
 import { Partners } from './pages/Partners';
 import { PartnerDetail } from './pages/PartnerDetail';
 import { CreatePartner } from './pages/CreatePartner';
@@ -21,6 +24,9 @@ export function App() {
           <Route path="products" element={<Products />} />
           <Route path="products/new" element={<CreateProduct />} />
           <Route path="products/:id" element={<ProductDetail />} />
+          <Route path="products/:pid/variants/new" element={<AddVariant />} />
+          <Route path="products/:pid/variants/:vid" element={<VariantEdit />} />
+          <Route path="products/:pid/variants/:vid/batches" element={<BatchView />} />
 
           <Route path="partners" element={<Partners />} />
           <Route path="partners/new" element={<CreatePartner />} />

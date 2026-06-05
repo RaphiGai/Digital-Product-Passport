@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useCreate } from '@/api/hooks';
-import { ApiError } from '@/api/client';
+import { ApiError, odataList } from '@/api/client';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Banner } from '@/ui/Breadcrumb';
@@ -8,26 +9,38 @@ import { FormSection, FieldRow, Input, Select } from '@/ui/Form';
 
 const EMPTY = { color: '', size: '', sku: '', gtin: '', weight_g: '', status: 'active' };
 
-export function Step2Variant({ ctx, setCtx, next, back }) {
+/**
+ * Add one or more variants to ctx.productId. Reused by the wizard and the focused
+ * "add variant" page.
+ * @param {{ ctx, setCtx, onPrimary: () => void, primaryLabel: string, onBack?: () => void }} props
+ */
+export function Step2Variant({ ctx, setCtx, onPrimary, primaryLabel, onBack }) {
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
 
+  // Existing variants of this product (so the list reflects reality on re-entry too).
+  const existing = useQuery({
+    queryKey: ['ProductVariants', ctx.productId],
+    queryFn: () =>
+      odataList('ProductVariants', { filter: `product_ID eq '${ctx.productId}'`, orderby: 'sku', top: 200 }),
+    enabled: !!ctx.productId
+  });
+
   const create = useCreate('ProductVariants', {
-    invalidate: [['Products', ctx.productId]],
+    invalidate: [['ProductVariants', ctx.productId], ['Products', ctx.productId], ['Products']],
     onSuccess: (row) => {
       setCtx((c) => ({
         ...c,
         variantId: row.ID,
         variantLabel: [row.color, row.size].filter(Boolean).join(' / ') || row.sku
       }));
-      next();
+      setForm(EMPTY);
     }
   });
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const submit = (e) => {
-    e.preventDefault();
+  const add = () => {
     setError('');
     if (!form.sku.trim()) {
       setError('SKU is required for a variant.');
@@ -47,8 +60,10 @@ export function Step2Variant({ ctx, setCtx, next, back }) {
     );
   };
 
+  const variants = existing.data ?? [];
+
   return (
-    <form onSubmit={submit} className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
       <Card className="p-6">
         {error && (
           <div className="mb-4">
@@ -57,7 +72,7 @@ export function Step2Variant({ ctx, setCtx, next, back }) {
         )}
         <FormSection
           title="Add variant"
-          description="A variant is a concrete colour/size of the product, identified by a SKU."
+          description="A variant is a concrete colour/size of the product, identified by a SKU. Add as many as you need."
         >
           <FieldRow label="Colour" visibility="public" htmlFor="color">
             <Input id="color" value={form.color} onChange={set('color')} placeholder="Blue" />
@@ -88,40 +103,38 @@ export function Step2Variant({ ctx, setCtx, next, back }) {
           </FieldRow>
         </FormSection>
 
-        <div className="flex items-center justify-between border-t border-black/5 pt-5">
-          <Button type="button" variant="ghost" onClick={back}>
-            Back
+        <div className="flex justify-end">
+          <Button type="button" variant="outline" disabled={create.isPending} onClick={add}>
+            {create.isPending ? 'Adding…' : '+ Add variant'}
           </Button>
-          <Button type="submit" disabled={create.isPending}>
-            {create.isPending ? 'Saving…' : 'Save & continue'}
+        </div>
+
+        <div className="mt-5 flex items-center justify-between border-t border-black/5 pt-5">
+          {onBack ? (
+            <Button type="button" variant="ghost" onClick={onBack}>
+              Back
+            </Button>
+          ) : (
+            <span />
+          )}
+          <Button type="button" onClick={onPrimary}>
+            {primaryLabel}
           </Button>
         </div>
       </Card>
 
-      <WizardContext ctx={ctx} />
-    </form>
-  );
-}
-
-/** Small shared context panel used by steps 2-5. */
-export function WizardContext({ ctx }) {
-  return (
-    <Card>
-      <CardTitle>This product</CardTitle>
-      <dl className="mt-3 space-y-2 text-sm">
-        <div className="flex justify-between gap-3">
-          <dt className="text-ink-muted">Product</dt>
-          <dd className="text-right text-ink">{ctx.productName || '—'}</dd>
-        </div>
-        <div className="flex justify-between gap-3">
-          <dt className="text-ink-muted">Variant</dt>
-          <dd className="text-right text-ink">{ctx.variantLabel || '—'}</dd>
-        </div>
-        <div className="flex justify-between gap-3">
-          <dt className="text-ink-muted">Batch</dt>
-          <dd className="text-right text-ink">{ctx.batchId ? 'created' : '—'}</dd>
-        </div>
-      </dl>
-    </Card>
+      <Card>
+        <CardTitle>Variants of {ctx.productName || 'this product'}</CardTitle>
+        <ul className="mt-3 space-y-1.5">
+          {variants.map((v) => (
+            <li key={v.ID} className="flex justify-between gap-3 text-sm">
+              <span className="text-ink">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</span>
+              <span className="text-ink-muted">{v.sku}</span>
+            </li>
+          ))}
+          {variants.length === 0 && <li className="text-sm text-ink-muted">No variants yet.</li>}
+        </ul>
+      </Card>
+    </div>
   );
 }

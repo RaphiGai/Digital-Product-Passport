@@ -1,131 +1,90 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { odataList, ApiError } from '@/api/client';
-import { useCreate } from '@/api/hooks';
-import { Card } from '@/ui/Card';
+import { odataList } from '@/api/client';
+import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
-import { Banner } from '@/ui/Breadcrumb';
-import { FormSection, FieldRow, Input, Select } from '@/ui/Form';
-import { WizardContext } from './Step2Variant';
+import { FieldRow, Select } from '@/ui/Form';
+import { BomEditor } from '@/ui/BomEditor';
 
-export function Step3Bom({ ctx, next, back }) {
-  const [row, setRow] = useState({ component_ID: '', quantity: '', unit: '%', component_role: '' });
-  const [added, setAdded] = useState(/** @type {{name:string, role:string, qty:string}[]} */ ([]));
-  const [error, setError] = useState('');
+/**
+ * Wizard step: pick a target variant and edit its bill of materials (reusable editor,
+ * incl. "copy from another variant"). The target variant can be switched to define BOMs
+ * for several variants in one pass. Last wizard step → "Finish".
+ * @param {{ ctx, onBack: () => void, onPrimary: () => void, primaryLabel: string }} props
+ */
+export function Step3Bom({ ctx, onBack, onPrimary, primaryLabel }) {
+  const [variantId, setVariantId] = useState(ctx.variantId || '');
 
-  // Candidate components: other products in the tenant (materials, components, packaging…).
-  const { data: products } = useQuery({
-    queryKey: ['Products', 'bom-candidates'],
-    queryFn: () => odataList('Products', { orderby: 'name', top: 200 })
+  const variantsQ = useQuery({
+    queryKey: ['ProductVariants', ctx.productId],
+    queryFn: () =>
+      odataList('ProductVariants', { filter: `product_ID eq '${ctx.productId}'`, orderby: 'sku', top: 200 }),
+    enabled: !!ctx.productId
   });
-  const candidates = (products ?? []).filter((p) => p.ID !== ctx.productId);
+  const variants = variantsQ.data ?? [];
 
-  const create = useCreate('ProductBOMs');
-
-  const set = (key) => (e) => setRow((r) => ({ ...r, [key]: e.target.value }));
-
-  const addComponent = () => {
-    setError('');
-    if (!row.component_ID) {
-      setError('Pick a component product.');
-      return;
-    }
-    create.mutate(
-      {
-        parent_ID: ctx.variantId,
-        component_ID: row.component_ID,
-        quantity: row.quantity ? Number(row.quantity) : null,
-        unit: row.unit || null,
-        component_role: row.component_role || null,
-        is_mandatory: true,
-        status: 'active'
-      },
-      {
-        onSuccess: () => {
-          const name = candidates.find((c) => c.ID === row.component_ID)?.name ?? 'Component';
-          setAdded((a) => [...a, { name, role: row.component_role, qty: `${row.quantity} ${row.unit}` }]);
-          setRow({ component_ID: '', quantity: '', unit: '%', component_role: '' });
-        },
-        onError: (err) => setError(err instanceof ApiError ? err.message : 'Could not add the component.')
-      }
-    );
-  };
+  // Default the target to the last-added (ctx) variant, else the first available.
+  useEffect(() => {
+    const list = variantsQ.data ?? [];
+    if (!variantId && list.length) setVariantId(ctx.variantId || list[0].ID);
+  }, [variantsQ.data, variantId, ctx.variantId]);
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-      <Card className="p-6">
-        {error && (
-          <div className="mb-4">
-            <Banner kind="error">{error}</Banner>
+      <div className="space-y-6">
+        <Card>
+          <CardTitle>Bill of materials</CardTitle>
+          <p className="mt-1 text-sm text-ink-muted">
+            BOM is defined per variant. Pick a variant, add its components — or copy another
+            variant&apos;s BOM as a starting point and adjust.
+          </p>
+          <div className="mt-4 max-w-sm">
+            <FieldRow label="Variant" htmlFor="bom-variant">
+              <Select
+                id="bom-variant"
+                value={variantId}
+                onChange={(e) => setVariantId(e.target.value)}
+                options={[
+                  { value: '', label: variants.length ? 'Select a variant…' : 'No variants — add one first' },
+                  ...variants.map((v) => ({
+                    value: v.ID,
+                    label: [v.color, v.size].filter(Boolean).join(' / ') || v.sku || v.ID
+                  }))
+                ]}
+              />
+            </FieldRow>
           </div>
-        )}
-        <FormSection
-          title="Bill of materials"
-          description="Add the component products that make up this variant. Optional — you can skip and add them later."
-        >
-          <FieldRow label="Component product" htmlFor="comp" className="md:col-span-2">
-            <Select
-              id="comp"
-              value={row.component_ID}
-              onChange={set('component_ID')}
-              options={[
-                { value: '', label: candidates.length ? 'Select a product…' : 'No other products available' },
-                ...candidates.map((c) => ({ value: c.ID, label: `${c.name}${c.brand ? ` · ${c.brand}` : ''}` }))
-              ]}
-            />
-          </FieldRow>
-          <FieldRow label="Quantity" htmlFor="qty">
-            <Input id="qty" type="number" value={row.quantity} onChange={set('quantity')} placeholder="80" />
-          </FieldRow>
-          <FieldRow label="Unit" htmlFor="unit">
-            <Select
-              id="unit"
-              value={row.unit}
-              onChange={set('unit')}
-              options={[
-                { value: '%', label: '%' },
-                { value: 'g', label: 'g' },
-                { value: 'kg', label: 'kg' },
-                { value: 'pcs', label: 'pcs' }
-              ]}
-            />
-          </FieldRow>
-          <FieldRow label="Role" htmlFor="role" className="md:col-span-2" hint="e.g. Main fabric, Stretch yarn, Zipper">
-            <Input id="role" value={row.component_role} onChange={set('component_role')} placeholder="Main fabric" />
-          </FieldRow>
-        </FormSection>
+        </Card>
 
-        <div className="flex justify-end">
-          <Button type="button" variant="outline" disabled={create.isPending} onClick={addComponent}>
-            {create.isPending ? 'Adding…' : '+ Add component'}
-          </Button>
-        </div>
+        {variantId && <BomEditor productId={ctx.productId} variantId={variantId} variants={variants} />}
 
-        {added.length > 0 && (
-          <ul className="mt-4 space-y-1.5 border-t border-black/5 pt-4">
-            {added.map((a, i) => (
-              <li key={i} className="flex justify-between text-sm">
-                <span className="text-ink">
-                  {a.name}
-                  {a.role ? ` · ${a.role}` : ''}
-                </span>
-                <span className="text-ink-muted">{a.qty}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="mt-5 flex items-center justify-between border-t border-black/5 pt-5">
-          <Button type="button" variant="ghost" onClick={back}>
+        <div className="flex items-center justify-between border-t border-black/5 pt-5">
+          <Button type="button" variant="ghost" onClick={onBack}>
             Back
           </Button>
-          <Button type="button" onClick={next}>
-            {added.length ? 'Continue' : 'Skip'}
+          <Button type="button" onClick={onPrimary}>
+            {primaryLabel}
           </Button>
         </div>
-      </Card>
+      </div>
 
-      <WizardContext ctx={ctx} />
+      <Card>
+        <CardTitle>This product</CardTitle>
+        <dl className="mt-3 space-y-2 text-sm">
+          <div className="flex justify-between gap-3">
+            <dt className="text-ink-muted">Product</dt>
+            <dd className="text-right text-ink">{ctx.productName || '—'}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-ink-muted">Variants</dt>
+            <dd className="text-right text-ink">{variants.length}</dd>
+          </div>
+        </dl>
+        <p className="mt-3 text-xs text-ink-muted">
+          Batches and the digital product passport are created later from each variant&apos;s
+          batch view.
+        </p>
+      </Card>
     </div>
   );
 }
