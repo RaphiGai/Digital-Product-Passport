@@ -44,6 +44,16 @@ export function CreatePartner() {
       setError('Name and Country are mandatory.');
       return;
     }
+
+    if (form.name.trim().length > 70) {
+      setError('Partner name must not exceed 70 characters.');
+      return;
+    }
+
+    if (form.country_iso2.trim().length !== 2) {
+      setError('Country must contain exactly 2 characters (ISO-2 code, e.g. DE, IN, IT).');
+      return;
+    }
     if (roles.length === 0) {
       setError('Select at least one supply chain role.');
       return;
@@ -95,10 +105,10 @@ export function CreatePartner() {
             title="Partner identity"
             description="Name and Country are mandatory and the only fields visible on the public consumer DPP."
           >
-            <FieldRow label="Name" required visibility="public" htmlFor="name">
-              <Input id="name" value={form.name} onChange={set('name')} placeholder="TextileCo India" />
+            <FieldRow label="Name" required visibility="public" htmlFor="name" hint={`Maximum 70 characters (${form.name.length}/70)`}>
+              <Input id="name" value={form.name} onChange={set('name')} placeholder="TextileCo India" maxLength={70} />
             </FieldRow>
-            <FieldRow label="Country" required visibility="public" htmlFor="country" hint="ISO-2 code, e.g. IN">
+            <FieldRow label="Country" required visibility="public" htmlFor="country" hint={`Exactly 2 characters (ISO-2 code, e.g. DE, IN, IT) (${form.country_iso2.length}/2)`}>
               <Input
                 id="country"
                 value={form.country_iso2}
