@@ -26,13 +26,18 @@
       "csrfProtection": false
     },
     {
+      "source": "^/assets/(.*)$",
+      "localDir": "resources",
+      "authenticationType": "none"
+    },
+    {
       "source": "^/consumer\\.html.*$",
-      "service": "html5-apps-repo.app-runtime",
+      "localDir": "resources",
       "authenticationType": "none"
     },
     {
       "source": "^(.*)$",
-      "service": "html5-apps-repo.app-runtime",
+      "localDir": "resources",
       "authenticationType": "xsuaa"
     }
   ]
