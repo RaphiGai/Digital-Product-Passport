@@ -37,6 +37,9 @@ export function CreatePartner() {
   const toggleRole = (value) => (on) =>
     setRoles((r) => (on ? [...r, value] : r.filter((x) => x !== value)));
 
+  const isValidEmail = (email) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
   const submit = (e) => {
     e.preventDefault();
     setError('');
@@ -54,6 +57,11 @@ export function CreatePartner() {
       setError('Country must contain exactly 2 characters (ISO-2 code, e.g. DE, IN, IT).');
       return;
     }
+    if (form.contact_email.trim() && !isValidEmail(form.contact_email.trim())) {
+      setError('Please enter a valid contact email address, e.g. name@company.com.');
+      return;
+    }
+
     if (roles.length === 0) {
       setError('Select at least one supply chain role.');
       return;
@@ -67,7 +75,7 @@ export function CreatePartner() {
         address: form.address || null,
         identifier: form.identifier || null,
         contact_person: form.contact_person || null,
-        contact_email: form.contact_email || null,
+        contact_email: form.contact_email.trim() || null,
         archived: form.archived,
         owning_organization_ID: me?.organizationId,
         // deep insert into BusinessPartnerRoles — each row needs its own client-side key
@@ -118,7 +126,7 @@ export function CreatePartner() {
               />
             </FieldRow>
             <FieldRow label="City" visibility="internal" htmlFor="city">
-              <Input id="city" value={form.city} onChange={set('city')} placeholder="Mumbai" />
+              <Input id="city" value={form.city} onChange={set('city')} placeholder="Mumbai" maxLength={70} />
             </FieldRow>
             <FieldRow
               label="External identifier"
@@ -131,10 +139,11 @@ export function CreatePartner() {
                 value={form.identifier}
                 onChange={set('identifier')}
                 placeholder="VAT-IN-0012345"
+                maxLength={40}
               />
             </FieldRow>
             <FieldRow label="Address" visibility="internal" htmlFor="address" className="md:col-span-2">
-              <Textarea id="address" value={form.address} onChange={set('address')} />
+              <Textarea id="address" value={form.address} onChange={set('address')} maxLength={150} />
             </FieldRow>
           </FormSection>
 
@@ -143,10 +152,10 @@ export function CreatePartner() {
             description="Both fields are optional and internal only — never shown on the public consumer DPP."
           >
             <FieldRow label="Contact person" visibility="internal" htmlFor="cp">
-              <Input id="cp" value={form.contact_person} onChange={set('contact_person')} />
+              <Input id="cp" value={form.contact_person} onChange={set('contact_person')} maxLength={70} />
             </FieldRow>
-            <FieldRow label="Contact email" visibility="internal" htmlFor="ce">
-              <Input id="ce" type="email" value={form.contact_email} onChange={set('contact_email')} />
+            <FieldRow label="Contact email" visibility="internal" htmlFor="ce" hint="Enter a valid email address, e.g. contact@company.com.">
+              <Input id="ce" type="email" value={form.contact_email} onChange={set('contact_email')} placeholder="contact@company.com" maxLength={70} />
             </FieldRow>
           </FormSection>
 
