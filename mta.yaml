@@ -1,7 +1,7 @@
 _schema-version: '3.3'
 ID: dpp-frontend
 version: 0.1.0
-description: DPP Studio — React frontend deployed via the SAP BTP HTML5 Application Repository
+description: DPP Studio — React frontend; standalone approuter serves the SPA from its own container
 
 parameters:
   enable-parallel-deployments: true
@@ -11,6 +11,10 @@ parameters:
 #  1. Backend MTA (dpp-capgemini) is deployed first → its dpp-srv route is set
 #     in the `srv-api` destination URL below (update if the backend host changes).
 #  2. The shared XSUAA instance `dpp-uaa` already exists in the target space.
+#
+# Variante A: the approuter serves the built SPA directly from a local `resources/`
+# folder (xs-app.json localDir). No HTML5 Application Repository is used — this
+# avoids the repo's app-resolution problems in the XSUAA-protected path.
 # ---------------------------------------------------------------------------
 
 modules:
@@ -22,33 +26,12 @@ modules:
       builder: custom
       commands:
         - npm ci || npm install
-        - npm run build:cf
+        - npm run build
       supported-platforms: []
-      # build:cf runs vite build, then packages dist/ into dpp-ui-content.zip
-      # (the inner per-app bundle the HTML5 repo requires). No build-result, so the
-      # deployer resolves the artifact relative to the module path (app/).
+      build-result: dist
 
-  # ---- Uploads the built UI into the HTML5 Application Repository (app-host) ----
-  - name: dpp-ui-deployer
-    type: com.sap.application.content
-    path: .
-    requires:
-      - name: dpp-html5-host
-        parameters:
-          content-target: true
-    build-parameters:
-      build-result: resources
-      requires:
-        - name: dpp-ui
-          # The inner per-app bundle built by app/scripts/package-html5.mjs. The
-          # content deployer wraps it into data.zip → required nested structure.
-          artifacts:
-            - dpp-ui-content.zip
-          target-path: resources/
-
-  # ---- Approuter: serves the SPA from the HTML5 repo, forwards API to the backend ----
-  # NOTE: must NOT be named `dpp-approuter` — that app name is already owned by the
-  # backend MTA (dpp-capgemini) in this space. Frontend approuter gets its own name.
+  # ---- Approuter: serves the SPA from its container, forwards API to the backend ----
+  # NOTE: must NOT be named `dpp-approuter` — that app name is owned by the backend MTA.
   - name: dpp-frontend-approuter
     type: approuter.nodejs
     path: router
@@ -56,16 +39,22 @@ modules:
       keep-existing-routes: true
       memory: 256M
       disk-quota: 512M
+    build-parameters:
+      # Copy the Vite build output into the approuter's resources/ folder so
+      # xs-app.json can serve the SPA via localDir. `*` matches the dist contents
+      # (index.html, consumer.html, assets/) relative to dpp-ui's build-result.
+      requires:
+        - name: dpp-ui
+          artifacts:
+            - '*'
+          target-path: resources/
     properties:
-      # Inline destination to the backend CAP service as an env var (no destination
-      # service / no provider module needed). forwardAuthToken sends the XSUAA JWT to
-      # dpp-srv, which accepts it because both bind the SAME dpp-uaa (same xsappname).
-      # This is the dpp-srv route in space `dev` — update it if the backend host changes.
+      # Inline destination to the backend CAP service. forwardAuthToken sends the
+      # XSUAA JWT to dpp-srv, which accepts it because both bind the SAME dpp-uaa.
       destinations: >
         [{"name":"srv-api","url":"https://cf-procode-bas-dev-dpp-srv.cfapps.eu10-004.hana.ondemand.com","forwardAuthToken":true}]
     requires:
       - name: dpp-uaa
-      - name: dpp-html5-runtime
     provides:
       - name: fe-app-api
         properties:
@@ -73,19 +62,6 @@ modules:
           app-uri: ${default-uri}
 
 resources:
-  # HTML5 Application Repository — storage (app-host) + runtime (app-runtime)
-  - name: dpp-html5-host
-    type: org.cloudfoundry.managed-service
-    parameters:
-      service: html5-apps-repo
-      service-plan: app-host
-
-  - name: dpp-html5-runtime
-    type: org.cloudfoundry.managed-service
-    parameters:
-      service: html5-apps-repo
-      service-plan: app-runtime
-
   # SHARED XSUAA — bind the EXISTING backend instance (do NOT re-declare as managed).
   # Identical xsappname/audience → the forwarded JWT is accepted by dpp-srv.
   - name: dpp-uaa

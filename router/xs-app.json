@@ -27,20 +27,17 @@
     },
     {
       "source": "^/assets/(.*)$",
-      "target": "dppstudio/assets/$1",
-      "service": "html5-apps-repo-rt",
+      "localDir": "resources",
       "authenticationType": "none"
     },
     {
       "source": "^/consumer\\.html.*$",
-      "target": "dppstudio/consumer.html",
-      "service": "html5-apps-repo-rt",
+      "localDir": "resources",
       "authenticationType": "none"
     },
     {
-      "source": "^/(.*)$",
-      "target": "dppstudio/$1",
-      "service": "html5-apps-repo-rt",
+      "source": "^(.*)$",
+      "localDir": "resources",
       "authenticationType": "xsuaa"
     }
   ]

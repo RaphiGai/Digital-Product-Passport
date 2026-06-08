@@ -1,31 +1,28 @@
 /**
- * Standalone approuter for DPP Studio (Variante B — HTML5 Application Repository).
+ * Standalone approuter for DPP Studio (Variante A — serves the SPA from this
+ * container's resources/ folder via xs-app.json localDir; no HTML5 repo).
  *
- * The SPA itself (index.html, consumer.html, /assets/*) lives in the HTML5
- * Application Repository; xs-app.json forwards every non-API path to it via
- * `service: html5-apps-repo-rt` with the `/dppstudio/...` app prefix.
- *
- * This thin extension rewrites two classes of request BEFORE routing — it never
- * serves files itself (unlike the cf-push variant), it only adjusts req.url so
- * the normal HTML5-repo routes pick up the right resource:
+ * This thin extension handles two GET cases before normal routing:
  *
  *  1. QR-scan navigation. The printed QR points at /public/dpp/:token. A browser
- *     opening it (Accept: text/html) must get the rendered consumer SPA, while
- *     the page's own JSON fetch and the qr.png image (non-HTML Accept) fall
- *     through to the backend untouched. We rewrite only the HTML navigation to
- *     /consumer.html; the browser address bar keeps /public/dpp/:token, so
- *     ConsumerApp still reads the token from the path.
+ *     opening it (Accept: text/html) must get the rendered consumer SPA shell,
+ *     while the page's own JSON fetch and the /qr.png image (non-HTML Accept)
+ *     fall through to the backend untouched. The browser address bar keeps
+ *     /public/dpp/:token, so ConsumerApp still reads the token from the path.
  *
- *  2. SPA deep links. React Router uses BrowserRouter (history API), so a direct
- *     hit or reload of e.g. /products/123 would otherwise 404 against the repo.
- *     Any HTML navigation that is not an API path and not a static file is
- *     rewritten to /index.html so the SPA boots and resolves the route client-side.
+ *  2. SPA deep links. React Router uses the history API, so a direct hit or
+ *     reload of e.g. /products/123 would 404 against localDir (which does not
+ *     fall back to index.html). We rewrite such HTML navigations to /index.html;
+ *     the catch-all xsuaa route then still gates them behind login.
  */
+const fs = require('fs');
+const path = require('path');
 const approuter = require('@sap/approuter');
 
 const ar = approuter();
+const CONSUMER_HTML = path.join(__dirname, 'resources', 'consumer.html');
 
-// Paths handled by the backend (xs-app.json → srv-api destination). Never rewrite these.
+// Backend paths (forwarded to srv-api) — never serve locally / never fall back.
 const BACKEND = /^\/(odata|public|healthz)(\/|$)/;
 // QR target: /public/dpp/<token> but NOT /public/dpp/<token>/qr.png
 const CONSUMER_NAV = /^\/public\/dpp\/[^/]+\/?$/;
@@ -33,22 +30,23 @@ const CONSUMER_NAV = /^\/public\/dpp\/[^/]+\/?$/;
 ar.first.use((req, res, next) => {
   if (req.method !== 'GET') return next();
 
-  const path = (req.url || '').split('?')[0];
+  const url = (req.url || '').split('?')[0];
   const wantsHtml = (req.headers.accept || '').includes('text/html');
 
-  // 1) QR-scan opened in a browser → consumer SPA (served from the HTML5 repo).
-  if (wantsHtml && CONSUMER_NAV.test(path)) {
-    req.url = '/consumer.html';
-    return next();
+  // 1) QR-scan opened in a browser → serve the consumer SPA shell.
+  if (wantsHtml && CONSUMER_NAV.test(url)) {
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    fs.createReadStream(CONSUMER_HTML).pipe(res);
+    return;
   }
 
   // 2) Leave backend API/asset calls (incl. the JSON fetch + qr.png) untouched.
-  if (BACKEND.test(path)) return next();
+  if (BACKEND.test(url)) return next();
 
   // 3) SPA deep-link fallback: HTML navigation to a non-file path → index.html.
-  const lastSegment = path.slice(path.lastIndexOf('/') + 1);
+  const lastSegment = url.slice(url.lastIndexOf('/') + 1);
   const isStaticFile = lastSegment.includes('.');
-  if (wantsHtml && !isStaticFile) {
+  if (wantsHtml && !isStaticFile && url !== '/') {
     req.url = '/index.html';
   }
 
