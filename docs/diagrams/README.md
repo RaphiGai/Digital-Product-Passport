@@ -13,9 +13,11 @@ These four diagrams correspond directly to the four required deliverables in [..
 | # | File | Maps to | Contents |
 |---|---|---|---|
 | 1 | [technical-data-model.drawio](technical-data-model.drawio) | Technical Data Model | Physical schema as deployed to HANA Cloud: 12 tables (incl. serialised Product Items and DPP Marketing Links) with columns, data types and constraints |
-| 2 | [software-architecture.drawio](software-architecture.drawio) | Software Architecture | Component view: client → BTP platform → OData and REST → business logic → libraries → database |
+| 2 | [software-architecture.drawio](software-architecture.drawio) | Software Architecture | Logical component view (deployment-agnostic): client → platform boundary → OData and REST → business logic → libraries → persistence |
 | 3 | [erd.drawio](erd.drawio) | Semantic Model (Entity Relationship) | 12 entities with attributes and foreign key relations (crow's-foot notation), incl. Product Item with its 1:1 item-level DPP and DPP Marketing Links |
-| 4 | [btp-architecture.drawio](btp-architecture.drawio) | BTP Architecture | Deployment topology on SAP BTP: subaccount, Cloud Foundry, MTA modules, authorization service, HANA database, runtime secrets |
+| 4 | [btp-architecture.drawio](btp-architecture.drawio) | BTP Architecture | Deployment topology on SAP BTP (no code internals): subaccount, Cloud Foundry, both MTAs (backend + frontend) sharing one XSUAA, MTA modules, HANA database, runtime secrets |
+
+> **Keeping diagrams 2 and 4 disjoint:** the two architecture views share a seam (Approuter, XSUAA, HANA, actors) and historically overlapped. The rebuild rules — what each view shows, what it must *not* show, and how to render the shared seam at different detail in each — are in [diagram-separation-spec.md](diagram-separation-spec.md).
 
 ### Supplementary diagrams (appendix)
 

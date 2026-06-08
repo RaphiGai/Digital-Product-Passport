@@ -13,7 +13,7 @@ Supplementary material (solution context, deployment topology, passport lifecycl
 
 ## 1. BTP Architecture
 
-Deployment topology on SAP Business Technology Platform — subaccount, Cloud Foundry org and space, MTA modules and resources, bindings. Uses the official BTP solution diagram icon set.
+**View contract — the deployment view.** This diagram answers *where the system runs and what platform pieces wire it together*: subaccount, Cloud Foundry org and space, MTA modules, resources and their bindings. It deliberately shows **no code internals** — the backend collapses to a single `dpp-srv` module. Code structure lives in §2. The topology spans **two MTAs** in the same space — the backend (`dpp-capgemini`) and the frontend (`dpp-frontend`) — bound to **one shared XSUAA** (`dpp-uaa`, same `xsappname`), so the JWT the frontend approuter forwards is accepted by the backend. Uses the official BTP solution diagram icon set. The rebuild rules that keep this view disjoint from §2 are in [diagrams/diagram-separation-spec.md](diagrams/diagram-separation-spec.md).
 
 ![BTP Architecture](diagrams/btp-architecture.png)
 
@@ -52,7 +52,7 @@ The detailed access-control specification is in [appendix.md](appendix.md).
 
 ## 2. Software Architecture
 
-Layers: client → BTP platform → API layer (authenticated OData and public REST) → business logic → supporting libraries → database. The platform also surfaces a Swagger UI and a health check endpoint.
+**View contract — the logical view.** This diagram answers *what the code is and how a request flows through it*, layer by layer: client → platform boundary → API layer (authenticated OData and public REST) → business logic → supporting libraries → persistence. It is **deployment-agnostic** — it stays true even running locally on SQLite with mocked auth. The platform appears only as a thin **boundary** (the Approuter terminates auth, XSUAA validates the token); its decomposition into modules, resources and bindings is the subject of §1, not this view. Likewise persistence is shown abstractly (SAP HANA Cloud in production, SQLite in development). The rebuild rules that keep this view disjoint from §1 are in [diagrams/diagram-separation-spec.md](diagrams/diagram-separation-spec.md).
 
 ![Software Architecture](diagrams/software-architecture.png)
 
@@ -66,11 +66,10 @@ Editable source: [diagrams/software-architecture.drawio](diagrams/software-archi
 - Consumers reach the system from a mobile browser via QR scan
 - Market surveillance authorities use any HTTP client and the same public token URL as consumers
 
-**BTP platform layer**
+**Platform boundary** (shown as a single context box — full decomposition in §1)
 
-- Application Router handles single sign-on and serves the static UI
-- Authorization and Trust Service (XSUAA) issues and verifies tokens
-- Runtime Secrets are stored in a user-provided service and injected at boot
+- The Application Router terminates the session/SSO and serves the static UI; XSUAA validates the forwarded token. From the logical view this is one boundary the request crosses on its way in — its modules, service plans and bindings are a §1 (deployment) concern.
+- Runtime Secrets (a user-provided service) are injected into the backend at boot by the Secret Loader library.
 
 **API layer**
 

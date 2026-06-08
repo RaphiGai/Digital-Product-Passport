@@ -23,8 +23,9 @@ yarn-debug.log*
 # OS / IDE
 .DS_Store
 Thumbs.db
-# Office temp / lock files
+# Office temp / lock / backup files
 ~$*
+*.bak
 .vscode/*
 !.vscode/launch.json
 !.vscode/settings.json
