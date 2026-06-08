@@ -32,8 +32,9 @@ export function BomEditor({ productId, variantId, variants = [] }) {
   });
 
   const nameOf = (id) => products.data?.find((p) => p.ID === id)?.name ?? id;
-  const candidates = (products.data ?? []).filter((p) => p.ID !== productId);
-
+  const candidates = (products.data ?? []).filter(
+    (p) => p.ID !== productId && ['material', 'component', 'packaging'].includes(p.product_type)
+  );
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['ProductBOMs', variantId] });
     if (productId) qc.invalidateQueries({ queryKey: ['Products', productId] });

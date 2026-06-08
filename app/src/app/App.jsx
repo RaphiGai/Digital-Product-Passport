@@ -13,6 +13,7 @@ import { CreatePartner } from './pages/CreatePartner';
 import { Dpps } from './pages/Dpps';
 import { DppDetail } from './pages/DppDetail';
 import { ComingSoon } from './pages/ComingSoon';
+import { BatchEdit } from './pages/BatchEdit';
 
 export function App() {
   return (
@@ -27,6 +28,7 @@ export function App() {
           <Route path="products/:pid/variants/new" element={<AddVariant />} />
           <Route path="products/:pid/variants/:vid" element={<VariantEdit />} />
           <Route path="products/:pid/variants/:vid/batches" element={<BatchView />} />
+          <Route path="products/:pid/variants/:vid/batches/:bid/edit" element={<BatchEdit />} />
 
           <Route path="partners" element={<Partners />} />
           <Route path="partners/new" element={<CreatePartner />} />

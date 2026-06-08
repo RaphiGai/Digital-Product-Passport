@@ -19,13 +19,14 @@ const columns = [
   },
   { header: 'Country', cell: (p) => p.country_iso2 ?? '—' },
   { header: 'City', cell: (p) => p.city ?? '—' },
+  { header: 'Roles', cell: (p) => (p.roles ?? []).map((r) => r.role).join(', ') || '—' },
   { header: 'Status', cell: (p) => <StatusBadge status={p.archived ? 'archived' : 'active'} /> }
 ];
 
 export function Partners() {
   const { data, isLoading } = useQuery({
     queryKey: ['BusinessPartners'],
-    queryFn: () => odataList('BusinessPartners', { orderby: 'name', top: 100 })
+    queryFn: () => odataList('BusinessPartners', { orderby: 'name', top: 100, expand: ['roles'] })
   });
 
   return (

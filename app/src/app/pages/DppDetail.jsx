@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
-import { odataGet } from '@/api/client';
+import { odataGet, callFunction } from '@/api/client';   // added callFunction here
 import { useAction, useUpdate } from '@/api/hooks';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
@@ -31,6 +31,14 @@ export function DppDetail() {
     queryFn: () => odataGet('DPPs', id, { expand: ['product'] })
   });
 
+  // Fetches the QR code image from the backend as base64.
+  // Only runs once the DPP is loaded and has a qr_token (i.e. after publishing).
+  const qrQ = useQuery({
+    queryKey: ['DPPs', id, 'qr'],
+    queryFn: () => callFunction(`DPPs('${id}')/DPPService.generateQRCode`),
+    enabled: !!dpp?.qr_token
+  });
+
   const invalidate = [['DPPs', id], ['DPPs']];
   const act = useAction('DPPs', { invalidate });
   const update = useUpdate('DPPs', { invalidate });
@@ -51,9 +59,6 @@ export function DppDetail() {
       }
     );
 
-  // Publishing must also make the passport publicly visible — the consumer route
-  // requires status='published' AND visibility='public'. publishDPP only sets the status,
-  // so we set visibility='public' first, then publish.
   const publish = () =>
     update.mutate(
       { key: id, payload: { visibility: 'public' } },
@@ -185,10 +190,13 @@ export function DppDetail() {
 
         <Card>
           <CardTitle>QR code</CardTitle>
-          {dpp.qr_token ? (
+          {/* Renders the QR image returned as base64 from generateQRCode().      */}
+          {/* Before publishing: qr_token is null so qrQ never runs → show hint. */}
+          {/* After publishing:  qrQ fetches and decodes the base64 PNG.          */}
+          {qrQ.data?.png ? (
             <div className="mt-3 flex flex-col items-center gap-2">
               <img
-                src={`/public/dpp/${dpp.qr_token}/qr.png`}
+                src={`data:image/png;base64,${qrQ.data.png}`}
                 alt="DPP QR code"
                 className="h-44 w-44 rounded-lg border border-black/5"
               />
@@ -196,7 +204,7 @@ export function DppDetail() {
             </div>
           ) : (
             <p className="mt-3 text-sm text-ink-muted">
-              No QR yet — publish the passport to generate one.
+              {dpp.qr_token ? 'Loading QR…' : 'No QR yet — publish the passport to generate one.'}
             </p>
           )}
         </Card>
