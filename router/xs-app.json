@@ -27,12 +27,14 @@
     },
     {
       "source": "^/consumer\\.html.*$",
-      "service": "html5-apps-repo.app-runtime",
+      "target": "/dppstudio/consumer.html",
+      "service": "html5-apps-repo-rt",
       "authenticationType": "none"
     },
     {
-      "source": "^(.*)$",
-      "service": "html5-apps-repo.app-runtime",
+      "source": "^/(.*)$",
+      "target": "/dppstudio/$1",
+      "service": "html5-apps-repo-rt",
       "authenticationType": "xsuaa"
     }
   ]

@@ -1,0 +1,15 @@
+{
+  "_version": "1.59.0",
+  "sap.app": {
+    "id": "dppstudio",
+    "type": "application",
+    "title": "DPP Studio",
+    "description": "Digital Product Passport — company app and public consumer view",
+    "applicationVersion": {
+      "version": "0.1.0"
+    }
+  },
+  "sap.cloud": {
+    "service": "dppstudio"
+  }
+}

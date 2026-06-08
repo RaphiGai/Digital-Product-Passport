@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:cf": "vite build && node scripts/package-html5.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{js,jsx,css}\""
@@ -20,6 +21,7 @@
     "react-router-dom": "^6.27.0"
   },
   "devDependencies": {
+    "adm-zip": "^0.5.16",
     "@eslint/js": "^9.13.0",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",

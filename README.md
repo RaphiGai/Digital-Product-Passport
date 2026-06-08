@@ -68,21 +68,32 @@ The public consumer view is the second entry — locally:
 - `npm run build` — production build (both entries) into `dist/`
 - `npm run lint` — ESLint
 
-## Deploy to BTP (Variante B) — prerequisites
+## Deploy to BTP (Variante B — HTML5 Application Repository)
 
-> Status: **skeleton**. The MTA structure is in place; finalize the items below before the
-> first `cf deploy`.
+The build uploads the Vite output into the **HTML5 Application Repository**; the standalone
+Approuter (`router/`) serves it from there and forwards `/odata` + `/public` to the backend.
 
-1. **Backend first.** Deploy `dpp_capgemini`, then note the `dpp-srv` route
-   (e.g. `https://dpp-srv-dev.cfapps.eu10-004.hana.ondemand.com`).
-2. **Set the backend URL** in `mta.yaml` → `dpp-approuter` → `srv-api` destination:
-   replace `BACKEND_SRV_URL`.
-3. **Shared XSUAA.** `mta.yaml` binds the existing `dpp-uaa` instance via
-   `existing-service` (must already exist in the target space). No new XSUAA is created,
-   so the forwarded JWT is accepted by the backend.
-4. **HTML5 content packaging.** Deploying a plain Vite app to the HTML5 Application
-   Repository needs a `manifest.json` (app id / `sap.cloud.service`) alongside `dist/`.
-   This is the remaining deploy-time step (tracked for Phase 2 / pre-deploy).
+How the pieces fit together:
+
+- **App identity.** `app/public/manifest.json` (→ `dist/manifest.json`) declares
+  `sap.app.id: dppstudio`. The HTML5 content deployer stores the app under that name.
+- **Routing.** `router/xs-app.json` forwards every non-API path to the repo via
+  `service: html5-apps-repo-rt` with the `target: /dppstudio/$1` prefix — so the SPA's
+  absolute `/assets/...` paths resolve without a Vite `base` change. The `dppstudio` prefix
+  in the routes must match `sap.app.id`.
+- **Approuter extension.** `router/approuter.js` rewrites two request classes before routing:
+  a browser opening the QR target `/public/dpp/:token` (Accept: text/html) gets `consumer.html`;
+  any other HTML navigation to a non-file path (React Router deep links) falls back to
+  `index.html`. The JSON fetch and `qr.png` pass through to the backend untouched.
+- **Shared XSUAA.** `mta.yaml` binds the existing `dpp-uaa` instance via `existing-service`
+  (must already exist in the target space), so the forwarded JWT is accepted by the backend.
+
+Prerequisites:
+
+1. **Backend first.** Deploy `dpp_capgemini`; the `srv-api` destination in `mta.yaml` points at
+   its `dpp-srv` route. Update that URL if the backend host changes.
+2. **`PUBLIC_BASE_URL`.** Set the backend's `dpp-secrets` `PUBLIC_BASE_URL` to **this frontend
+   Approuter's** host, so printed QR codes resolve to the consumer view served here.
 
 ```bash
 mbt build

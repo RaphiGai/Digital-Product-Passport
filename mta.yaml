@@ -8,9 +8,9 @@ parameters:
 
 # ---------------------------------------------------------------------------
 # Deploy prerequisites (see README):
-#  1. Backend MTA (dpp-capgemini) is deployed first → note the dpp-srv route.
-#  2. Set that route in the `srv-api` destination URL below (BACKEND_SRV_URL).
-#  3. The shared XSUAA instance `dpp-uaa` already exists in the target space.
+#  1. Backend MTA (dpp-capgemini) is deployed first → its dpp-srv route is set
+#     in the `srv-api` destination URL below (update if the backend host changes).
+#  2. The shared XSUAA instance `dpp-uaa` already exists in the target space.
 # ---------------------------------------------------------------------------
 
 modules:
@@ -22,9 +22,11 @@ modules:
       builder: custom
       commands:
         - npm ci || npm install
-        - npm run build
+        - npm run build:cf
       supported-platforms: []
-      build-result: dist
+      # build:cf runs vite build, then packages dist/ into dpp-ui-content.zip
+      # (the inner per-app bundle the HTML5 repo requires). No build-result, so the
+      # deployer resolves the artifact relative to the module path (app/).
 
   # ---- Uploads the built UI into the HTML5 Application Repository (app-host) ----
   - name: dpp-ui-deployer
@@ -38,32 +40,32 @@ modules:
       build-result: resources
       requires:
         - name: dpp-ui
+          # The inner per-app bundle built by app/scripts/package-html5.mjs. The
+          # content deployer wraps it into data.zip → required nested structure.
           artifacts:
-            - dist
+            - dpp-ui-content.zip
           target-path: resources/
 
   # ---- Approuter: serves the SPA from the HTML5 repo, forwards API to the backend ----
-  - name: dpp-approuter
+  # NOTE: must NOT be named `dpp-approuter` — that app name is already owned by the
+  # backend MTA (dpp-capgemini) in this space. Frontend approuter gets its own name.
+  - name: dpp-frontend-approuter
     type: approuter.nodejs
     path: router
     parameters:
       keep-existing-routes: true
       memory: 256M
       disk-quota: 512M
+    properties:
+      # Inline destination to the backend CAP service as an env var (no destination
+      # service / no provider module needed). forwardAuthToken sends the XSUAA JWT to
+      # dpp-srv, which accepts it because both bind the SAME dpp-uaa (same xsappname).
+      # This is the dpp-srv route in space `dev` — update it if the backend host changes.
+      destinations: >
+        [{"name":"srv-api","url":"https://cf-procode-bas-dev-dpp-srv.cfapps.eu10-004.hana.ondemand.com","forwardAuthToken":true}]
     requires:
       - name: dpp-uaa
       - name: dpp-html5-runtime
-      # Inline destination to the backend CAP service (mirrors the backend's own
-      # approuter wiring). forwardAuthToken sends the XSUAA JWT to dpp-srv, which
-      # accepts it because both bind the SAME dpp-uaa instance (same xsappname).
-      # TODO before deploy: replace BACKEND_SRV_URL with the deployed dpp-srv route,
-      #   e.g. https://dpp-srv-dev.cfapps.eu10-004.hana.ondemand.com
-      - name: srv-api
-        group: destinations
-        properties:
-          name: srv-api
-          url: BACKEND_SRV_URL
-          forwardAuthToken: true
     provides:
       - name: fe-app-api
         properties:
