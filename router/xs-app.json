@@ -26,14 +26,20 @@
       "csrfProtection": false
     },
     {
+      "source": "^/assets/(.*)$",
+      "target": "dppstudio/assets/$1",
+      "service": "html5-apps-repo-rt",
+      "authenticationType": "none"
+    },
+    {
       "source": "^/consumer\\.html.*$",
-      "target": "/dppstudio/consumer.html",
+      "target": "dppstudio/consumer.html",
       "service": "html5-apps-repo-rt",
       "authenticationType": "none"
     },
     {
       "source": "^/(.*)$",
-      "target": "/dppstudio/$1",
+      "target": "dppstudio/$1",
       "service": "html5-apps-repo-rt",
       "authenticationType": "xsuaa"
     }
