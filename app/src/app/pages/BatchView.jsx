@@ -66,12 +66,13 @@ function BatchRow({ batch, pid, vid, onMsg }) {
   const dpps = dppsQ.data ?? [];
   const dppByItem = Object.fromEntries(dpps.map((d) => [d.item_ID, d]));
 
-  const dppCount = dpps.length;
+  const itemDpps = dpps.filter((d) => d.item_ID);
+  const dppCount = itemDpps.length;
   const dppsMatchItems = dppCount === items.length && items.length > 0;
-  const allDraft = dppsMatchItems && dpps.every((d) => d.status === 'draft');
-  const allApproved = dppsMatchItems && dpps.every((d) => d.status === 'approved');
-  const allPublished = dppsMatchItems && dpps.every((d) => d.status === 'published');
-  const anyPublished = dpps.some((d) => d.status === 'published');
+  const allDraft = dppsMatchItems && itemDpps.every((d) => d.status === 'draft');
+  const allApproved = dppsMatchItems && itemDpps.every((d) => d.status === 'approved');
+  const allPublished = dppsMatchItems && itemDpps.every((d) => d.status === 'published');
+  const anyPublished = itemDpps.some((d) => d.status === 'published');
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['ProductItems', batch.ID] });
@@ -98,30 +99,6 @@ function BatchRow({ batch, pid, vid, onMsg }) {
       onMsg({ kind: 'success', text: 'Items created.' });
     },
     onError: (err) => onMsg({ kind: 'error', text: err instanceof ApiError ? err.message : 'Could not create items.' })
-  });
-
-  // ── Create one DPP per item ─────────────────────────────────────────────────
-  const createDpps = useMutation({
-    mutationFn: async () => {
-      const withoutDpp = items.filter((item) => !dppByItem[item.ID]);
-      for (const item of withoutDpp) {
-        await odataCreate('DPPs', {
-          ID: newId(),
-          product_ID: pid,
-          batch_ID: batch.ID,
-          item_ID: item.ID,
-          dpp_type: 'product',
-          visibility: 'internal',
-          status: 'draft'
-        });
-      }
-      return withoutDpp.length;
-    },
-    onSuccess: (n) => {
-      invalidateAll();
-      onMsg({ kind: 'success', text: `${n} DPP draft${n !== 1 ? 's' : ''} created.` });
-    },
-    onError: (err) => onMsg({ kind: 'error', text: err instanceof ApiError ? err.message : 'Could not create DPPs.' })
   });
 
   // ── Approve all DPPs ────────────────────────────────────────────────────────
@@ -166,7 +143,7 @@ function BatchRow({ batch, pid, vid, onMsg }) {
     onError: () => onMsg({ kind: 'error', text: 'Publish all failed.' })
   });
 
-  const busy = createItems.isPending || createDpps.isPending || approveAll.isPending || publishAll.isPending;
+  const busy = createItems.isPending || approveAll.isPending || publishAll.isPending;
   const parsedCount = parseInt(itemCount, 10);
 
   return (
@@ -220,24 +197,6 @@ function BatchRow({ batch, pid, vid, onMsg }) {
             {createItems.isPending ? 'Adding…' : 'Add items'}
           </Button>
         </div>
-
-        {/* Bulk DPP actions — shown based on state */}
-        {items.length > 0 && dppCount === 0 && (
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={busy}
-            onClick={() => createDpps.mutate()}
-          >
-            {createDpps.isPending ? 'Creating…' : `Create ${items.length} DPPs`}
-          </Button>
-        )}
-
-        {items.length > 0 && dppCount > 0 && dppCount < items.length && (
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => createDpps.mutate()}>
-            {createDpps.isPending ? 'Creating…' : `Create missing DPPs (${items.length - dppCount})`}
-          </Button>
-        )}
 
         {allDraft && dppCount > 0 && (
           <Button
