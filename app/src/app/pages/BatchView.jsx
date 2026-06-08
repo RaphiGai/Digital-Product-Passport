@@ -68,11 +68,13 @@ function BatchRow({ batch, pid, vid, onMsg }) {
 
   const itemDpps = dpps.filter((d) => d.item_ID);
   const dppCount = itemDpps.length;
-  const dppsMatchItems = dppCount === items.length && items.length > 0;
-  const allDraft = dppsMatchItems && itemDpps.every((d) => d.status === 'draft');
-  const allApproved = dppsMatchItems && itemDpps.every((d) => d.status === 'approved');
-  const allPublished = dppsMatchItems && itemDpps.every((d) => d.status === 'published');
-  const anyPublished = itemDpps.some((d) => d.status === 'published');
+
+  // Group DPPs by lifecycle stage instead of requiring ALL items to share one
+  // status. This lets newly added items (whose DPPs start in `draft`) be
+  // approved/published even when the rest of the batch is already published.
+  const draftDpps = itemDpps.filter((d) => d.status === 'draft' || d.status === 'in_review');
+  const approvedDpps = itemDpps.filter((d) => d.status === 'approved');
+  const publishedCount = itemDpps.filter((d) => d.status === 'published').length;
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['ProductItems', batch.ID] });
@@ -103,7 +105,7 @@ function BatchRow({ batch, pid, vid, onMsg }) {
 
   // ── Approve all DPPs ────────────────────────────────────────────────────────
   const approveAll = useMutation({
-    mutationFn: () => bulkAction(dpps.map((d) => d.ID), 'approveDPP'),
+    mutationFn: () => bulkAction(draftDpps.map((d) => d.ID), 'approveDPP'),
     onSuccess: (r) => {
       invalidateAll();
       onMsg({
@@ -119,9 +121,11 @@ function BatchRow({ batch, pid, vid, onMsg }) {
   // ── Publish all DPPs ────────────────────────────────────────────────────────
   const publishAll = useMutation({
     mutationFn: async () => {
-      // Set visibility=public first on all, then publish
+      // Set visibility=public on the approved DPPs first, then publish only those.
+      // Restricting to `approved` avoids re-publishing already-published DPPs,
+      // which would bump their version (publishDPP increments on re-publish).
       await Promise.allSettled(
-        dpps.map((d) =>
+        approvedDpps.map((d) =>
           fetch(`/odata/v4/dpp/DPPs('${d.ID}')`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -129,7 +133,7 @@ function BatchRow({ batch, pid, vid, onMsg }) {
           })
         )
       );
-      return bulkAction(dpps.map((d) => d.ID), 'publishDPP');
+      return bulkAction(approvedDpps.map((d) => d.ID), 'publishDPP');
     },
     onSuccess: (r) => {
       invalidateAll();
@@ -198,33 +202,33 @@ function BatchRow({ batch, pid, vid, onMsg }) {
           </Button>
         </div>
 
-        {allDraft && dppCount > 0 && (
+        {draftDpps.length > 0 && (
           <Button
             variant="primary"
             size="sm"
             disabled={busy}
             onClick={() => approveAll.mutate()}
           >
-            {approveAll.isPending ? 'Approving…' : `Approve all (${dppCount})`}
+            {approveAll.isPending ? 'Approving…' : `Approve ${draftDpps.length}`}
           </Button>
         )}
 
-        {allApproved && (
+        {approvedDpps.length > 0 && (
           <Button
             variant="primary"
             size="sm"
             disabled={busy}
             onClick={() => publishAll.mutate()}
           >
-            {publishAll.isPending ? 'Publishing…' : `Publish all (${dppCount})`}
+            {publishAll.isPending ? 'Publishing…' : `Publish ${approvedDpps.length}`}
           </Button>
         )}
 
-        {anyPublished && (
+        {publishedCount > 0 && (
           <span className="text-xs text-green-700 font-medium">
-            {allPublished
+            {publishedCount === dppCount
               ? `✓ All ${dppCount} published`
-              : `${dpps.filter((d) => d.status === 'published').length}/${items.length} published`}
+              : `${publishedCount}/${dppCount} published`}
           </span>
         )}
 
