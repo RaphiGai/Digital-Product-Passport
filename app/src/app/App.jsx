@@ -14,6 +14,7 @@ import { Dpps } from './pages/Dpps';
 import { DppDetail } from './pages/DppDetail';
 import { ComingSoon } from './pages/ComingSoon';
 import { BatchEdit } from './pages/BatchEdit';
+import { PartnerEdit } from './pages/PartnerEdit';
 
 export function App() {
   return (
@@ -33,7 +34,7 @@ export function App() {
           <Route path="partners" element={<Partners />} />
           <Route path="partners/new" element={<CreatePartner />} />
           <Route path="partners/:id" element={<PartnerDetail />} />
-          <Route path="partners/:id/edit" element={<ComingSoon title="Edit business partner" />} />
+          <Route path="partners/:id/edit" element={<PartnerEdit />} />
 
           <Route path="dpps" element={<Dpps />} />
           <Route path="dpps/:id" element={<DppDetail />} />
