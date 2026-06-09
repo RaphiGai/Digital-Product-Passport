@@ -9,6 +9,7 @@ import { Badge, StatusBadge } from '@/ui/Badge';
 import { Breadcrumb } from '@/ui/Breadcrumb';
 import { DataTable } from '@/ui/Table';
 import { RequireRole } from '@/auth/RequireRole';
+import { formatDateTime, formatDate } from '@/lib/formatters';
 
 const roleLabel = (v) => PARTNER_ROLES.find((r) => r.value === v)?.label ?? v;
 
@@ -147,9 +148,9 @@ export function PartnerDetail() {
           <Card>
             <CardTitle>Audit fields</CardTitle>
             <div className="mt-2 grid grid-cols-2 gap-x-6">
-              <Row label="Created at" value={bp.createdAt} />
+              <Row label="Created at" value={formatDateTime(bp.createdAt)} />
               <Row label="Created by" value={bp.createdBy ?? bp.createdBy_ID} />
-              <Row label="Last changed" value={bp.lastChange ?? bp.modifiedAt} />
+              <Row label="Last changed" value={formatDateTime(bp.lastChange ?? bp.modifiedAt)} />
               <Row label="Changed by" value={bp.changedBy ?? bp.changedBy_ID ?? bp.modifiedBy} />
             </div>
           </Card>
@@ -180,7 +181,7 @@ export function PartnerDetail() {
               <Row label="Active batches" value={activeBatches} />
               <Row label="Roles" value={roles.length} />
               <Row label="Status" value={<StatusBadge status={bp.archived ? 'archived' : 'active'} />} />
-              <Row label="Partner since" value={bp.createdAt?.slice(0, 10)} />
+              <Row label="Partner since" value={formatDate(bp.createdAt)} />
             </div>
           </Card>
         </div>
