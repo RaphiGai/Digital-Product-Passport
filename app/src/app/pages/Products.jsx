@@ -1,14 +1,26 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Plus } from 'lucide-react';
 import { odataList } from '@/api/client';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
-import { StatusBadge } from '@/ui/Badge';
+import { StatusBadge, Badge } from '@/ui/Badge';
+import { SortHeader } from '@/ui/Table';
 import { RequireRole } from '@/auth/RequireRole';
 import { PageHeader } from './ComingSoon';
+import { PRODUCT_TYPES } from '@/lib/fieldCatalogue';
+import { formatLabel } from '@/lib/formatters';
 import { cn } from '@/lib/cn';
+
+const PRODUCT_TYPE_LABELS = Object.fromEntries(PRODUCT_TYPES.map((t) => [t.value, t.label]));
+const typeLabel = (t) => PRODUCT_TYPE_LABELS[t] ?? formatLabel(t);
+
+function getSortValue(product, column) {
+  if (column === 'variants') return (product.variants ?? []).length;
+  if (column === 'product_type') return typeLabel(product.product_type);
+  return product[column] ?? '';
+}
 
 function ProductRow({ product }) {
   const [open, setOpen] = useState(false);
@@ -33,8 +45,13 @@ function ProductRow({ product }) {
             {[product.brand, product.category].filter(Boolean).join(' · ')}
           </div>
         </div>
-        <span className="text-xs text-ink-muted">{variants.length} variants</span>
-        <StatusBadge status={product.status} />
+        <span className="flex w-40 shrink-0">
+          <Badge tone="gray">{typeLabel(product.product_type)}</Badge>
+        </span>
+        <span className="w-24 shrink-0 text-right text-xs text-ink-muted">{variants.length} variants</span>
+        <span className="flex w-28 shrink-0 justify-end">
+          <StatusBadge status={product.status} />
+        </span>
       </div>
 
       {open && (
@@ -75,10 +92,57 @@ function ProductRow({ product }) {
 }
 
 export function Products() {
+  const [search, setSearch] = useState('');
+  const [sortConfig, setSortConfig] = useState({ column: 'name', direction: 'asc' });
+
   const { data, isLoading } = useQuery({
     queryKey: ['Products'],
     queryFn: () => odataList('Products', { expand: ['variants'], orderby: 'name', top: 100 })
   });
+
+  function handleSort(column) {
+    setSortConfig((current) =>
+      current.column === column
+        ? { column, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+        : { column, direction: 'asc' }
+    );
+  }
+
+  const filteredProducts = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    if (!query) return data ?? [];
+
+    return (data ?? []).filter((p) => {
+      const searchableText = [
+        p.name,
+        p.brand,
+        p.category,
+        typeLabel(p.product_type),
+        p.status,
+        ...(p.variants ?? []).flatMap((v) => [v.sku, v.color, v.size])
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchableText.includes(query);
+    });
+  }, [data, search]);
+
+  const sortedProducts = useMemo(() => {
+    return [...filteredProducts].sort((a, b) => {
+      const aValue = String(getSortValue(a, sortConfig.column)).toLowerCase();
+      const bValue = String(getSortValue(b, sortConfig.column)).toLowerCase();
+
+      const result = aValue.localeCompare(bValue, 'en', {
+        numeric: true,
+        sensitivity: 'base'
+      });
+
+      return sortConfig.direction === 'asc' ? result : -result;
+    });
+  }, [filteredProducts, sortConfig]);
 
   return (
     <div className="space-y-6">
@@ -91,13 +155,40 @@ export function Products() {
         </RequireRole>
       </div>
 
+      <input
+        type="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search products..."
+        className="w-full rounded-lg border border-black/10 bg-white px-4 py-2 text-sm text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+      />
+
       <Card className="p-0">
         {isLoading ? (
           <p className="px-5 py-8 text-center text-ink-muted">Loading…</p>
-        ) : (data ?? []).length === 0 ? (
-          <p className="px-5 py-8 text-center text-ink-muted">No products yet.</p>
+        ) : sortedProducts.length === 0 ? (
+          <p className="px-5 py-8 text-center text-ink-muted">
+            {(data ?? []).length === 0 ? 'No products yet.' : 'No products found.'}
+          </p>
         ) : (
-          (data ?? []).map((p) => <ProductRow key={p.ID} product={p} />)
+          <>
+            <div className="flex items-center gap-3 border-b border-black/5 px-5 py-2.5 text-xs uppercase tracking-wider text-ink-muted">
+              <span className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <SortHeader label="Product" column="name" sortConfig={sortConfig} onSort={handleSort} />
+              </span>
+              <span className="w-40 shrink-0">
+                <SortHeader label="Type" column="product_type" sortConfig={sortConfig} onSort={handleSort} />
+              </span>
+              <span className="flex w-24 shrink-0 justify-end">
+                <SortHeader label="Variants" column="variants" sortConfig={sortConfig} onSort={handleSort} />
+              </span>
+              <span className="flex w-28 shrink-0 justify-end">
+                <SortHeader label="Status" column="status" sortConfig={sortConfig} onSort={handleSort} />
+              </span>
+            </div>
+            {sortedProducts.map((p) => <ProductRow key={p.ID} product={p} />)}
+          </>
         )}
       </Card>
     </div>

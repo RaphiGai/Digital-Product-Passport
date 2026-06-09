@@ -2,28 +2,12 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { odataList } from '@/api/client';
-import { DataTable } from '@/ui/Table';
+import { DataTable, SortHeader } from '@/ui/Table';
 import { StatusBadge } from '@/ui/Badge';
 import { Button } from '@/ui/Button';
 import { RequireRole } from '@/auth/RequireRole';
 import { PageHeader } from './ComingSoon';
 import { formatLabel } from '@/lib/formatters';
-
-function SortHeader({ label, column, sortConfig, onSort }) {
-  const isActive = sortConfig.column === column;
-  const icon = !isActive ? '↕' : sortConfig.direction === 'asc' ? '↑' : '↓';
-
-  return (
-    <button
-      type="button"
-      onClick={() => onSort(column)}
-      className="inline-flex items-center gap-1 font-medium text-ink hover:text-brand-700"
-    >
-      {label}
-      <span className="text-xs text-ink-muted">{icon}</span>
-    </button>
-  );
-}
 
 function getSortValue(partner, column) {
   if (column === 'roles') {
@@ -50,19 +34,11 @@ export function Partners() {
   });
 
   function handleSort(column) {
-    setSortConfig((current) => {
-      if (current.column === column) {
-        return {
-          column,
-          direction: current.direction === 'asc' ? 'desc' : 'asc'
-        };
-      }
-
-      return {
-        column,
-        direction: 'asc'
-      };
-    });
+    setSortConfig((current) =>
+      current.column === column
+        ? { column, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+        : { column, direction: 'asc' }
+    );
   }
 
   const filteredPartners = useMemo(() => {

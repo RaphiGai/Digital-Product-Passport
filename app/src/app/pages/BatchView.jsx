@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { odataGet, odataList, odataCreate, newId, ApiError } from '@/api/client';
+import { odataGet, odataList, odataCreate, odataUpdate, odataDelete, newId, ApiError } from '@/api/client';
 import { useCreate } from '@/api/hooks';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { StatusBadge } from '@/ui/Badge';
-import { FormSection, FieldRow, Input, Select } from '@/ui/Form';
+import { FormSection, FieldRow, Input, Select, CountrySelect, CheckboxCard } from '@/ui/Form';
 
 const EMPTY = {
   batch_number: '',
@@ -35,12 +35,157 @@ async function bulkAction(dppIds, action) {
   return { total: dppIds.length, failed };
 }
 
+// ── Per-batch component sourcing (overrides the variant-level BOM sub_dpp) ──────
+// Internal BOM line: tick the consumed component batch(es) — their footprints are
+// averaged (a batch's footprint = the DPP of its first item). External line: record
+// the supplier batch number (informational; footprint comes from the BOM line).
+
+function BatchComponentsEditor({ batch, vid, onMsg }) {
+  const qc = useQueryClient();
+
+  const bomsQ = useQuery({
+    queryKey: ['ProductBOMs', 'variant', vid],
+    queryFn: () => odataList('ProductBOMs', { filter: `parent_ID eq '${vid}'`, top: 200 })
+  });
+  const productsQ = useQuery({
+    queryKey: ['Products', 'sourcing-names'],
+    queryFn: () => odataList('Products', { select: ['ID', 'name'], orderby: 'name', top: 500 })
+  });
+  const bcQ = useQuery({
+    queryKey: ['BatchComponents', batch.ID],
+    queryFn: () => odataList('BatchComponents', { filter: `batch_ID eq '${batch.ID}'`, top: 200 })
+  });
+
+  const boms = bomsQ.data ?? [];
+  const componentIds = [...new Set(boms.map((b) => b.component_ID).filter(Boolean))];
+
+  // All production batches of the internal components used in this variant's BOM.
+  const compBatchesQ = useQuery({
+    queryKey: ['Batches', 'component-candidates', componentIds.join(',')],
+    queryFn: () =>
+      odataList('Batches', {
+        filter: componentIds.map((id) => `variant/product_ID eq '${id}'`).join(' or '),
+        expand: ['variant'],
+        orderby: 'batch_number',
+        top: 500
+      }),
+    enabled: componentIds.length > 0
+  });
+
+  const nameOf = (id) => productsQ.data?.find((p) => p.ID === id)?.name ?? id;
+  const batchesFor = (componentId) =>
+    (compBatchesQ.data ?? []).filter((b) => b.variant?.product_ID === componentId);
+
+  // BatchComponents of this finished-good batch, grouped by BOM line.
+  const bcByBom = {};
+  for (const bc of bcQ.data ?? []) (bcByBom[bc.bom_ID] ??= []).push(bc);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['BatchComponents', batch.ID] });
+  const onErr = (err) =>
+    onMsg({ kind: 'error', text: err instanceof ApiError ? err.message : 'Could not save sourcing.' });
+
+  // Toggle one component batch on/off for an internal BOM line (create / delete its row).
+  const toggleBatch = useMutation({
+    mutationFn: ({ bomId, componentBatchId, on }) => {
+      if (on) {
+        return odataCreate('BatchComponents', {
+          ID: newId(), batch_ID: batch.ID, bom_ID: bomId, component_batch_ID: componentBatchId
+        });
+      }
+      const existing = (bcByBom[bomId] ?? []).find((bc) => bc.component_batch_ID === componentBatchId);
+      return existing ? odataDelete('BatchComponents', existing.ID) : Promise.resolve();
+    },
+    onSuccess: () => { invalidate(); onMsg({ kind: 'success', text: 'Component sourcing updated.' }); },
+    onError: onErr
+  });
+
+  // External line: upsert the supplier batch number on a single row.
+  const saveExtBatchNo = useMutation({
+    mutationFn: ({ bomId, value }) => {
+      const existing = (bcByBom[bomId] ?? [])[0];
+      if (existing) return odataUpdate('BatchComponents', existing.ID, { external_batch_number: value || null });
+      return odataCreate('BatchComponents', {
+        ID: newId(), batch_ID: batch.ID, bom_ID: bomId, external_batch_number: value || null
+      });
+    },
+    onSuccess: () => { invalidate(); onMsg({ kind: 'success', text: 'Batch number saved.' }); },
+    onError: onErr
+  });
+
+  if (bomsQ.isLoading || bcQ.isLoading) return <p className="px-5 py-4 text-sm text-ink-muted">Loading components…</p>;
+  if (!boms.length)
+    return <p className="px-5 py-4 text-sm text-ink-muted">This variant has no bill of materials.</p>;
+
+  return (
+    <div className="border-t border-black/5 bg-gray-50/60 px-5 py-4">
+      <p className="mb-3 text-xs text-ink-muted">
+        Record which component batches were consumed in this run. Internal components: tick the batches
+        used — their CO₂/recycled values are averaged. External components: enter the supplier batch number.
+      </p>
+      <div className="space-y-4">
+        {boms.map((b) => {
+          const isExternal = !!b.external_dpp_url || !b.component_ID;
+          const rows = bcByBom[b.ID] ?? [];
+          const selected = new Set(rows.map((r) => r.component_batch_ID).filter(Boolean));
+          const label = (b.component_ID ? nameOf(b.component_ID) : b.component_name) || '—';
+          const candidates = batchesFor(b.component_ID);
+          return (
+            <div key={b.ID} className="rounded-lg border border-black/5 bg-white p-3">
+              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-ink">
+                <span>{label}</span>
+                {b.component_role && <span className="text-xs font-normal text-ink-muted">{b.component_role}</span>}
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-normal text-ink-muted">
+                  {isExternal ? 'External' : 'Internal'}
+                </span>
+              </div>
+
+              {isExternal ? (
+                <FieldRow
+                  label="Supplier batch number"
+                  htmlFor={`extbn-${b.ID}`}
+                  hint="Traceability info only — footprint values come from the BOM line."
+                >
+                  <Input
+                    id={`extbn-${b.ID}`}
+                    key={rows[0]?.ID ?? 'new'}
+                    defaultValue={rows[0]?.external_batch_number ?? ''}
+                    placeholder="e.g. ELA-2026-04"
+                    disabled={saveExtBatchNo.isPending}
+                    onBlur={(e) => saveExtBatchNo.mutate({ bomId: b.ID, value: e.target.value.trim() })}
+                  />
+                </FieldRow>
+              ) : compBatchesQ.isLoading ? (
+                <p className="text-xs text-ink-muted">Loading batches…</p>
+              ) : candidates.length ? (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {candidates.map((cb) => (
+                    <CheckboxCard
+                      key={cb.ID}
+                      checked={selected.has(cb.ID)}
+                      onChange={(on) => toggleBatch.mutate({ bomId: b.ID, componentBatchId: cb.ID, on })}
+                      title={cb.batch_number || cb.ID}
+                      hint={cb.status}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-amber-600">No production batches for this component yet.</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Per-batch row ─────────────────────────────────────────────────────────────
 
 function BatchRow({ batch, pid, vid, onMsg }) {
   const qc = useQueryClient();
   const [itemCount, setItemCount] = useState('');
   const [expanded, setExpanded] = useState(false);
+  const [compExpanded, setCompExpanded] = useState(false);
 
   // Items for this batch
   const itemsQ = useQuery({
@@ -242,6 +387,15 @@ function BatchRow({ batch, pid, vid, onMsg }) {
             {expanded ? 'Hide items' : 'View items'}
           </Button>
         )}
+
+        {/* Per-run component sourcing */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setCompExpanded((o) => !o)}
+        >
+          {compExpanded ? 'Hide components' : 'Components'}
+        </Button>
       </div>
 
       {/* ── Collapsible items list ── */}
@@ -279,6 +433,9 @@ function BatchRow({ batch, pid, vid, onMsg }) {
           })}
         </div>
       )}
+
+      {/* ── Collapsible component sourcing ── */}
+      {compExpanded && <BatchComponentsEditor batch={batch} vid={vid} onMsg={onMsg} />}
     </div>
   );
 }
@@ -297,7 +454,7 @@ export function BatchView() {
   });
   const productQ = useQuery({
     queryKey: ['Products', pid, 'name'],
-    queryFn: () => odataGet('Products', pid, { select: ['ID', 'name'] })
+    queryFn: () => odataGet('Products', pid, { select: ['ID', 'name', 'product_type'] })
   });
   const batchesQ = useQuery({
     queryKey: ['Batches', vid],
@@ -318,6 +475,10 @@ export function BatchView() {
     ...(partnersQ.data ?? []).map((p) => ({ value: p.ID, label: p.name }))
   ];
 
+  // Recycled content is a leaf-material input; a finished product's value is
+  // computed from its BOM, so it isn't entered on a finished batch.
+  const showRecycled = productQ.data?.product_type !== 'finished';
+
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const addBatch = useMutation({
@@ -329,7 +490,7 @@ export function BatchView() {
         production_date: form.production_date || null,
         country_of_origin: form.country_of_origin || null,
         co2_footprint_kg: form.co2_footprint_kg ? Number(form.co2_footprint_kg) : null,
-        recycled_content_pct: form.recycled_content_pct ? Number(form.recycled_content_pct) : null,
+        recycled_content_pct: showRecycled && form.recycled_content_pct ? Number(form.recycled_content_pct) : null,
         factory_ID: form.factory_ID || null,
         supplier_ID: form.supplier_ID || null,
         status: 'draft'
@@ -414,7 +575,7 @@ export function BatchView() {
               <Input id="pd" type="date" value={form.production_date} onChange={set('production_date')} />
             </FieldRow>
             <FieldRow label="Country of origin" visibility="public" htmlFor="coo">
-              <Input id="coo" value={form.country_of_origin} onChange={set('country_of_origin')} placeholder="PT" />
+              <CountrySelect id="coo" value={form.country_of_origin} onChange={set('country_of_origin')} />
             </FieldRow>
             <FieldRow label="Factory" visibility="internal" htmlFor="factory">
               <Select id="factory" value={form.factory_ID} onChange={set('factory_ID')} options={partnerOptions} />
@@ -422,12 +583,16 @@ export function BatchView() {
             <FieldRow label="Supplier" visibility="internal" htmlFor="supplier">
               <Select id="supplier" value={form.supplier_ID} onChange={set('supplier_ID')} options={partnerOptions} />
             </FieldRow>
-            <FieldRow label="CO₂ footprint (kg)" visibility="public" htmlFor="co2">
+            <FieldRow label="CO₂ footprint (own production)" visibility="public" htmlFor="co2"
+              hint="This product's OWN production, per its consumption unit (per finished piece for finished goods, per kg for a material sold by weight).">
               <Input id="co2" type="number" step="0.001" value={form.co2_footprint_kg} onChange={set('co2_footprint_kg')} />
             </FieldRow>
-            <FieldRow label="Recycled content (%)" visibility="public" htmlFor="rc">
-              <Input id="rc" type="number" step="0.01" value={form.recycled_content_pct} onChange={set('recycled_content_pct')} />
-            </FieldRow>
+            {showRecycled && (
+              <FieldRow label="Recycled content (%)" visibility="public" htmlFor="rc"
+                hint="Only for materials/components — a finished product's recycled content is computed from its BOM.">
+                <Input id="rc" type="number" step="0.01" value={form.recycled_content_pct} onChange={set('recycled_content_pct')} />
+              </FieldRow>
+            )}
           </FormSection>
           <div className="flex justify-end border-t border-black/5 pt-5">
             <Button type="submit" disabled={addBatch.isPending}>

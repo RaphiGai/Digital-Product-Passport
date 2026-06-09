@@ -35,6 +35,19 @@ const ESPR_LABEL = {
   draft: 'ESPR draft'
 };
 
+/** de-DE number: comma decimal, dot thousands. Returns null for empty. */
+const deNum = (v, digits = 2) =>
+  v == null || v === ''
+    ? null
+    : new Intl.NumberFormat('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(Number(v));
+
+/** ISO date → DD.MM.YYYY (German standard). */
+const deDate = (v) => {
+  if (!v) return null;
+  const [y, m, d] = String(v).slice(0, 10).split('-');
+  return d && m && y ? `${d}.${m}.${y}` : String(v).slice(0, 10);
+};
+
 export function ConsumerApp() {
   const token = tokenFromPath();
   const [state, setState] = useState({ status: 'loading' });
@@ -84,13 +97,20 @@ function Passport({ dpp }) {
   const p = dpp.product ?? {};
   const v = dpp.variant ?? {};
   const b = dpp.batch ?? {};
+  const agg = dpp.aggregated?.values ?? {};
   const origin = p.country_of_origin || b.country_of_origin;
+
+  // Prefer the rolled-up BOM aggregate (batch's own value + mass-weighted component
+  // contributions) over the batch's own component-excluding value. Fall back to the
+  // simple value when no aggregate is available. Formatted in German (de-DE).
+  const co2 = deNum(agg.co2_footprint_kg ?? b.co2_footprint_kg, 2);
+  const recycled = deNum(agg.recycled_content_pct ?? b.recycled_content_pct, 2);
 
   return (
     <>
       <Hero product={p} variant={v} espr={p.espr_compliance} />
 
-      <Stats co2={b.co2_footprint_kg} recycled={b.recycled_content_pct} origin={origin} />
+      <Stats co2={co2} recycled={recycled} origin={origin} />
 
       <div className="mt-4 space-y-4">
         <Section icon={Layers} title="Materials & composition">
@@ -98,7 +118,7 @@ function Passport({ dpp }) {
           <KeyVal label="Substances of concern" value={p.substances_of_concern} />
           <KeyVal label="Country of origin" value={origin} />
           {b.batch_number && <KeyVal label="Production batch" value={b.batch_number} />}
-          {b.production_date && <KeyVal label="Produced" value={b.production_date} />}
+          {b.production_date && <KeyVal label="Produced" value={deDate(b.production_date)} />}
         </Section>
 
         <Section icon={Droplets} title="Care, repair & end-of-life">
@@ -190,7 +210,7 @@ function Hero({ product, variant, espr }) {
 function Stats({ co2, recycled, origin }) {
   const tiles = [
     co2 != null && { icon: Leaf, value: `${co2} kg`, label: 'CO₂ footprint' },
-    recycled != null && { icon: Recycle, value: `${recycled}%`, label: 'Recycled content' },
+    recycled != null && { icon: Recycle, value: `${recycled} %`, label: 'Recycled content' },
     origin && { icon: MapPin, value: origin, label: 'Origin' }
   ].filter(Boolean);
 
@@ -265,24 +285,29 @@ function Materials({ items, depth = 0 }) {
                 <div className="text-xs text-ink-muted">{m.fibre_composition}</div>
               )}
             </div>
-            <div className="shrink-0 text-right text-xs text-ink-muted">
-              {m.quantity != null && (
-                <span>
-                  {m.quantity}
-                  {m.unit ? ` ${m.unit}` : ''}
-                </span>
-              )}
-              {m.external_dpp_url && (
-                <a
-                  href={m.external_dpp_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 text-brand-700 hover:underline"
-                >
-                  Supplier DPP <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
-            </div>
+            {(m.external_dpp_url || m.sub_dpp?.qr_token) && (
+              <div className="shrink-0 text-right text-xs">
+                {m.external_dpp_url ? (
+                  <a
+                    href={m.external_dpp_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 text-brand-700 hover:underline"
+                  >
+                    Supplier DPP <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : (
+                  <a
+                    href={`/consumer.html?token=${encodeURIComponent(m.sub_dpp.qr_token)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 text-brand-700 hover:underline"
+                  >
+                    View passport <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+            )}
           </div>
           {m.components?.length > 0 && <Materials items={m.components} depth={depth + 1} />}
         </li>
@@ -300,7 +325,7 @@ function Authenticity({ dpp }) {
           <p className="text-sm font-semibold text-ink">Authentic digital product passport</p>
           <p className="text-xs text-ink-muted">
             Version {dpp.version ?? 1}
-            {dpp.last_updated ? ` · updated ${String(dpp.last_updated).slice(0, 10)}` : ''}
+            {dpp.last_updated ? ` · updated ${deDate(dpp.last_updated)}` : ''}
           </p>
         </div>
       </div>

@@ -1,6 +1,31 @@
 import { Card } from './Card';
 
 /**
+ * Clickable column header that drives a `{ column, direction }` sort state.
+ * Shared by the list pages so search + per-column sort behave identically.
+ * @param {{
+ *   label: string, column: string,
+ *   sortConfig: { column: string, direction: 'asc' | 'desc' },
+ *   onSort: (column: string) => void
+ * }} props
+ */
+export function SortHeader({ label, column, sortConfig, onSort }) {
+  const isActive = sortConfig.column === column;
+  const icon = !isActive ? '↕' : sortConfig.direction === 'asc' ? '↑' : '↓';
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(column)}
+      className="inline-flex items-center gap-1 font-medium text-ink hover:text-brand-700"
+    >
+      {label}
+      <span className="text-xs text-ink-muted">{icon}</span>
+    </button>
+  );
+}
+
+/**
  * @template T
  * @typedef {Object} Column
  * @property {string} header

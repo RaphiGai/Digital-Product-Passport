@@ -1,5 +1,6 @@
 import { cn } from '@/lib/cn';
 import { FieldVisibilityBadge } from './Badge';
+import { COUNTRIES } from '@/lib/countries';
 
 /**
  * Section wrapper with a title + description, matching the create-form mockups.
@@ -62,6 +63,25 @@ export function Select({ options, className, ...props }) {
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/**
+ * Country picker backed by the shared ISO-3166 list. Stores the ISO-2 code as value,
+ * so it is a drop-in replacement for any country `<select>`/`<Input>`.
+ * @param {{ placeholder?: string }
+ *   & React.SelectHTMLAttributes<HTMLSelectElement>} props
+ */
+export function CountrySelect({ className, placeholder = 'Select country', ...props }) {
+  return (
+    <select className={cn(inputBase, className)} {...props}>
+      <option value="">{placeholder}</option>
+      {COUNTRIES.map((country) => (
+        <option key={country.code} value={country.code}>
+          {country.name} ({country.code})
         </option>
       ))}
     </select>

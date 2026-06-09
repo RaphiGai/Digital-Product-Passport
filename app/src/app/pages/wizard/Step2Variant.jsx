@@ -86,7 +86,8 @@ export function Step2Variant({ ctx, setCtx, onPrimary, primaryLabel, onBack }) {
           <FieldRow label="GTIN" visibility="internal" htmlFor="gtin">
             <Input id="gtin" value={form.gtin} onChange={set('gtin')} placeholder="1234567890123" />
           </FieldRow>
-          <FieldRow label="Weight (g)" visibility="internal" htmlFor="weight">
+          <FieldRow label="Weight (g)" visibility="internal" htmlFor="weight"
+            hint="Mass basis for rolling component CO₂/recycled content up to this product">
             <Input id="weight" type="number" value={form.weight_g} onChange={set('weight_g')} placeholder="180" />
           </FieldRow>
           <FieldRow label="Status" visibility="internal" htmlFor="status">

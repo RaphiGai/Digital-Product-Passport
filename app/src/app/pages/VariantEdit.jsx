@@ -112,7 +112,8 @@ export function VariantEdit() {
           <FieldRow label="GTIN" visibility="internal" htmlFor="gtin">
             <Input id="gtin" value={form.gtin} onChange={set('gtin')} />
           </FieldRow>
-          <FieldRow label="Weight (g)" visibility="internal" htmlFor="weight">
+          <FieldRow label="Weight (g)" visibility="internal" htmlFor="weight"
+            hint="Mass basis for rolling component CO₂/recycled content up to this product">
             <Input id="weight" type="number" value={form.weight_g} onChange={set('weight_g')} />
           </FieldRow>
           <FieldRow label="Status" visibility="internal" htmlFor="status">

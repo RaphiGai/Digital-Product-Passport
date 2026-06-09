@@ -8,8 +8,7 @@ import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { FieldCatalogueAside } from '@/ui/FieldCatalogueAside';
-import { FormSection, FieldRow, Input, Textarea, RadioCards, CheckboxCard } from '@/ui/Form';
-import { COUNTRIES } from '@/lib/countries';
+import { FormSection, FieldRow, Input, Textarea, RadioCards, CheckboxCard, CountrySelect } from '@/ui/Form';
 
 const EMPTY = {
   name: '',
@@ -125,20 +124,7 @@ export function CreatePartner() {
               htmlFor="country"
               hint="Select a country"
             >
-              <select
-                id="country"
-                value={form.country_iso2}
-                onChange={set('country_iso2')}
-                className="w-full rounded-lg border border-black/10 bg-white px-3 py-2"
-              >
-                <option value="">Select country</option>
-
-                {COUNTRIES.map((country) => (
-                  <option key={country.code} value={country.code}>
-                    {country.name} ({country.code})
-                  </option>
-                ))}
-              </select>
+              <CountrySelect id="country" value={form.country_iso2} onChange={set('country_iso2')} />
             </FieldRow>
             <FieldRow label="City" visibility="internal" htmlFor="city">
               <Input id="city" value={form.city} onChange={set('city')} placeholder="Mumbai" maxLength={70} />

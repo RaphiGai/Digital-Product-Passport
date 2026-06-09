@@ -13,7 +13,7 @@ import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Banner } from '@/ui/Breadcrumb';
 import { FieldCatalogueAside } from '@/ui/FieldCatalogueAside';
-import { FormSection, FieldRow, Input, Textarea, RadioCards } from '@/ui/Form';
+import { FormSection, FieldRow, Input, Textarea, RadioCards, CountrySelect } from '@/ui/Form';
 
 const EMPTY = {
   product_type: 'finished',
@@ -127,7 +127,7 @@ export function Step1Product({ ctx, setCtx, next }) {
               <Textarea id="soc" value={form.substances_of_concern} onChange={set('substances_of_concern')} />
             </FieldRow>
             <FieldRow label="Country of origin" required visibility="public" htmlFor="coo" className="md:col-span-2">
-              <Input id="coo" value={form.country_of_origin} onChange={set('country_of_origin')} placeholder="Portugal (PT)" />
+              <CountrySelect id="coo" value={form.country_of_origin} onChange={set('country_of_origin')} />
             </FieldRow>
           </FormSection>
 

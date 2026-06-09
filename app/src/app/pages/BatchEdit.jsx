@@ -6,7 +6,7 @@ import { useUpdate } from '@/api/hooks';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
-import { FormSection, FieldRow, Input, Select } from '@/ui/Form';
+import { FormSection, FieldRow, Input, Select, CountrySelect } from '@/ui/Form';
 
 export function BatchEdit() {
   const { pid, vid, bid } = useParams();
@@ -20,7 +20,7 @@ export function BatchEdit() {
   });
   const productQ = useQuery({
     queryKey: ['Products', pid, 'name'],
-    queryFn: () => odataGet('Products', pid, { select: ['ID', 'name'] })
+    queryFn: () => odataGet('Products', pid, { select: ['ID', 'name', 'product_type'] })
   });
   const variantQ = useQuery({
     queryKey: ['ProductVariants', 'one', vid],
@@ -57,6 +57,10 @@ export function BatchEdit() {
     ]
   });
 
+  // Recycled content is a leaf-material input; a finished product's value is
+  // computed (mass-weighted) from its BOM components, so it isn't entered here.
+  const showRecycled = productQ.data?.product_type !== 'finished';
+
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const save = () => {
@@ -76,7 +80,7 @@ export function BatchEdit() {
           factory_ID:           form.factory_ID || null,
           supplier_ID:          form.supplier_ID || null,
           co2_footprint_kg:     form.co2_footprint_kg !== '' ? Number(form.co2_footprint_kg) : null,
-          recycled_content_pct: form.recycled_content_pct !== '' ? Number(form.recycled_content_pct) : null,
+          recycled_content_pct: showRecycled && form.recycled_content_pct !== '' ? Number(form.recycled_content_pct) : null,
           status:               form.status
         }
       },
@@ -133,7 +137,7 @@ export function BatchEdit() {
             <Input id="pd" type="date" value={form.production_date} onChange={set('production_date')} />
           </FieldRow>
           <FieldRow label="Country of origin" visibility="public" htmlFor="coo">
-            <Input id="coo" value={form.country_of_origin} onChange={set('country_of_origin')} placeholder="PT" />
+            <CountrySelect id="coo" value={form.country_of_origin} onChange={set('country_of_origin')} />
           </FieldRow>
           <FieldRow label="Production stage" visibility="internal" htmlFor="ps" hint="e.g. Cut & Sew">
             <Input id="ps" value={form.production_stage} onChange={set('production_stage')} placeholder="Cut & Sew" />
@@ -144,12 +148,16 @@ export function BatchEdit() {
           <FieldRow label="Supplier" visibility="internal" htmlFor="supplier">
             <Select id="supplier" value={form.supplier_ID} onChange={set('supplier_ID')} options={partnerOptions} />
           </FieldRow>
-          <FieldRow label="CO₂ footprint (kg)" visibility="public" htmlFor="co2">
+          <FieldRow label="CO₂ footprint (own production)" visibility="public" htmlFor="co2"
+            hint="This product's OWN production, per its consumption unit: per finished piece for assembled/finished goods (added on top of components), per kg for a material sold by weight.">
             <Input id="co2" type="number" step="0.001" value={form.co2_footprint_kg} onChange={set('co2_footprint_kg')} />
           </FieldRow>
-          <FieldRow label="Recycled content (%)" visibility="public" htmlFor="rc">
-            <Input id="rc" type="number" step="0.01" value={form.recycled_content_pct} onChange={set('recycled_content_pct')} />
-          </FieldRow>
+          {showRecycled && (
+            <FieldRow label="Recycled content (%)" visibility="public" htmlFor="rc"
+              hint="Only for materials/components — a finished product's recycled content is computed from its BOM.">
+              <Input id="rc" type="number" step="0.01" value={form.recycled_content_pct} onChange={set('recycled_content_pct')} />
+            </FieldRow>
+          )}
           <FieldRow label="Status" visibility="internal" htmlFor="status">
             <Select
               id="status"
