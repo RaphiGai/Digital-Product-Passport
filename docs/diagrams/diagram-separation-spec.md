@@ -112,17 +112,23 @@ Target: the **deployment topology** — modules, resources, bindings — across
 - **Future / out-of-scope services** (Destination, Document Management, Alert
   Notification, Application Logging) — keep, but dashed/greyed as "planned".
 
-### Add (currently missing — and the strongest way to make this view distinct)
-- The **frontend MTA** (`dpp_frontend`), as its own module group in the same space:
+### Frontend MTA — render as Variante A (localDir)
+- The **frontend MTA** (`dpp_frontend`) as its own module group in the same space:
   - `dpp-ui` (`html5`, Vite build → `dist`)
-  - `dpp-ui-deployer` (`com.sap.application.content`)
-  - `dpp-approuter` (frontend's own `approuter.nodejs`)
-  - resources `dpp-html5-host` + `dpp-html5-runtime` (`html5-apps-repo`, plans
-    `app-host` / `app-runtime`)
-- The **shared XSUAA**: draw the frontend's approuter binding the *same* `dpp-uaa`
-  instance (`existing-service`) — same `xsappname`, so the forwarded JWT is
-  accepted by `dpp-srv`. This shared-instance arrow is a deployment fact that
-  belongs **only** in this view.
+  - `dpp-frontend-approuter` (`approuter.nodejs`) — serves the SPA from its **own
+    container** (`xs-app.json` `localDir`, `resources/`); the `dist` is copied into
+    the approuter at build time. **No** `dpp-ui-deployer` and **no** `html5-apps-repo`
+    resources.
+- The **shared XSUAA**: the frontend approuter binds the *same* `dpp-uaa` instance
+  (`existing-service`) — same `xsappname`, so the forwarded JWT is accepted by
+  `dpp-srv`. This shared-instance arrow is a deployment fact that belongs only here.
+
+> **History — Variante B (dropped).** An earlier design served the SPA from the SAP
+> HTML5 Application Repository: a `dpp-ui-deployer` (`com.sap.application.content`)
+> module plus `dpp-html5-host` + `dpp-html5-runtime` resources. It was abandoned
+> because the repo could not resolve the app in the XSUAA-protected route
+> (`Service Tag index is unknown` → endless login loop). The localDir approach above
+> is the current, working one — keep these elements **out** of the diagram.
 
 ### Target layout
 ```
@@ -131,13 +137,12 @@ Client tier            Company user · Consumer (QR) · Authority      (minimal)
 SAP BTP Subaccount (eu10-004)  ·  CF Org CF_ProCode_BAS  ·  Space dev
 
   ── Backend MTA (dpp-capgemini) ──        ── Frontend MTA (dpp-frontend) ──
-  dpp-approuter ──srv-api──▶ dpp-srv       dpp-approuter ──/odata,/public──▶ (backend srv-api)
-        │                     │  │  │       dpp-ui-deployer ──▶ dpp-html5-host
-        │                     │  │  └─▶ dpp-secrets (UPS)       dpp-ui (Vite → dist)
-        ▼                     │  └────▶ dpp-db  ◀── dpp-db-deployer (hdb)
-     dpp-uaa (XSUAA) ◀────────┴──────────────────────────── dpp-approuter (frontend)
+  dpp-approuter ──srv-api──▶ dpp-srv       dpp-frontend-approuter ──/odata,/public──▶ (backend srv-api)
+        │                     │  │  │         serves SPA from localDir (resources/)
+        │                     │  │  └─▶ dpp-secrets (UPS)   dpp-ui (Vite → dist) ──┐
+        ▼                     │  └────▶ dpp-db  ◀── dpp-db-deployer (hdb)          └▶ dist copied into approuter
+     dpp-uaa (XSUAA) ◀────────┴──────────────────────────── dpp-frontend-approuter
        (shared, existing-service — same xsappname → JWT accepted)
-                                          dpp-html5-host / dpp-html5-runtime
 
   Planned (dashed): Destination · Document Management · Alert Notification · Application Logging
 ```
@@ -158,8 +163,8 @@ SAP BTP Subaccount (eu10-004)  ·  CF Org CF_ProCode_BAS  ·  Space dev
 - [ ] software-architecture.drawio: collapse BTP band → one "Platform boundary" box
 - [ ] software-architecture.drawio: HANA → abstract "Persistence (prod/dev)" node
 - [ ] software-architecture.drawio: add 2 logic boxes + Aggregator lib; fix table count
-- [ ] btp-architecture.drawio: add frontend MTA (4 nodes) + html5-apps-repo resources
-- [ ] btp-architecture.drawio: draw shared `dpp-uaa` binding from frontend approuter
+- [x] btp-architecture.drawio: frontend MTA = `dpp-ui` + `dpp-frontend-approuter` (localDir); no `dpp-ui-deployer`, no `html5-apps-repo` resources
+- [x] btp-architecture.drawio: shared `dpp-uaa` binding from frontend approuter
 - [ ] btp-architecture.drawio: confirm no handler/lib boxes remain
 - [ ] Re-export both `.png` (border 10, white background, ≥1400 px)
 - [ ] architecture.md §1 + §2 prose synced (done in this change set)

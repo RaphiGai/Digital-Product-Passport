@@ -11,6 +11,23 @@ Supplementary material (solution context, deployment topology, passport lifecycl
 
 ---
 
+## Technology stack & rationale
+
+The stack follows three guiding principles: **BTP-native** (use the platform's managed
+services instead of self-hosting), **established tools with large communities** (so the
+project stays maintainable by a changing student team and easy to hire/learn for), and
+**scalability without operational burden** (horizontal scaling handled by the platform).
+The full per-technology breakdown — backend, frontend and the *why* of each choice —
+is in [tech-stack-and-architecture-details.md](tech-stack-and-architecture-details.md).
+
+Three deliberate trade-offs shape this architecture:
+
+- **Programmatic RBAC instead of platform role collections** — forced by the dev tenant, see [§1.3](#13-why-the-application-enforces-access-control-instead-of-the-platform).
+- **Frontend served from the approuter container (localDir), not the HTML5 Application Repository** — the repo could not resolve the app in the XSUAA-protected route; localDir is simpler and avoids that failure mode (see the frontend repo's README).
+- **One shared XSUAA for both MTAs** — same `xsappname`, so the JWT the frontend forwards is accepted by the backend without a token exchange.
+
+---
+
 ## 1. BTP Architecture
 
 **View contract — the deployment view.** This diagram answers *where the system runs and what platform pieces wire it together*: subaccount, Cloud Foundry org and space, MTA modules, resources and their bindings. It deliberately shows **no code internals** — the backend collapses to a single `dpp-srv` module. Code structure lives in §2. The topology spans **two MTAs** in the same space — the backend (`dpp-capgemini`) and the frontend (`dpp-frontend`) — bound to **one shared XSUAA** (`dpp-uaa`, same `xsappname`), so the JWT the frontend approuter forwards is accepted by the backend. Uses the official BTP solution diagram icon set. The rebuild rules that keep this view disjoint from §2 are in [diagrams/diagram-separation-spec.md](diagrams/diagram-separation-spec.md).
