@@ -2,7 +2,7 @@
 
 const { _internals } = require('../../srv/lib/aggregator');
 const {
-  weightedSum, weightedAverage, unionStrings, rollupFibres, parseFibres, toFraction,
+  weightedSum, weightedAverage, toFraction, toKg,
 } = _internals;
 
 describe('aggregator helpers', () => {
@@ -34,26 +34,27 @@ describe('aggregator helpers', () => {
     expect(result).toBeCloseTo(19, 5);
   });
 
-  test('unionStrings deduplicates and sorts CSV-style entries', () => {
-    const result = unionStrings('PFAS; lead', [
-      { value: 'Lead, cadmium', weight: 1 },
-      { value: 'PFAS', weight: 1 },
-    ]);
-    expect(result.split('; ')).toEqual(['Lead', 'PFAS', 'cadmium', 'lead']);
+  test('toKg converts g/kg directly and % via the parent unit weight', () => {
+    expect(toKg(2, 'kg')).toBe(2);
+    expect(toKg(500, 'g')).toBeCloseTo(0.5, 6);
+    expect(toKg(95, '%', 180)).toBeCloseTo(0.171, 6);   // 95% of a 180 g garment
   });
 
-  test('parseFibres extracts material percentages', () => {
-    expect(parseFibres('60% Cotton, 40% Polyester')).toEqual({
-      Cotton: 60, Polyester: 40,
-    });
+  test('toKg has no mass basis for pcs, percent-without-weight, or null quantity', () => {
+    expect(toKg(1, 'pcs', 180)).toBeNull();
+    expect(toKg(95, '%', null)).toBeNull();
+    expect(toKg(null, 'kg')).toBeNull();
   });
 
-  test('rollupFibres weights child fibre compositions and rounds to 1 decimal', () => {
-    const result = rollupFibres(null, [
-      { value: '100% Organic Cotton', weight: 0.95 },
-      { value: '100% Elastane',       weight: 0.05 },
-    ]);
-    expect(result).toContain('95.0% Organic Cotton');
-    expect(result).toContain('5.0% Elastane');
+  test('CO2 rollup: self per-unit emission + consumed mass × component intensity', () => {
+    // T-shirt: own cut&sew 2.4 kg/unit + cotton (intensity 15.0 kg/kg) × 0.171 kg consumed.
+    const co2 = weightedSum(2.4, [{ value: 15.0, weight: toKg(95, '%', 180) }]);
+    expect(co2).toBeCloseTo(4.965, 5);
+  });
+
+  test('recycled content is a mass-weighted average over resolved components', () => {
+    // Only cotton (15%, 0.171 kg) resolves; elastane is external/excluded.
+    const recycled = weightedAverage(null, [{ value: 15, weight: toKg(95, '%', 180) }]);
+    expect(recycled).toBeCloseTo(15, 5);
   });
 });

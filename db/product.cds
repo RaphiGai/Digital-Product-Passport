@@ -66,6 +66,9 @@ entity Batches : identified, audited {
   supplier             : Association to BusinessPartners;
   country_of_origin    : CountryISO2;
   production_stage     : String(60);
+  // The product's own footprint per its consumption unit: per finished piece for
+  // assembled/finished goods (added on top of components), per kg for a material
+  // sold/consumed by weight. The aggregator interprets the basis from the BOM unit.
   co2_footprint_kg     : Decimal(10, 3);
   recycled_content_pct : Decimal(5, 2);
   status               : BatchStatus default 'draft';
@@ -99,26 +102,43 @@ annotate ProductItems with @assert.unique : {
 // own DPP through their own production process).
 entity ProductBOMs : identified, audited {
   parent           : Association to ProductVariants not null;
-  component        : Association to Products        not null;
+  component        : Association to Products;   // internal component product; null for external-only components
+  // For external components without an internal product record: descriptive data
+  // entered on the line (used for the BOM table + consumer materials list).
+  component_name              : String(120);
+  component_category          : String(60);
+  component_fibre_composition : String(500);
   quantity         : Decimal(10, 3);
   unit             : String(8);
   component_role   : String(60);
   is_mandatory     : Boolean default true;
   sub_dpp          : Association to DPPs;   // internal DPP of the component (own data)
   external_dpp_url : URL;                   // alternative: external supplier-hosted DPP link
+  // For external components (no internal sub_dpp): the supplier-declared footprint
+  // values entered on the line, used directly in aggregation. ext_co2_footprint is
+  // per the BOM unit (per kg for g/kg lines, per piece for pcs lines).
+  ext_co2_footprint        : Decimal(10, 4);
+  ext_recycled_content_pct : Decimal(5, 2);
   status           : BOMStatus default 'active';
 }
 
 annotate ProductBOMs with @assert.unique : { edge : [parent, component] };
 
 // ----- Per-batch component sourcing -----
-// Which supplier delivered each BOM component for a specific batch. Suppliers can
-// differ per production run, so this is recorded per (batch, BOM line) rather than
-// on the variant-level BOM. One row per (batch, bom).
+// Which concrete component batch(es) were consumed for each BOM line of a specific
+// finished-good batch. Suppliers/batches can differ per production run, so this is
+// recorded per (batch, BOM line) rather than on the variant-level BOM. MULTIPLE rows
+// per (batch, bom) are allowed: each references one consumed component batch; the
+// aggregator averages their footprints. Overrides the variant-level ProductBOMs.sub_dpp.
 entity BatchComponents : identified {
-  batch    : Association to Batches     not null;
-  bom      : Association to ProductBOMs not null;
-  supplier : Association to BusinessPartners;
+  batch                 : Association to Batches     not null;
+  bom                   : Association to ProductBOMs not null;
+  supplier              : Association to BusinessPartners;
+  // Internal: the concrete component batch consumed. Its footprint is taken from the
+  // DPP of the batch's first item (all items in a batch are identical).
+  component_batch       : Association to Batches;
+  // External component: the supplier's batch number (informational only, no effect on the calculation).
+  external_batch_number : String(40);
+  // Legacy / explicit: a specific component DPP (used when no component_batch is set).
+  sub_dpp               : Association to DPPs;
 }
-
-annotate BatchComponents with @assert.unique : { per_batch_bom : [batch, bom] };

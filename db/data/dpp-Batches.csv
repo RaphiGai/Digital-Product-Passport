@@ -1,5 +1,11 @@
 ID;variant_ID;batch_number;production_date;factory_ID;supplier_ID;country_of_origin;production_stage;co2_footprint_kg;recycled_content_pct;status
-batch-2026-05-A;var-tshirt-blue-m;2026-05-A;2026-05-15;bp-braga;bp-cotton-coop;PT;Cut & Sew;2.400;20.00;approved
-batch-2026-05-B;var-tshirt-blue-l;2026-05-B;2026-05-18;bp-braga;bp-cotton-coop;PT;Cut & Sew;2.600;20.00;draft
-batch-cotton-2026-04;var-cotton-default;2026-04-COT;2026-04-10;bp-cotton-coop;bp-cotton-coop;TR;Spinning;3.000;15.00;approved
-batch-elastane-2026-04;var-elastane-default;2026-04-ELA;2026-04-12;;;DE;Extrusion;8.000;0.00;approved
+batch-2026-05-A;var-tshirt-blue-m;2026-05-A;2026-05-15;bp-braga;bp-cotton-coop;PT;Cut & Sew;2.400;;approved
+batch-2026-05-B;var-tshirt-blue-l;2026-05-B;2026-05-18;bp-braga;bp-cotton-coop;PT;Cut & Sew;2.600;;draft
+batch-cotton-2026-04;var-cotton-default;2026-04-COT;2026-04-10;bp-cotton-coop;bp-cotton-coop;TR;Spinning;15.000;15.00;approved
+batch-elastane-2026-04;var-elastane-default;2026-04-ELA;2026-04-12;;;DE;Extrusion;;0.00;approved
+batch-denim-2026-03-A;var-denim-default;2026-03-DEN-A;2026-03-05;bp-cotton-coop;bp-cotton-coop;TR;Weaving;12.000;60.00;approved
+batch-denim-2026-03-B;var-denim-default;2026-03-DEN-B;2026-03-20;bp-cotton-coop;bp-cotton-coop;TR;Weaving;14.000;50.00;approved
+batch-lining-2026-03;var-lining-default;2026-03-LIN;2026-03-12;bp-braga;bp-cotton-coop;DE;Extrusion;8.000;100.00;approved
+batch-jacket-2026-04-A;var-jacket-indigo-m;2026-04-JKT-A;2026-04-22;bp-braga;bp-braga;PT;Cut & Sew;3.200;;approved
+batch-button-2026-03;var-button-default;2026-03-BTN;2026-03-08;bp-braga;bp-braga;DE;Stamping;0.020;30.00;approved
+batch-box-2026-03;var-box-default;2026-03-BOX;2026-03-10;bp-greenpack;bp-greenpack;DE;Die-cut;0.150;80.00;approved

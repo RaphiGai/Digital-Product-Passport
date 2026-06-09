@@ -4,6 +4,7 @@ const cds = require('@sap/cds');
 const { randomUUID } = require('crypto');
 const tokens = require('../lib/token');
 const { requireOwningOrg } = require('./auth-helpers');
+const { aggregate } = require('../lib/aggregator');
 
 const DPP_OWNER_PATH = 'product.owning_organization_ID';
 
@@ -238,6 +239,43 @@ module.exports = (srv) => {
     const QRCode = require('qrcode');
     const pngBuffer = await QRCode.toBuffer(payload, { type: 'png', margin: 1, scale: 6 });
     return { png: pngBuffer.toString('base64'), payload };
+  });
+
+  // ----- Function: aggregatedFootprint (live BOM rollup for pre-publish review) -----
+
+  srv.on('aggregatedFootprint', DPPs, async (req) => {
+    const id = req.params[req.params.length - 1].ID;
+    await requireOwningOrg(req, 'DPPs', id, DPP_OWNER_PATH);
+    const dpp = await SELECT.one.from(DPPs).where({ ID: id });
+    if (!dpp) req.reject(404, `DPP '${id}' not found.`);
+
+    const result = await aggregate(id);
+    const bd = result.breakdown || { own_co2_kg: null, components: [] };
+
+    // Resolve internal component names for the breakdown display.
+    const { Products } = cds.entities('dpp');
+    const ids = [...new Set(bd.components.map((c) => c.component_ID).filter(Boolean))];
+    const prods = ids.length
+      ? await SELECT.from(Products).columns('ID', 'name').where({ ID: { in: ids } })
+      : [];
+    const nameById = Object.fromEntries(prods.map((p) => [p.ID, p.name]));
+    const components = bd.components.map((c) => ({
+      name: c.component_ID ? (nameById[c.component_ID] ?? c.component_ID) : (c.component_name ?? '—'),
+      source: c.source,
+      unit: c.unit,
+      quantity: c.quantity,
+      co2_kg: c.co2_kg,
+      recycled_pct: c.recycled_pct,
+      mass_kg: c.mass_kg,
+    }));
+
+    return {
+      co2_footprint_kg:      result.values?.co2_footprint_kg ?? null,
+      recycled_content_pct:  result.values?.recycled_content_pct ?? null,
+      incomplete:            result.incomplete ?? false,
+      missing:               JSON.stringify(result.missing ?? []),
+      breakdown:             JSON.stringify({ own_co2_kg: bd.own_co2_kg, components })
+    };
   });
 };
 

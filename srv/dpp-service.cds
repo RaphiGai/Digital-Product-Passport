@@ -30,6 +30,15 @@ service DPPService @(
     tenantId       : String;
   };
 
+  // Live-aggregated footprint for the pre-publication review (computed by srv/lib/aggregator).
+  type AggregatedFootprint : {
+    co2_footprint_kg      : Decimal(14, 6);
+    recycled_content_pct  : Decimal(14, 6);
+    incomplete            : Boolean;
+    missing               : LargeString;   // JSON array of unresolved component edges
+    breakdown             : LargeString;   // JSON: { own_co2_kg, components:[{name,co2_kg,recycled_pct,mass_kg,...}] }
+  };
+
   entity Organizations         as projection on db.Organizations;
   entity Users                 as projection on db.Users;
   entity BusinessPartners      as projection on db.BusinessPartners;
@@ -60,6 +69,9 @@ service DPPService @(
     action   regenerateQRToken()                     returns DPPs;
 
     function generateQRCode()                        returns QRCodeImage;
+
+    // Live aggregation across the BOM tree for review before publishing.
+    function aggregatedFootprint()                   returns AggregatedFootprint;
   };
 
   entity QRCodes               as projection on db.QRCodes;

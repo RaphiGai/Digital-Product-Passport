@@ -3,7 +3,7 @@
 const cds = require('@sap/cds');
 const QRCode = require('qrcode');
 const tokens = require('../lib/token');
-const { aggregate } = require('../lib/aggregator');
+const { aggregate, firstItemDpp } = require('../lib/aggregator');
 
 const MAX_DEPTH = 8;
 
@@ -11,11 +11,23 @@ const MAX_DEPTH = 8;
  * Recursively expand the BOM tree of a finished-product variant for consumer
  * display. Each node carries either the inline component description, a
  * reference to an internal sub-DPP, or an external supplier-DPP URL.
+ *
+ * The linked sub-DPP honours per-batch sourcing (BatchComponents `overrides`,
+ * keyed by BOM line ID): the consumed component batch's passport = the DPP of its
+ * first item. With several sourced batches, the first published+public one is the
+ * representative link. Without an override, the variant-level default applies.
+ * Only published+public passports are linked. `overrides` apply only at the top
+ * level (the finished good's batch) → an empty map is passed to recursion.
  */
-async function expandBomTree(variantId, productsById, bomsByParent, depth = 0, visited = new Set()) {
+async function expandBomTree(variantId, productsById, bomsByParent, overrides = new Map(), depth = 0, visited = new Set()) {
   if (depth > MAX_DEPTH) return [];
   if (visited.has(variantId)) return [];
   visited.add(variantId);
+
+  const { DPPs, ProductVariants } = cds.entities('dpp');
+  const isPublic = (d) => d && d.status === 'published' && d.visibility === 'public' && d.qr_token;
+  const loadDpp = (id) =>
+    SELECT.one.from(DPPs).columns(['ID', 'qr_token', 'status', 'visibility']).where({ ID: id });
 
   const edges = bomsByParent.get(variantId) || [];
   const out = [];
@@ -23,11 +35,12 @@ async function expandBomTree(variantId, productsById, bomsByParent, depth = 0, v
     const componentProduct = productsById.get(e.component_ID);
     const node = {
       component_ID: e.component_ID,
-      name: componentProduct?.name || null,
+      // Fall back to the line's free-text fields for external components (no internal product).
+      name: componentProduct?.name || e.component_name || null,
       product_type: componentProduct?.product_type || null,
       brand: componentProduct?.brand || null,
-      category: componentProduct?.category || null,
-      fibre_composition: componentProduct?.fibre_composition || null,
+      category: componentProduct?.category || e.component_category || null,
+      fibre_composition: componentProduct?.fibre_composition || e.component_fibre_composition || null,
       quantity: e.quantity,
       unit: e.unit,
       role: e.component_role,
@@ -36,17 +49,37 @@ async function expandBomTree(variantId, productsById, bomsByParent, depth = 0, v
       components: [],
     };
 
-    if (e.sub_dpp_ID) {
+    // Resolve the passport to link: per-batch sourcing first (representative =
+    // first published+public consumed batch), else the variant-level default. Rows
+    // that resolve to nothing (e.g. external-only batch-number rows) fall through.
+    const candidateIds = [];
+    for (const bc of overrides.get(e.ID) || []) {
+      const id = bc.component_batch_ID ? await firstItemDpp(bc.component_batch_ID) : (bc.sub_dpp_ID || null);
+      if (id) candidateIds.push(id);
+    }
+    if (!candidateIds.length && e.sub_dpp_ID) candidateIds.push(e.sub_dpp_ID);
+
+    let subDpp = null;
+    for (const id of candidateIds) {
+      const d = await loadDpp(id);
+      if (isPublic(d)) { subDpp = d; break; }
+    }
+    if (subDpp) {
       node.sub_dpp = {
-        id: e.sub_dpp_ID,
-        public_url: `${process.env.PUBLIC_BASE_URL || ''}/public/dpp/by-id/${e.sub_dpp_ID}`,
+        id: subDpp.ID,
+        qr_token: subDpp.qr_token,
+        public_url: `${process.env.PUBLIC_BASE_URL || ''}/public/dpp/${subDpp.qr_token}`,
       };
-      const subVariants = await SELECT.from(cds.entities('dpp').ProductVariants)
+    }
+
+    // Recurse into the internal component's own composition (no batch context here).
+    if (e.component_ID) {
+      const subVariants = await SELECT.from(ProductVariants)
         .columns(['ID'])
         .where({ product_ID: e.component_ID });
       for (const sv of subVariants) {
         const subNodes = await expandBomTree(
-          sv.ID, productsById, bomsByParent, depth + 1, new Set(visited),
+          sv.ID, productsById, bomsByParent, new Map(), depth + 1, new Set(visited),
         );
         if (subNodes.length) node.components.push(...subNodes);
       }
@@ -137,7 +170,7 @@ async function loadMarketingLinks(owningOrgId, dppId) {
 }
 
 async function loadDPPContext(dpp) {
-  const { Products, ProductVariants, Batches, ProductBOMs } = cds.entities('dpp');
+  const { Products, ProductVariants, Batches, ProductBOMs, BatchComponents } = cds.entities('dpp');
 
   const product = await SELECT.one.from(Products).where({ ID: dpp.product_ID });
 
@@ -146,6 +179,17 @@ async function loadDPPContext(dpp) {
   if (dpp.batch_ID) {
     batch = await SELECT.one.from(Batches).where({ ID: dpp.batch_ID });
     if (batch) variant = await SELECT.one.from(ProductVariants).where({ ID: batch.variant_ID });
+  }
+
+  // Per-batch component sourcing → BOM line ID → list of consumed-component rows.
+  // Mirrors srv/lib/aggregator.js; drives the linked sub-passport in the tree.
+  const overrides = new Map();
+  if (batch) {
+    const bcs = await SELECT.from(BatchComponents).where({ batch_ID: batch.ID });
+    for (const bc of bcs) {
+      if (!overrides.has(bc.bom_ID)) overrides.set(bc.bom_ID, []);
+      overrides.get(bc.bom_ID).push(bc);
+    }
   }
 
   const owningOrgId = product?.owning_organization_ID;
@@ -164,12 +208,12 @@ async function loadDPPContext(dpp) {
 
   let materialsTree = [];
   if (variant) {
-    materialsTree = await expandBomTree(variant.ID, productsById, bomsByParent);
+    materialsTree = await expandBomTree(variant.ID, productsById, bomsByParent, overrides);
   } else {
     const variants = await SELECT.from(ProductVariants)
       .columns(['ID']).where({ product_ID: dpp.product_ID });
     for (const v of variants) {
-      const nodes = await expandBomTree(v.ID, productsById, bomsByParent);
+      const nodes = await expandBomTree(v.ID, productsById, bomsByParent, overrides);
       if (nodes.length) { materialsTree = nodes; break; }
     }
   }

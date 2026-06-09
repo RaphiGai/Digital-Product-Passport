@@ -24,10 +24,13 @@ describe('Product BOM (Products + ProductBOMs)', () => {
       "/odata/v4/dpp/ProductBOMs?$filter=parent_ID eq 'var-tshirt-blue-m'",
       aliceAdmin
     );
-    const components = new Set(data.value.map((b) => b.component_ID));
-    expect(components).toEqual(new Set(['prod-mat-cotton', 'prod-mat-elastane']));
-    const totalPct = data.value.reduce((sum, b) => sum + Number(b.quantity), 0);
-    expect(Math.abs(totalPct - 100)).toBeLessThan(0.01);
+    const components = new Set(data.value.map((b) => b.component_ID).filter(Boolean));
+    expect(components.has('prod-mat-cotton')).toBe(true);
+    expect(components.has('prod-mat-elastane')).toBe(true);
+    const totalMassG = data.value
+      .filter((b) => b.unit === 'g')
+      .reduce((sum, b) => sum + Number(b.quantity), 0);
+    expect(totalMassG).toBeCloseTo(180, 1);   // 171 g cotton + 9 g elastane (pcs packaging excluded)
   });
 });
 
@@ -46,8 +49,8 @@ describe('Public consumer DTO with recursive BOM tree', () => {
 
     const cotton = data.materials.find((m) => m.name === 'Organic Cotton Fabric');
     expect(cotton).toBeDefined();
-    expect(Number(cotton.quantity)).toBe(95);
-    expect(cotton.unit).toBe('%');
+    expect(Number(cotton.quantity)).toBe(171);
+    expect(cotton.unit).toBe('g');
     expect(cotton.role).toBe('Main fabric');
     expect(cotton.sub_dpp).toMatchObject({ id: 'dpp-cotton' });
 
@@ -57,7 +60,12 @@ describe('Public consumer DTO with recursive BOM tree', () => {
     expect(elastane.sub_dpp).toBeNull();
 
     expect(data.aggregated).toBeDefined();
-    expect(data.aggregated.incomplete).toBe(true);
-    expect(typeof data.aggregated.values.co2_footprint_kg).toBe('number');
+    // Cotton via internal DPP + elastane via external supplier values → fully resolved.
+    expect(data.aggregated.incomplete).toBe(false);
+
+    // CO2 = 2.4 (cut&sew/unit) + 15.0×0.171 (cotton) + 20.0×0.009 (elastane) + 0.01×1 (polybag) = 5.155.
+    expect(data.aggregated.values.co2_footprint_kg).toBeCloseTo(5.155, 2);
+    // Recycled = mass-weighted average: (15×0.171 + 0×0.009) / 0.180 = 14.25 % (pcs polybag adds no mass basis).
+    expect(data.aggregated.values.recycled_content_pct).toBeCloseTo(14.25, 2);
   });
 });

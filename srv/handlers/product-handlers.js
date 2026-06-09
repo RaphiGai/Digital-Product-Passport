@@ -75,7 +75,13 @@ module.exports = (srv) => {
   // ----- BOM integrity: self-loop, quantity bounds, acyclic graph (US4.11) -----
 
   srv.before(['CREATE', 'UPDATE'], ProductBOMs, async (req) => {
-    const { parent_ID, component_ID, quantity, unit } = req.data;
+    const { parent_ID, component_ID, component_name, quantity, unit } = req.data;
+
+    // A line identifies its component either by an internal product (internal source)
+    // or by a free-text name (external supplier component without an internal record).
+    if (req.event === 'CREATE' && !component_ID && !component_name) {
+      req.reject(400, 'A BOM line needs a component product or an external component name.');
+    }
 
     let parentVariant = null;
     if (parent_ID) {
