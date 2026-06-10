@@ -367,6 +367,7 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
   const submit = () => {
     const isExternal = row.dpp_source === 'external';
     const externalUrl = row.external_dpp_url.trim();
+
     if (!isExternal && !row.component_ID) {
       setMsg({ kind: 'error', text: 'Pick a component product.' });
       return;
@@ -379,6 +380,43 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
       setMsg({ kind: 'error', text: 'Enter the external DPP URL, or switch the source to Internal.' });
       return;
     }
+    if (isExternal && externalUrl && !/^https?:\/\//i.test(externalUrl)) {
+      setMsg({ kind: 'error', text: 'External DPP URL must start with https:// (or http://).' });
+      return;
+    }
+    if (row.quantity !== '' && Number(row.quantity) <= 0) {
+      setMsg({ kind: 'error', text: 'Quantity must be greater than 0.' });
+      return;
+    }
+    if (row.unit === '%' && row.quantity !== '') {
+      const qty = Number(row.quantity);
+      if (qty > 100) {
+        setMsg({ kind: 'error', text: 'A single component cannot exceed 100 % share.' });
+        return;
+      }
+      const otherPctTotal = rows
+        .filter((r) => r.unit === '%' && r.ID !== editingId)
+        .reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+      if (otherPctTotal + qty > 100) {
+        setMsg({
+          kind: 'error',
+          text: `Total BOM share would reach ${(otherPctTotal + qty).toFixed(1)} % — cannot exceed 100 %.`
+        });
+        return;
+      }
+    }
+    if (isExternal && row.ext_co2 !== '' && Number(row.ext_co2) < 0) {
+      setMsg({ kind: 'error', text: 'CO₂ footprint cannot be negative.' });
+      return;
+    }
+    if (isExternal && row.ext_recycled !== '') {
+      const rec = Number(row.ext_recycled);
+      if (rec < 0 || rec > 100) {
+        setMsg({ kind: 'error', text: 'Recycled content must be between 0 and 100 %.' });
+        return;
+      }
+    }
+
     saveMut.mutate({
       component_ID: isExternal ? null : row.component_ID,
       component_name: isExternal ? row.component_name.trim() : null,

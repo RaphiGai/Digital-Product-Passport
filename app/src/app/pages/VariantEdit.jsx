@@ -56,6 +56,14 @@ export function VariantEdit() {
       setMsg({ kind: 'error', text: 'SKU is required.' });
       return;
     }
+    if (form.weight_g !== '' && Number(form.weight_g) <= 0) {
+      setMsg({ kind: 'error', text: 'Weight must be a positive number (in grams).' });
+      return;
+    }
+    if (form.image_url?.trim() && !/^https?:\/\//i.test(form.image_url.trim())) {
+      setMsg({ kind: 'error', text: 'Image URL must start with https:// (or http://).' });
+      return;
+    }
     update.mutate(
       {
         key: vid,

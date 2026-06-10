@@ -607,6 +607,17 @@ export function BatchView() {
       setMsg({ kind: 'error', text: 'Batch number is required.' });
       return;
     }
+    if (form.co2_footprint_kg !== '' && Number(form.co2_footprint_kg) < 0) {
+      setMsg({ kind: 'error', text: 'CO₂ footprint cannot be negative.' });
+      return;
+    }
+    if (form.recycled_content_pct !== '') {
+      const rec = Number(form.recycled_content_pct);
+      if (rec < 0 || rec > 100) {
+        setMsg({ kind: 'error', text: 'Recycled content must be between 0 and 100 %.' });
+        return;
+      }
+    }
     addBatch.mutate();
   };
 
