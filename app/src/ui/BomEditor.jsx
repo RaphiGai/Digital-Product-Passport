@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Trash2, Pencil, ExternalLink } from 'lucide-react';
+import { Trash2, Pencil, ExternalLink, ChevronRight, ChevronDown } from 'lucide-react';
 import { odataList, odataCreate, odataUpdate, odataDelete, newId, ApiError } from '@/api/client';
 import { Card, CardTitle } from './Card';
 import { Button } from './Button';
@@ -22,13 +22,11 @@ const EMPTY_ROW = {
   ext_recycled: ''
 };
 
-const COLS =
-  'grid-cols-[minmax(0,2.4fr)_minmax(84px,auto)_minmax(104px,auto)_minmax(84px,auto)_minmax(0,2fr)_minmax(76px,auto)]';
+// Fixed px widths so header and data rows share identical column sizes across
+// independent grid containers. (minmax(Xpx,auto) would resolve "auto" per-row
+// and produce different widths between header and data rows.)
+const COLS = 'grid-cols-[minmax(0,3fr)_76px_96px_68px_minmax(0,2fr)_72px]';
 
-// Pick the component DPP that best represents its footprint. The footprint lives
-// on the batch, so require a batch; prefer a published, batch-level passport, but
-// fall back to item-/product-level DPPs (the standard "batch + item → publish"
-// flow only produces item-level DPPs).
 function pickComponentDpp(dpps) {
   if (!dpps?.length) return null;
   const score = (d) =>
@@ -38,13 +36,221 @@ function pickComponentDpp(dpps) {
   return [...dpps].sort((a, b) => score(b) - score(a))[0]?.ID ?? null;
 }
 
+function resolveFootprint(r, dppById) {
+  if (r.external_dpp_url || r.ext_co2_footprint != null || r.ext_recycled_content_pct != null) {
+    return { co2: r.ext_co2_footprint, recycled: r.ext_recycled_content_pct };
+  }
+  const b = dppById[r.sub_dpp_ID]?.batch;
+  return { co2: b?.co2_footprint_kg ?? null, recycled: b?.recycled_content_pct ?? null };
+}
+
+function fmtNum(v) {
+  return v == null || v === '' ? '—' : String(Number(v));
+}
+
+// Recursive BOM row. Internal components (component_ID set, no external URL)
+// show a chevron; expanding lazily fetches the component's first variant and
+// its BOM lines, then renders them at the next depth level.
+function BomTableRow({ r, depth, dppById, allProducts, editingId, onEdit, onDelete }) {
+  const [open, setOpen] = useState(false);
+  const isInternal = !!r.component_ID && !r.external_dpp_url;
+  const canEdit = depth === 0;
+  const fp = resolveFootprint(r, dppById);
+  const indent = depth * 20;
+
+  const name = r.component_ID
+    ? (allProducts?.find((p) => p.ID === r.component_ID)?.name ?? r.component_name ?? r.component_ID)
+    : (r.component_name ?? '—');
+
+  const variantQ = useQuery({
+    queryKey: ['ProductVariants', 'bom-expand', r.component_ID],
+    queryFn: () =>
+      odataList('ProductVariants', { filter: `product_ID eq '${r.component_ID}'`, orderby: 'sku', top: 1 }),
+    enabled: open && isInternal,
+    staleTime: 60_000
+  });
+  const childVariantId = variantQ.data?.[0]?.ID;
+
+  const childBomQ = useQuery({
+    queryKey: ['ProductBOMs', childVariantId],
+    queryFn: () => odataList('ProductBOMs', { filter: `parent_ID eq '${childVariantId}'`, top: 200 }),
+    enabled: !!childVariantId,
+    staleTime: 60_000
+  });
+  const childRows = childBomQ.data ?? [];
+
+  const childSubIds = [...new Set(childRows.map((c) => c.sub_dpp_ID).filter(Boolean))];
+  const childDppsQ = useQuery({
+    queryKey: ['DPPs', 'bom-sub-child', childVariantId, childSubIds.join(',')],
+    queryFn: () =>
+      odataList('DPPs', {
+        filter: childSubIds.map((id) => `ID eq '${id}'`).join(' or '),
+        expand: ['batch'],
+        top: 200
+      }),
+    enabled: childSubIds.length > 0,
+    staleTime: 60_000
+  });
+  const childDppById = Object.fromEntries((childDppsQ.data ?? []).map((d) => [d.ID, d]));
+
+  const isLoading = variantQ.isLoading || (!!childVariantId && childBomQ.isLoading);
+
+  return (
+    <>
+      <div
+        className={`grid ${COLS} items-center border-b border-black/5 last:border-0 transition-colors ${
+          editingId === r.ID ? 'bg-brand-50' : 'hover:bg-black/[0.015]'
+        }`}
+      >
+        {/* Component — indent + optional chevron + name/role */}
+        <div
+          className="flex min-w-0 items-center border-r border-black/10 py-3 pr-3"
+          style={{ paddingLeft: `${12 + indent}px` }}
+        >
+          <span className="mr-1.5 flex h-4 w-4 shrink-0 items-center justify-center">
+            {isInternal && (
+              <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                className="text-ink-muted hover:text-ink"
+                aria-label={open ? 'Collapse sub-components' : 'Expand sub-components'}
+              >
+                {open ? (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5" />
+                )}
+              </button>
+            )}
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-ink">{name}</div>
+            {r.component_role && (
+              <div className="truncate text-xs text-ink-muted">{r.component_role}</div>
+            )}
+          </div>
+        </div>
+
+        {/* Qty */}
+        <div className="flex items-center justify-end border-r border-black/10 px-3 py-3 text-sm text-ink-muted">
+          {r.quantity != null ? `${r.quantity}${r.unit ? ` ${r.unit}` : ''}` : '—'}
+        </div>
+
+        {/* CO₂ kg/kg */}
+        <div className="flex items-center justify-end border-r border-black/10 px-3 py-3 text-sm tabular-nums text-ink">
+          {fmtNum(fp.co2)}
+        </div>
+
+        {/* Rec % */}
+        <div className="flex items-center justify-end border-r border-black/10 px-3 py-3 text-sm tabular-nums text-ink">
+          {fmtNum(fp.recycled)}
+        </div>
+
+        {/* Source */}
+        <div className="flex min-w-0 items-center border-r border-black/10 px-3 py-3">
+          {r.external_dpp_url ? (
+            <a
+              href={r.external_dpp_url}
+              target="_blank"
+              rel="noreferrer"
+              title={r.external_dpp_url}
+              className="flex min-w-0 items-center gap-1 text-xs text-brand-700 hover:underline"
+            >
+              <ExternalLink className="h-3 w-3 shrink-0" />
+              <span className="truncate">{r.external_dpp_url}</span>
+            </a>
+          ) : r.sub_dpp_ID ? (
+            <Link
+              to={`/dpps/${r.sub_dpp_ID}`}
+              title={r.sub_dpp_ID}
+              className="block truncate text-xs text-brand-700 hover:underline"
+            >
+              Internal DPP
+            </Link>
+          ) : (
+            <span className="text-xs text-amber-600">No DPP</span>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-2 px-3 py-3">
+          {canEdit ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onEdit(r)}
+                className="text-ink-muted hover:text-brand-700"
+                title="Edit"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(r.ID)}
+                className="text-ink-muted hover:text-red-600"
+                title="Remove"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
+          ) : r.component_ID ? (
+            <Link
+              to={`/products/${r.component_ID}`}
+              className="text-ink-muted hover:text-brand-700"
+              title="View component product"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Recursive child BOM */}
+      {open && isInternal && (
+        <>
+          {isLoading ? (
+            <div
+              className="border-b border-black/5 py-2 text-xs text-ink-muted"
+              style={{ paddingLeft: `${32 + indent}px` }}
+            >
+              Loading…
+            </div>
+          ) : !childVariantId ? (
+            <div
+              className="border-b border-black/5 py-2 text-xs text-ink-muted"
+              style={{ paddingLeft: `${32 + indent}px` }}
+            >
+              No variant for this component.
+            </div>
+          ) : childRows.length === 0 ? (
+            <div
+              className="border-b border-black/5 py-2 text-xs text-ink-muted"
+              style={{ paddingLeft: `${32 + indent}px` }}
+            >
+              No sub-components.
+            </div>
+          ) : (
+            childRows.map((child) => (
+              <BomTableRow
+                key={child.ID}
+                r={child}
+                depth={depth + 1}
+                dppById={childDppById}
+                allProducts={allProducts}
+                editingId={null}
+                onEdit={() => {}}
+                onDelete={() => {}}
+              />
+            ))
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 /**
  * Reusable Bill-of-Materials editor for a single variant.
- *
- * Each line sources its CO₂/recycled footprint either from the component's own
- * INTERNAL DPP (linked automatically, aggregated live) or from an EXTERNAL
- * supplier — in which case the supplier URL and the footprint values are entered
- * on the line and used directly in the aggregation. Lines can be edited or removed.
  *
  * @param {{ productId: string, variantId: string }} props
  */
@@ -65,8 +271,6 @@ export function BomEditor({ productId, variantId }) {
     queryFn: () => odataList('Products', { orderby: 'name', top: 200 })
   });
 
-  // Resolve the linked internal DPPs (+ their batch footprint) so the table can
-  // show the CO₂ intensity / recycled content each internal line contributes.
   const subDppIds = [...new Set((bom.data ?? []).map((r) => r.sub_dpp_ID).filter(Boolean))];
   const subDpps = useQuery({
     queryKey: ['DPPs', 'bom-sub', variantId, subDppIds.join(',')],
@@ -80,12 +284,10 @@ export function BomEditor({ productId, variantId }) {
   });
   const dppById = Object.fromEntries((subDpps.data ?? []).map((d) => [d.ID, d]));
 
-  const nameOf = (id) => products.data?.find((p) => p.ID === id)?.name ?? id;
-  // Display name: internal product's name, else the line's free-text component name.
-  const rowName = (r) => (r.component_ID ? nameOf(r.component_ID) : r.component_name || '—');
   const candidates = (products.data ?? []).filter(
     (p) => p.ID !== productId && ['material', 'component', 'packaging'].includes(p.product_type)
   );
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['ProductBOMs', variantId] });
     if (productId) qc.invalidateQueries({ queryKey: ['Products', productId] });
@@ -93,8 +295,6 @@ export function BomEditor({ productId, variantId }) {
 
   const saveMut = useMutation({
     mutationFn: async (core) => {
-      // Internal: link the component's own model-level DPP so its footprint rolls up.
-      // External: keep the supplier URL + the manually-entered footprint values.
       let sub_dpp_ID = null;
       if (!core.external_dpp_url && core.component_ID) {
         const dpps = await odataList('DPPs', {
@@ -129,7 +329,6 @@ export function BomEditor({ productId, variantId }) {
   const delMut = useMutation({
     mutationFn: (id) => odataDelete('ProductBOMs', id),
     onSuccess: (_data, id) => {
-      // If the row being edited was removed, drop out of edit mode.
       if (id === editingId) {
         setEditingId(null);
         setRow(EMPTY_ROW);
@@ -193,19 +392,6 @@ export function BomEditor({ productId, variantId }) {
     });
   };
 
-  // Footprint shown per line: external → values entered on the line; internal →
-  // from the linked DPP's batch (exactly what the aggregation consumes).
-  const rowFootprint = (r) => {
-    if (r.external_dpp_url || r.ext_co2_footprint != null || r.ext_recycled_content_pct != null) {
-      return { co2: r.ext_co2_footprint, recycled: r.ext_recycled_content_pct };
-    }
-    const b = dppById[r.sub_dpp_ID]?.batch;
-    return { co2: b?.co2_footprint_kg ?? null, recycled: b?.recycled_content_pct ?? null };
-  };
-
-  // Numeric table cell: show the value (incl. 0) or an em-dash when absent.
-  const numCell = (v) => (v == null || v === '' ? '—' : String(Number(v)));
-
   const rows = bom.data ?? [];
 
   return (
@@ -218,94 +404,41 @@ export function BomEditor({ productId, variantId }) {
         </div>
       )}
 
-      {/* existing rows — column table with light vertical dividers */}
       {rows.length > 0 ? (
         <div className="mt-3 overflow-x-auto">
-          <div className="min-w-[860px]">
-            <div className={`grid ${COLS} border-b border-black/10 text-xs font-medium uppercase tracking-wide text-ink-muted`}>
+          <div className="min-w-[760px]">
+            {/* Header */}
+            <div
+              className={`grid ${COLS} border-b border-black/10 text-xs font-medium uppercase tracking-wide text-ink-muted`}
+            >
               <span className="border-r border-black/10 px-4 py-2">Component</span>
-              <span className="border-r border-black/10 px-4 py-2 text-right">Qty</span>
-              <span className="border-r border-black/10 px-4 py-2 text-right">CO₂ kg/kg</span>
-              <span className="border-r border-black/10 px-4 py-2 text-right">Rec %</span>
-              <span className="border-r border-black/10 px-4 py-2">DPP / URL</span>
-              <span className="px-4 py-2 text-right">Actions</span>
+              <span className="border-r border-black/10 px-3 py-2 text-right">Qty</span>
+              <span className="border-r border-black/10 px-3 py-2 text-right">CO₂ kg/kg</span>
+              <span className="border-r border-black/10 px-3 py-2 text-right">Rec %</span>
+              <span className="border-r border-black/10 px-3 py-2">Source</span>
+              <span className="px-3 py-2" />
             </div>
-            {rows.map((r) => {
-              const fp = rowFootprint(r);
-              return (
-                <div
-                  key={r.ID}
-                  className={`grid ${COLS} border-b border-black/5 last:border-0 ${
-                    editingId === r.ID ? 'bg-brand-50' : ''
-                  }`}
-                >
-                  <div className="flex min-w-0 items-center border-r border-black/10 px-4 py-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-ink">{rowName(r)}</div>
-                      {r.component_role && <div className="truncate text-xs text-ink-muted">{r.component_role}</div>}
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-end border-r border-black/10 px-4 py-3 text-sm text-ink-muted">
-                    {r.quantity != null ? `${r.quantity}${r.unit ? ` ${r.unit}` : ''}` : '—'}
-                  </div>
-                  <div className="flex items-center justify-end border-r border-black/10 px-4 py-3 text-sm text-ink">
-                    {numCell(fp.co2)}
-                  </div>
-                  <div className="flex items-center justify-end border-r border-black/10 px-4 py-3 text-sm text-ink">
-                    {numCell(fp.recycled)}
-                  </div>
-                  <div className="flex min-w-0 items-center border-r border-black/10 px-4 py-3">
-                    {r.external_dpp_url ? (
-                      <a
-                        href={r.external_dpp_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={r.external_dpp_url}
-                        className="flex min-w-0 items-center gap-1 text-xs text-brand-700 hover:underline"
-                      >
-                        <ExternalLink className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{r.external_dpp_url}</span>
-                      </a>
-                    ) : r.sub_dpp_ID ? (
-                      <Link
-                        to={`/dpps/${r.sub_dpp_ID}`}
-                        title={r.sub_dpp_ID}
-                        className="block truncate text-xs text-brand-700 hover:underline"
-                      >
-                        Internal DPP
-                      </Link>
-                    ) : (
-                      <span className="text-xs text-amber-600">No DPP</span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-end gap-3 px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(r)}
-                      className="text-ink-muted hover:text-brand-700"
-                      title="Edit"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => delMut.mutate(r.ID)}
-                      className="text-ink-muted hover:text-red-600"
-                      title="Remove"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+
+            {/* Rows */}
+            {rows.map((r) => (
+              <BomTableRow
+                key={r.ID}
+                r={r}
+                depth={0}
+                dppById={dppById}
+                allProducts={products.data}
+                editingId={editingId}
+                onEdit={startEdit}
+                onDelete={(id) => delMut.mutate(id)}
+              />
+            ))}
           </div>
         </div>
       ) : (
         <p className="mt-3 py-3 text-sm text-ink-muted">No components yet.</p>
       )}
 
-      {/* add / edit form */}
+      {/* Add / edit form */}
       <div className="mt-4 border-t border-black/5 pt-4">
         <div className="mb-3 text-sm font-medium text-ink">
           {editingId ? 'Edit component' : 'Add component'}
@@ -356,10 +489,20 @@ export function BomEditor({ productId, variantId }) {
                 />
               </FieldRow>
               <FieldRow label="Category" htmlFor="bom-ccat">
-                <Input id="bom-ccat" value={row.component_category} onChange={set('component_category')} placeholder="e.g. Trim" />
+                <Input
+                  id="bom-ccat"
+                  value={row.component_category}
+                  onChange={set('component_category')}
+                  placeholder="e.g. Trim"
+                />
               </FieldRow>
               <FieldRow label="Fibre composition" htmlFor="bom-cfib">
-                <Input id="bom-cfib" value={row.component_fibre} onChange={set('component_fibre')} placeholder="e.g. 100% Polyester" />
+                <Input
+                  id="bom-cfib"
+                  value={row.component_fibre}
+                  onChange={set('component_fibre')}
+                  placeholder="e.g. 100% Polyester"
+                />
               </FieldRow>
             </>
           )}
@@ -371,11 +514,16 @@ export function BomEditor({ productId, variantId }) {
               id="bom-unit"
               value={row.unit}
               onChange={set('unit')}
-              options={['g', 'kg', 'pcs'].map((u) => ({ value: u, label: u }))}
+              options={['g', 'kg', 'pcs', '%'].map((u) => ({ value: u, label: u }))}
             />
           </FieldRow>
           <FieldRow label="Role" htmlFor="bom-role" className="md:col-span-2" hint="e.g. Main fabric, Zipper">
-            <Input id="bom-role" value={row.component_role} onChange={set('component_role')} placeholder="Main fabric" />
+            <Input
+              id="bom-role"
+              value={row.component_role}
+              onChange={set('component_role')}
+              placeholder="Main fabric"
+            />
           </FieldRow>
 
           {row.dpp_source === 'external' && (
@@ -407,7 +555,11 @@ export function BomEditor({ productId, variantId }) {
                   placeholder="20"
                 />
               </FieldRow>
-              <FieldRow label="Recycled content (%)" htmlFor="bom-extrec" hint="Supplier value — used for aggregation.">
+              <FieldRow
+                label="Recycled content (%)"
+                htmlFor="bom-extrec"
+                hint="Supplier value — used for aggregation."
+              >
                 <Input
                   id="bom-extrec"
                   type="number"
