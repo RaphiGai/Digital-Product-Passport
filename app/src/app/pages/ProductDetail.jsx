@@ -114,12 +114,17 @@ function BatchRow({ batch, pid, vid }) {
             : <ChevronRight className="h-3.5 w-3.5" />}
         </button>
 
-        <div>
-          <span className="text-sm font-medium text-ink">{batch.batch_number ?? batch.ID}</span>
+        <Link
+          to={`/products/${pid}/variants/${vid}/batches/${batch.ID}`}
+          className="min-w-0 hover:text-brand-700"
+        >
+          <span className="text-sm font-medium text-ink hover:text-brand-700">
+            {batch.batch_number ?? batch.ID}
+          </span>
           <div className="text-xs text-ink-muted">
             {[batch.production_date, batch.factory?.name].filter(Boolean).join(' · ')}
           </div>
-        </div>
+        </Link>
 
         <StatusBadge status={batch.status} />
 
@@ -226,10 +231,10 @@ function VariantRow({ variant, pid }) {
             : <ChevronRight className="h-4 w-4" />}
         </button>
 
-        <div>
-          <span className="font-medium text-ink">{label}</span>
+        <Link to={`/products/${pid}/variants/${variant.ID}/view`} className="min-w-0 hover:text-brand-700">
+          <span className="font-medium text-ink hover:text-brand-700">{label}</span>
           <div className="text-xs text-ink-muted">{variant.sku}</div>
-        </div>
+        </Link>
 
         <StatusBadge status={variant.status} />
 
@@ -332,6 +337,9 @@ export function ProductDetail() {
         </div>
         <RequireRole role="company_advanced">
           <div className="flex gap-2">
+            <Link to={`/products/${id}/edit`}>
+              <Button variant="outline">Edit</Button>
+            </Link>
             <Button
               variant="danger"
               disabled={p.status === 'archived' || archive.isPending}

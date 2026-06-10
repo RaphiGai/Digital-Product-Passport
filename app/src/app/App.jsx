@@ -6,6 +6,9 @@ import { ProductDetail } from './pages/ProductDetail';
 import { CreateProduct } from './pages/CreateProduct';
 import { AddVariant } from './pages/AddVariant';
 import { VariantEdit } from './pages/VariantEdit';
+import { VariantView } from './pages/VariantView';
+import { BatchDetail } from './pages/BatchDetail';
+import { ProductEdit } from './pages/ProductEdit';
 import { BatchView } from './pages/BatchView';
 import { Partners } from './pages/Partners';
 import { PartnerDetail } from './pages/PartnerDetail';
@@ -26,9 +29,12 @@ export function App() {
           <Route path="products" element={<Products />} />
           <Route path="products/new" element={<CreateProduct />} />
           <Route path="products/:id" element={<ProductDetail />} />
+          <Route path="products/:id/edit" element={<ProductEdit />} />
           <Route path="products/:pid/variants/new" element={<AddVariant />} />
           <Route path="products/:pid/variants/:vid" element={<VariantEdit />} />
+          <Route path="products/:pid/variants/:vid/view" element={<VariantView />} />
           <Route path="products/:pid/variants/:vid/batches" element={<BatchView />} />
+          <Route path="products/:pid/variants/:vid/batches/:bid" element={<BatchDetail />} />
           <Route path="products/:pid/variants/:vid/batches/:bid/edit" element={<BatchEdit />} />
 
           <Route path="partners" element={<Partners />} />

@@ -51,10 +51,10 @@ function fmtNum(v) {
 // Recursive BOM row. Internal components (component_ID set, no external URL)
 // show a chevron; expanding lazily fetches the component's first variant and
 // its BOM lines, then renders them at the next depth level.
-function BomTableRow({ r, depth, dppById, allProducts, editingId, onEdit, onDelete }) {
+function BomTableRow({ r, depth, dppById, allProducts, editingId, onEdit, onDelete, readOnly = false }) {
   const [open, setOpen] = useState(false);
   const isInternal = !!r.component_ID && !r.external_dpp_url;
-  const canEdit = depth === 0;
+  const canEdit = depth === 0 && !readOnly;
   const fp = resolveFootprint(r, dppById);
   const indent = depth * 20;
 
@@ -240,6 +240,7 @@ function BomTableRow({ r, depth, dppById, allProducts, editingId, onEdit, onDele
                 editingId={null}
                 onEdit={() => {}}
                 onDelete={() => {}}
+                readOnly={readOnly}
               />
             ))
           )}
@@ -254,7 +255,7 @@ function BomTableRow({ r, depth, dppById, allProducts, editingId, onEdit, onDele
  *
  * @param {{ productId: string, variantId: string }} props
  */
-export function BomEditor({ productId, variantId }) {
+export function BomEditor({ productId, variantId, readOnly = false }) {
   const qc = useQueryClient();
   const [row, setRow] = useState(EMPTY_ROW);
   const [editingId, setEditingId] = useState(null);
@@ -427,9 +428,10 @@ export function BomEditor({ productId, variantId }) {
                 depth={0}
                 dppById={dppById}
                 allProducts={products.data}
-                editingId={editingId}
+                editingId={readOnly ? null : editingId}
                 onEdit={startEdit}
                 onDelete={(id) => delMut.mutate(id)}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -438,7 +440,8 @@ export function BomEditor({ productId, variantId }) {
         <p className="mt-3 py-3 text-sm text-ink-muted">No components yet.</p>
       )}
 
-      {/* Add / edit form */}
+      {/* Add / edit form — hidden in read-only mode */}
+      {!readOnly && (
       <div className="mt-4 border-t border-black/5 pt-4">
         <div className="mb-3 text-sm font-medium text-ink">
           {editingId ? 'Edit component' : 'Add component'}
@@ -583,6 +586,7 @@ export function BomEditor({ productId, variantId }) {
           </Button>
         </div>
       </div>
+      )}
     </Card>
   );
 }
