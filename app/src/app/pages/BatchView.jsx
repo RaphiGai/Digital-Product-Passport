@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { odataGet, odataList, odataCreate, odataUpdate, odataDelete, newId, ApiError } from '@/api/client';
@@ -40,26 +40,20 @@ async function bulkAction(dppIds, action) {
 // averaged (a batch's footprint = the DPP of its first item). External line: record
 // the supplier batch number (informational; footprint comes from the BOM line).
 
-function BatchComponentsEditor({ batch, vid, onMsg }) {
-  const qc = useQueryClient();
-
+// Loads the variant's BOM lines + the production batches of every internal component.
+// Shared by the create form and the per-batch editor (React Query dedupes by key).
+function useVariantSourcing(vid) {
   const bomsQ = useQuery({
     queryKey: ['ProductBOMs', 'variant', vid],
-    queryFn: () => odataList('ProductBOMs', { filter: `parent_ID eq '${vid}'`, top: 200 })
+    queryFn: () => odataList('ProductBOMs', { filter: `parent_ID eq '${vid}'`, top: 200 }),
+    enabled: !!vid
   });
   const productsQ = useQuery({
     queryKey: ['Products', 'sourcing-names'],
     queryFn: () => odataList('Products', { select: ['ID', 'name'], orderby: 'name', top: 500 })
   });
-  const bcQ = useQuery({
-    queryKey: ['BatchComponents', batch.ID],
-    queryFn: () => odataList('BatchComponents', { filter: `batch_ID eq '${batch.ID}'`, top: 200 })
-  });
-
   const boms = bomsQ.data ?? [];
   const componentIds = [...new Set(boms.map((b) => b.component_ID).filter(Boolean))];
-
-  // All production batches of the internal components used in this variant's BOM.
   const compBatchesQ = useQuery({
     queryKey: ['Batches', 'component-candidates', componentIds.join(',')],
     queryFn: () =>
@@ -71,35 +65,131 @@ function BatchComponentsEditor({ batch, vid, onMsg }) {
       }),
     enabled: componentIds.length > 0
   });
+  const componentBatches = compBatchesQ.data ?? [];
+  return {
+    boms,
+    componentBatches,
+    nameOf: (id) => productsQ.data?.find((p) => p.ID === id)?.name ?? id,
+    batchesFor: (componentId) => componentBatches.filter((b) => b.variant?.product_ID === componentId),
+    loading: bomsQ.isLoading,
+    loadingBatches: compBatchesQ.isLoading
+  };
+}
 
-  const nameOf = (id) => productsQ.data?.find((p) => p.ID === id)?.name ?? id;
-  const batchesFor = (componentId) =>
-    (compBatchesQ.data ?? []).filter((b) => b.variant?.product_ID === componentId);
+// A BOM line sources externally when it has a supplier URL (or no internal product).
+const isExternalLine = (b) => !!b.external_dpp_url || !b.component_ID;
+
+// Sensible create-form default: the latest approved component batch, else the latest.
+function pickDefaultComponentBatch(candidates) {
+  if (!candidates?.length) return null;
+  const byDateDesc = [...candidates].sort(
+    (a, b) => String(b.production_date || '').localeCompare(String(a.production_date || ''))
+  );
+  return byDateDesc.find((c) => c.status === 'approved') ?? byDateDesc[0];
+}
+
+/**
+ * Controlled per-BOM-line sourcing picker. Internal lines → multi-select of the
+ * component's batches; external lines → supplier batch-number input. Purely
+ * presentational: reads the current selection via selectionFor(bomId) and reports
+ * changes via onToggleBatch / onSetExtNo. Reused by create (local state) and edit (live).
+ */
+function BatchSourcingPicker({ boms, batchesFor, nameOf, loadingBatches, selectionFor, onToggleBatch, onSetExtNo, disabled }) {
+  return (
+    <div className="space-y-4">
+      {boms.map((b) => {
+        const external = isExternalLine(b);
+        const sel = selectionFor(b.ID);
+        const label = (b.component_ID ? nameOf(b.component_ID) : b.component_name) || '—';
+        const candidates = batchesFor(b.component_ID);
+        return (
+          <div key={b.ID} className="rounded-lg border border-black/5 bg-white p-3">
+            <div className="mb-2 flex items-center gap-2 text-sm font-medium text-ink">
+              <span>{label}</span>
+              {b.component_role && <span className="text-xs font-normal text-ink-muted">{b.component_role}</span>}
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-normal text-ink-muted">
+                {external ? 'External' : 'Internal'}
+              </span>
+            </div>
+
+            {external ? (
+              <FieldRow
+                label="Supplier batch number"
+                htmlFor={`extbn-${b.ID}`}
+                hint="Traceability info only — footprint values come from the BOM line."
+              >
+                <Input
+                  id={`extbn-${b.ID}`}
+                  key={`extbn-${b.ID}-${sel.extNo}`}
+                  defaultValue={sel.extNo}
+                  placeholder="e.g. ELA-2026-04"
+                  disabled={disabled}
+                  onBlur={(e) => onSetExtNo(b.ID, e.target.value.trim())}
+                />
+              </FieldRow>
+            ) : loadingBatches ? (
+              <p className="text-xs text-ink-muted">Loading batches…</p>
+            ) : candidates.length ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {candidates.map((cb) => (
+                  <CheckboxCard
+                    key={cb.ID}
+                    checked={sel.batchIds.has(cb.ID)}
+                    onChange={(on) => onToggleBatch(b.ID, cb.ID, on)}
+                    title={cb.batch_number || cb.ID}
+                    hint={cb.status}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-amber-600">No production batches for this component yet.</p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function BatchComponentsEditor({ batch, vid, onMsg }) {
+  const qc = useQueryClient();
+  const { boms, nameOf, batchesFor, loading, loadingBatches } = useVariantSourcing(vid);
+
+  const bcQ = useQuery({
+    queryKey: ['BatchComponents', batch.ID],
+    queryFn: () => odataList('BatchComponents', { filter: `batch_ID eq '${batch.ID}'`, top: 200 })
+  });
 
   // BatchComponents of this finished-good batch, grouped by BOM line.
   const bcByBom = {};
   for (const bc of bcQ.data ?? []) (bcByBom[bc.bom_ID] ??= []).push(bc);
 
+  const selectionFor = (bomId) => {
+    const rows = bcByBom[bomId] ?? [];
+    return {
+      batchIds: new Set(rows.map((r) => r.component_batch_ID).filter(Boolean)),
+      extNo: rows.find((r) => r.external_batch_number)?.external_batch_number ?? ''
+    };
+  };
+
   const invalidate = () => qc.invalidateQueries({ queryKey: ['BatchComponents', batch.ID] });
   const onErr = (err) =>
     onMsg({ kind: 'error', text: err instanceof ApiError ? err.message : 'Could not save sourcing.' });
 
-  // Toggle one component batch on/off for an internal BOM line (create / delete its row).
   const toggleBatch = useMutation({
-    mutationFn: ({ bomId, componentBatchId, on }) => {
+    mutationFn: ({ bomId, batchId, on }) => {
       if (on) {
         return odataCreate('BatchComponents', {
-          ID: newId(), batch_ID: batch.ID, bom_ID: bomId, component_batch_ID: componentBatchId
+          ID: newId(), batch_ID: batch.ID, bom_ID: bomId, component_batch_ID: batchId
         });
       }
-      const existing = (bcByBom[bomId] ?? []).find((bc) => bc.component_batch_ID === componentBatchId);
+      const existing = (bcByBom[bomId] ?? []).find((bc) => bc.component_batch_ID === batchId);
       return existing ? odataDelete('BatchComponents', existing.ID) : Promise.resolve();
     },
     onSuccess: () => { invalidate(); onMsg({ kind: 'success', text: 'Component sourcing updated.' }); },
     onError: onErr
   });
 
-  // External line: upsert the supplier batch number on a single row.
   const saveExtBatchNo = useMutation({
     mutationFn: ({ bomId, value }) => {
       const existing = (bcByBom[bomId] ?? [])[0];
@@ -112,7 +202,7 @@ function BatchComponentsEditor({ batch, vid, onMsg }) {
     onError: onErr
   });
 
-  if (bomsQ.isLoading || bcQ.isLoading) return <p className="px-5 py-4 text-sm text-ink-muted">Loading components…</p>;
+  if (loading || bcQ.isLoading) return <p className="px-5 py-4 text-sm text-ink-muted">Loading components…</p>;
   if (!boms.length)
     return <p className="px-5 py-4 text-sm text-ink-muted">This variant has no bill of materials.</p>;
 
@@ -122,59 +212,16 @@ function BatchComponentsEditor({ batch, vid, onMsg }) {
         Record which component batches were consumed in this run. Internal components: tick the batches
         used — their CO₂/recycled values are averaged. External components: enter the supplier batch number.
       </p>
-      <div className="space-y-4">
-        {boms.map((b) => {
-          const isExternal = !!b.external_dpp_url || !b.component_ID;
-          const rows = bcByBom[b.ID] ?? [];
-          const selected = new Set(rows.map((r) => r.component_batch_ID).filter(Boolean));
-          const label = (b.component_ID ? nameOf(b.component_ID) : b.component_name) || '—';
-          const candidates = batchesFor(b.component_ID);
-          return (
-            <div key={b.ID} className="rounded-lg border border-black/5 bg-white p-3">
-              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-ink">
-                <span>{label}</span>
-                {b.component_role && <span className="text-xs font-normal text-ink-muted">{b.component_role}</span>}
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-normal text-ink-muted">
-                  {isExternal ? 'External' : 'Internal'}
-                </span>
-              </div>
-
-              {isExternal ? (
-                <FieldRow
-                  label="Supplier batch number"
-                  htmlFor={`extbn-${b.ID}`}
-                  hint="Traceability info only — footprint values come from the BOM line."
-                >
-                  <Input
-                    id={`extbn-${b.ID}`}
-                    key={rows[0]?.ID ?? 'new'}
-                    defaultValue={rows[0]?.external_batch_number ?? ''}
-                    placeholder="e.g. ELA-2026-04"
-                    disabled={saveExtBatchNo.isPending}
-                    onBlur={(e) => saveExtBatchNo.mutate({ bomId: b.ID, value: e.target.value.trim() })}
-                  />
-                </FieldRow>
-              ) : compBatchesQ.isLoading ? (
-                <p className="text-xs text-ink-muted">Loading batches…</p>
-              ) : candidates.length ? (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {candidates.map((cb) => (
-                    <CheckboxCard
-                      key={cb.ID}
-                      checked={selected.has(cb.ID)}
-                      onChange={(on) => toggleBatch.mutate({ bomId: b.ID, componentBatchId: cb.ID, on })}
-                      title={cb.batch_number || cb.ID}
-                      hint={cb.status}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-amber-600">No production batches for this component yet.</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <BatchSourcingPicker
+        boms={boms}
+        batchesFor={batchesFor}
+        nameOf={nameOf}
+        loadingBatches={loadingBatches}
+        selectionFor={selectionFor}
+        onToggleBatch={(bomId, batchId, on) => toggleBatch.mutate({ bomId, batchId, on })}
+        onSetExtNo={(bomId, value) => saveExtBatchNo.mutate({ bomId, value })}
+        disabled={toggleBatch.isPending || saveExtBatchNo.isPending}
+      />
     </div>
   );
 }
@@ -481,10 +528,42 @@ export function BatchView() {
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
+  // Component sourcing collected up-front and saved together with the new batch.
+  const { boms, componentBatches, nameOf, batchesFor, loadingBatches } = useVariantSourcing(vid);
+  const [sourcing, setSourcing] = useState({}); // { [bomId]: { batchIds: Set, extNo: string } }
+
+  const buildInitialSourcing = useCallback(() => {
+    const init = {};
+    for (const b of boms) {
+      if (isExternalLine(b)) { init[b.ID] = { batchIds: new Set(), extNo: '' }; continue; }
+      const candidates = componentBatches.filter((cb) => cb.variant?.product_ID === b.component_ID);
+      const def = pickDefaultComponentBatch(candidates);
+      init[b.ID] = { batchIds: new Set(def ? [def.ID] : []), extNo: '' };
+    }
+    return init;
+  }, [boms, componentBatches]);
+
+  // Pre-select sensible defaults once the BOM + component batches have loaded.
+  useEffect(() => {
+    if (!boms.length || loadingBatches) return;
+    setSourcing((prev) => (Object.keys(prev).length ? prev : buildInitialSourcing()));
+  }, [boms, loadingBatches, buildInitialSourcing]);
+
+  const toggleSourcingBatch = (bomId, batchId, on) =>
+    setSourcing((prev) => {
+      const cur = prev[bomId] ?? { batchIds: new Set(), extNo: '' };
+      const batchIds = new Set(cur.batchIds);
+      if (on) batchIds.add(batchId); else batchIds.delete(batchId);
+      return { ...prev, [bomId]: { ...cur, batchIds } };
+    });
+  const setSourcingExtNo = (bomId, value) =>
+    setSourcing((prev) => ({ ...prev, [bomId]: { ...(prev[bomId] ?? { batchIds: new Set() }), extNo: value } }));
+
   const addBatch = useMutation({
-    mutationFn: () =>
-      odataCreate('Batches', {
-        ID: newId(),
+    mutationFn: async () => {
+      const batchId = newId();
+      await odataCreate('Batches', {
+        ID: batchId,
         variant_ID: vid,
         batch_number: form.batch_number.trim(),
         production_date: form.production_date || null,
@@ -494,11 +573,28 @@ export function BatchView() {
         factory_ID: form.factory_ID || null,
         supplier_ID: form.supplier_ID || null,
         status: 'draft'
-      }),
+      });
+      // Persist the per-BOM-line component sourcing for the new batch (optional per line).
+      for (const b of boms) {
+        const sel = sourcing[b.ID];
+        if (!sel) continue;
+        if (isExternalLine(b)) {
+          if (sel.extNo) {
+            await odataCreate('BatchComponents', { ID: newId(), batch_ID: batchId, bom_ID: b.ID, external_batch_number: sel.extNo });
+          }
+        } else {
+          for (const cbId of sel.batchIds) {
+            await odataCreate('BatchComponents', { ID: newId(), batch_ID: batchId, bom_ID: b.ID, component_batch_ID: cbId });
+          }
+        }
+      }
+    },
     onSuccess: () => {
       setForm(EMPTY);
+      setSourcing(buildInitialSourcing());
       setMsg({ kind: 'success', text: 'Batch added.' });
       qc.invalidateQueries({ queryKey: ['Batches', vid] });
+      qc.invalidateQueries({ queryKey: ['BatchComponents'] });
     },
     onError: (err) =>
       setMsg({ kind: 'error', text: err instanceof ApiError ? err.message : 'Could not add batch.' })
@@ -594,6 +690,28 @@ export function BatchView() {
               </FieldRow>
             )}
           </FormSection>
+
+          {boms.length > 0 && (
+            <div className="mt-6 border-t border-black/5 pt-5">
+              <h3 className="text-sm font-semibold text-ink">Component sourcing</h3>
+              <p className="mb-3 mt-0.5 text-xs text-ink-muted">
+                Which component batches were consumed in this run — internal lines average the selected
+                batches; external lines record the supplier batch number. Leave a line empty to use the
+                variant&apos;s BOM default.
+              </p>
+              <BatchSourcingPicker
+                boms={boms}
+                batchesFor={batchesFor}
+                nameOf={nameOf}
+                loadingBatches={loadingBatches}
+                selectionFor={(bomId) => sourcing[bomId] ?? { batchIds: new Set(), extNo: '' }}
+                onToggleBatch={toggleSourcingBatch}
+                onSetExtNo={setSourcingExtNo}
+                disabled={addBatch.isPending}
+              />
+            </div>
+          )}
+
           <div className="flex justify-end border-t border-black/5 pt-5">
             <Button type="submit" disabled={addBatch.isPending}>
               {addBatch.isPending ? 'Adding…' : 'Add batch'}
