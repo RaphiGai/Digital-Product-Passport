@@ -15,6 +15,25 @@ export function ProductEdit() {
   const [form, setForm] = useState(null);
   const [msg, setMsg] = useState(null);
 
+  const LIMITS = {
+    name: 70,
+    brand: 70,
+    category: 60,
+    model: 70,
+    gtin: 14,
+    description: 500,
+    fibre_composition: 500,
+    substances_of_concern: 500,
+    country_of_origin: 2,
+    care_instructions: 500,
+    repair_instructions: 500,
+    disposal_instructions: 500,
+    storytelling_title: 100,
+    storytelling_body: 1000
+  };
+
+  const remaining = (value, max) => `${max - (value?.length ?? 0)} characters remaining`;
+
   const productQ = useQuery({
     queryKey: ['Products', id],
     queryFn: () => odataGet('Products', id)
@@ -100,7 +119,10 @@ export function ProductEdit() {
         }
       },
       {
-        onSuccess: () => setMsg({ kind: 'success', text: 'Product saved.' }),
+        onSuccess: () => {
+          setMsg({ kind: 'success', text: 'Product saved.' });
+          navigate(`/products/${id}`);
+        },
         onError: (err) =>
           setMsg({ kind: 'error', text: err instanceof ApiError ? err.message : 'Could not save.' })
       }
@@ -147,28 +169,41 @@ export function ProductEdit() {
           description="Name, Brand and Category appear publicly on the consumer DPP."
         >
           <FieldRow label="Product name" required visibility="public" htmlFor="name">
-            <Input id="name" value={form.name} onChange={set('name')} />
+            <Input id="name" value={form.name} onChange={set('name')} maxLength={LIMITS.name} />
           </FieldRow>
           <FieldRow label="Brand" visibility="public" htmlFor="brand">
-            <Input id="brand" value={form.brand} onChange={set('brand')} />
+            <Input id="brand" value={form.brand} onChange={set('brand')} maxLength={LIMITS.brand} />
           </FieldRow>
           <FieldRow label="Category" visibility="public" htmlFor="category">
-            <Input id="category" value={form.category} onChange={set('category')} />
+            <Input id="category" value={form.category} onChange={set('category')} maxLength={LIMITS.category} />
           </FieldRow>
           <FieldRow label="Model" visibility="public" htmlFor="model" hint="Season or model line.">
-            <Input id="model" value={form.model} onChange={set('model')} />
+            <Input id="model" value={form.model} onChange={set('model')} maxLength={LIMITS.model} />
           </FieldRow>
           <FieldRow label="GTIN" visibility="internal" htmlFor="gtin">
-            <Input id="gtin" value={form.gtin} onChange={set('gtin')} />
+            <Input
+              id="gtin"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={14}
+              value={form.gtin}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  gtin: e.target.value.replace(/\D/g, '')
+                }))
+              }
+            />
           </FieldRow>
           <FieldRow
             label="Description"
             visibility="public"
             htmlFor="desc"
             className="md:col-span-2"
-            hint="Max 500 characters."
+            hint={remaining(form.description, LIMITS.description)}
           >
-            <Textarea id="desc" value={form.description} onChange={set('description')} maxLength={500} />
+            <Textarea id="desc" value={form.description} onChange={set('description')} maxLength={LIMITS.description} />
           </FieldRow>
         </FormSection>
 
@@ -180,20 +215,21 @@ export function ProductEdit() {
             label="Fibre composition"
             visibility="public"
             htmlFor="fibre"
-            hint="List all fibres with percentages and origin."
+            hint={remaining(form.fibre_composition, LIMITS.fibre_composition)}
           >
-            <Textarea id="fibre" value={form.fibre_composition} onChange={set('fibre_composition')} />
+            <Textarea id="fibre" value={form.fibre_composition} onChange={set('fibre_composition')} maxLength={LIMITS.fibre_composition} />
           </FieldRow>
           <FieldRow
             label="Substances of concern"
             visibility="public"
             htmlFor="soc"
-            hint="Enter 'None' if no substances apply (REACH / SCIP)."
+            hint={remaining(form.substances_of_concern, LIMITS.substances_of_concern)}
           >
             <Textarea
               id="soc"
               value={form.substances_of_concern}
               onChange={set('substances_of_concern')}
+              maxLength={LIMITS.substances_of_concern}
             />
           </FieldRow>
           <FieldRow
@@ -210,17 +246,18 @@ export function ProductEdit() {
           title="Care, repair & end-of-life"
           description="Mandatory ESPR lifecycle information. All appear publicly."
         >
-          <FieldRow label="Care instructions" visibility="public" htmlFor="care" className="md:col-span-2">
-            <Textarea id="care" value={form.care_instructions} onChange={set('care_instructions')} />
+          <FieldRow label="Care instructions" visibility="public" htmlFor="care" className="md:col-span-2" hint={remaining(form.care_instructions, LIMITS.care_instructions)}>
+            <Textarea id="care" value={form.care_instructions} onChange={set('care_instructions')} maxLength={LIMITS.care_instructions} />
           </FieldRow>
-          <FieldRow label="Repair instructions" visibility="public" htmlFor="repair">
-            <Textarea id="repair" value={form.repair_instructions} onChange={set('repair_instructions')} />
+          <FieldRow label="Repair instructions" visibility="public" htmlFor="repair" hint={remaining(form.repair_instructions, LIMITS.repair_instructions)}>
+            <Textarea id="repair" value={form.repair_instructions} onChange={set('repair_instructions')} maxLength={LIMITS.repair_instructions} />
           </FieldRow>
-          <FieldRow label="Disposal instructions" visibility="public" htmlFor="disposal">
+          <FieldRow label="Disposal instructions" visibility="public" htmlFor="disposal" hint={remaining(form.disposal_instructions, LIMITS.disposal_instructions)}>
             <Textarea
               id="disposal"
               value={form.disposal_instructions}
               onChange={set('disposal_instructions')}
+              maxLength={LIMITS.disposal_instructions}
             />
           </FieldRow>
         </FormSection>
@@ -246,18 +283,28 @@ export function ProductEdit() {
                     </button>
                   )}
                 </div>
-                <Input
-                  value={s.title}
-                  onChange={setBlock(i, 'title')}
-                  placeholder="Title (e.g. Sustainable sourcing)"
-                />
-                <Textarea
-                  className="mt-2"
-                  value={s.body}
-                  onChange={setBlock(i, 'body')}
-                  placeholder="Story text…"
-                  maxLength={1000}
-                />
+                  <Input
+                    value={s.title}
+                    onChange={setBlock(i, 'title')}
+                    placeholder="Title (e.g. Sustainable sourcing)"
+                    maxLength={LIMITS.storytelling_title}
+                  />
+
+                  <p className="mt-1 text-xs text-ink-muted">
+                    {remaining(s.title, LIMITS.storytelling_title)}
+                  </p>
+
+                  <Textarea
+                    className="mt-2"
+                    value={s.body}
+                    onChange={setBlock(i, 'body')}
+                    placeholder="Story text…"
+                    maxLength={LIMITS.storytelling_body}
+                  />
+
+                  <p className="mt-1 text-xs text-ink-muted">
+                    {remaining(s.body, LIMITS.storytelling_body)}
+                  </p>
               </div>
             ))}
             <Button type="button" variant="outline" onClick={addBlock}>
@@ -291,7 +338,7 @@ export function ProductEdit() {
 
         <div className="flex justify-end gap-3 border-t border-black/5 pt-5">
           <Button type="button" variant="outline" onClick={() => navigate(`/products/${id}`)}>
-            Back to product
+            Cancel
           </Button>
           <Button type="button" disabled={update.isPending} onClick={save}>
             {update.isPending ? 'Saving…' : 'Save product'}
