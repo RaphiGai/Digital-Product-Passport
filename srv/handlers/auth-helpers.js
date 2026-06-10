@@ -56,6 +56,10 @@ function getAppRole(req) {
  * Resolve the caller's owning organization (cached per request via the cds tx).
  */
 async function getUserOrg(req) {
+  // Entity-specific before-handlers (e.g. CREATE Products/BusinessPartners) run
+  // ahead of the central before('*') gate, and the XSUAA token carries no tenant
+  // claim — so resolve the user here to inject req.user.attr.tenant first. Idempotent.
+  await resolveAppUserInline(req);
   const tenantId = requireTenant(req);
   const { Organizations } = cds.entities('dpp');
   const org = await SELECT.one.from(Organizations).where({ tenant_id: tenantId });
