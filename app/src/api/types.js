@@ -44,6 +44,7 @@
  * @property {string} [gtin]
  * @property {string} [fibre_composition]
  * @property {string} [country_of_origin]
+ * @property {string} [storytelling] JSON array string [{title, body}]
  */
 
 /**

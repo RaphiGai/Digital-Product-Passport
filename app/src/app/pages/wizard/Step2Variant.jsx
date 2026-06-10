@@ -7,7 +7,7 @@ import { Button } from '@/ui/Button';
 import { Banner } from '@/ui/Breadcrumb';
 import { FormSection, FieldRow, Input, Select } from '@/ui/Form';
 
-const EMPTY = { color: '', size: '', sku: '', gtin: '', weight_g: '', status: 'active' };
+const EMPTY = { color: '', size: '', sku: '', gtin: '', weight_g: '', image_url: '', status: 'active' };
 
 /**
  * Add one or more variants to ctx.productId. Reused by the wizard and the focused
@@ -54,6 +54,7 @@ export function Step2Variant({ ctx, setCtx, onPrimary, primaryLabel, onBack }) {
         sku: form.sku.trim(),
         gtin: form.gtin || null,
         weight_g: form.weight_g ? Number(form.weight_g) : null,
+        image_url: form.image_url.trim() || null,
         status: form.status
       },
       { onError: (err) => setError(err instanceof ApiError ? err.message : 'Could not save the variant.') }
@@ -89,6 +90,10 @@ export function Step2Variant({ ctx, setCtx, onPrimary, primaryLabel, onBack }) {
           <FieldRow label="Weight (g)" visibility="internal" htmlFor="weight"
             hint="Mass basis for rolling component CO₂/recycled content up to this product">
             <Input id="weight" type="number" value={form.weight_g} onChange={set('weight_g')} placeholder="180" />
+          </FieldRow>
+          <FieldRow label="Image URL" visibility="public" htmlFor="img" className="md:col-span-2"
+            hint="Colour-correct product image — shown in the consumer story for this variant.">
+            <Input id="img" value={form.image_url} onChange={set('image_url')} placeholder="https://…/product-blue.jpg" />
           </FieldRow>
           <FieldRow label="Status" visibility="internal" htmlFor="status">
             <Select

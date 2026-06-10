@@ -38,6 +38,7 @@ export function VariantEdit() {
         sku: v.sku ?? '',
         gtin: v.gtin ?? '',
         weight_g: v.weight_g ?? '',
+        image_url: v.image_url ?? '',
         status: v.status ?? 'active'
       });
     }
@@ -64,6 +65,7 @@ export function VariantEdit() {
           sku: form.sku.trim(),
           gtin: form.gtin || null,
           weight_g: form.weight_g === '' ? null : Number(form.weight_g),
+          image_url: form.image_url?.trim() || null,
           status: form.status
         }
       },
@@ -115,6 +117,10 @@ export function VariantEdit() {
           <FieldRow label="Weight (g)" visibility="internal" htmlFor="weight"
             hint="Mass basis for rolling component CO₂/recycled content up to this product">
             <Input id="weight" type="number" value={form.weight_g} onChange={set('weight_g')} />
+          </FieldRow>
+          <FieldRow label="Image URL" visibility="public" htmlFor="img"
+            hint="Colour-correct product image — shown in the consumer story for this variant.">
+            <Input id="img" value={form.image_url} onChange={set('image_url')} />
           </FieldRow>
           <FieldRow label="Status" visibility="internal" htmlFor="status">
             <Select

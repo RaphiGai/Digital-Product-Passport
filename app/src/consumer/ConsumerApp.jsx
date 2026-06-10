@@ -173,10 +173,17 @@ function Passport({ dpp }) {
           </Section>
         )}
 
-        {dpp.storytelling?.length > 0 && (
+        {p.storytelling?.length > 0 && (
           <Section icon={Sparkles} title="The story">
+            {v.image_url && (
+              <img
+                src={v.image_url}
+                alt={p.name ?? 'Product'}
+                className="mb-3 aspect-[4/3] w-full rounded-xl border border-black/5 object-cover"
+              />
+            )}
             <div className="space-y-3">
-              {dpp.storytelling.map((s, i) => (
+              {p.storytelling.map((s, i) => (
                 <div key={i}>
                   {s.title && <p className="text-sm font-medium text-ink">{s.title}</p>}
                   {s.body && <p className="text-sm text-ink-muted">{s.body}</p>}

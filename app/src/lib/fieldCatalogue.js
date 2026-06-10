@@ -34,7 +34,8 @@ export const PRODUCT_CATALOGUE = [
   { key: 'status', label: 'ProductStatus', mandatory: true, visibility: 'internal' },
   { key: 'model', label: 'Model', mandatory: false, visibility: 'public' },
   { key: 'description', label: 'Description', mandatory: false, visibility: 'public' },
-  { key: 'gtin', label: 'GTIN', mandatory: false, visibility: 'internal' }
+  { key: 'gtin', label: 'GTIN', mandatory: false, visibility: 'internal' },
+  { key: 'storytelling', label: 'Storytelling', mandatory: false, visibility: 'public' }
 ];
 
 /** @type {CatalogueField[]} */

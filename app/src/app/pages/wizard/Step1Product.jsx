@@ -30,7 +30,8 @@ const EMPTY = {
   repair_instructions: '',
   disposal_instructions: '',
   status: 'draft',
-  espr_compliance: 'draft'
+  espr_compliance: 'draft',
+  storytelling: [{ title: '', body: '' }]
 };
 
 const REQUIRED = [
@@ -63,6 +64,16 @@ export function Step1Product({ ctx, setCtx, next }) {
   const alreadyCreated = Boolean(ctx.productId);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
+  // Storytelling block editor — serialized to a JSON array string on submit.
+  const setBlock = (i, key) => (e) =>
+    setForm((f) => ({
+      ...f,
+      storytelling: f.storytelling.map((s, idx) => (idx === i ? { ...s, [key]: e.target.value } : s))
+    }));
+  const addBlock = () => setForm((f) => ({ ...f, storytelling: [...f.storytelling, { title: '', body: '' }] }));
+  const removeBlock = (i) =>
+    setForm((f) => ({ ...f, storytelling: f.storytelling.filter((_, idx) => idx !== i) }));
+
   const submit = (e) => {
     e.preventDefault();
     if (alreadyCreated) return next();
@@ -72,8 +83,16 @@ export function Step1Product({ ctx, setCtx, next }) {
       setError(`Please fill all mandatory fields (${missing.length} missing).`);
       return;
     }
+    const story = form.storytelling
+      .map((s) => ({ title: s.title.trim(), body: s.body.trim() }))
+      .filter((s) => s.title || s.body);
     create.mutate(
-      { ...form, gtin: form.gtin || null, owning_organization_ID: me?.organizationId },
+      {
+        ...form,
+        gtin: form.gtin || null,
+        storytelling: story.length ? JSON.stringify(story) : null,
+        owning_organization_ID: me?.organizationId
+      },
       { onError: (err) => setError(err instanceof ApiError ? err.message : 'Could not save the product.') }
     );
   };
@@ -141,6 +160,38 @@ export function Step1Product({ ctx, setCtx, next }) {
             <FieldRow label="Disposal instructions" required visibility="public" htmlFor="disposal">
               <Textarea id="disposal" value={form.disposal_instructions} onChange={set('disposal_instructions')} />
             </FieldRow>
+          </FormSection>
+
+          <FormSection title="Storytelling" description="Optional brand / sustainability story shown on the consumer passport. Add one or more blocks (title + text). The colour-correct image is set per variant.">
+            <div className="space-y-3 md:col-span-2">
+              {form.storytelling.map((s, i) => (
+                <div key={i} className="rounded-lg border border-black/5 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">Block {i + 1}</span>
+                    {form.storytelling.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeBlock(i)}
+                        className="text-xs text-ink-muted hover:text-red-600"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <Input value={s.title} onChange={setBlock(i, 'title')} placeholder="Title (e.g. Sustainable sourcing)" />
+                  <Textarea
+                    className="mt-2"
+                    value={s.body}
+                    onChange={setBlock(i, 'body')}
+                    placeholder="Story text…"
+                    maxLength={1000}
+                  />
+                </div>
+              ))}
+              <Button type="button" variant="outline" onClick={addBlock}>
+                + Add story block
+              </Button>
+            </div>
           </FormSection>
 
           <FormSection title="Product status" description="Defaults to Draft on creation. Internal only.">
