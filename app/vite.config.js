@@ -59,7 +59,9 @@ export default defineConfig(({ mode }) => {
           // Entry 1: authenticated company app (behind xsuaa in prod)
           main: path.resolve(__dirname, 'index.html'),
           // Entry 2: public consumer view (no auth) — opened from a QR scan
-          consumer: path.resolve(__dirname, 'consumer.html')
+          consumer: path.resolve(__dirname, 'consumer.html'),
+          // Entry 3: public token-entry page (no auth) — paste a QR token → consumer view
+          lookup: path.resolve(__dirname, 'lookup.html')
         }
       }
     }

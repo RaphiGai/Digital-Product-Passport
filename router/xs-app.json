@@ -36,6 +36,11 @@
       "authenticationType": "none"
     },
     {
+      "source": "^/lookup\\.html.*$",
+      "localDir": "resources",
+      "authenticationType": "none"
+    },
+    {
       "source": "^(.*)$",
       "localDir": "resources",
       "authenticationType": "xsuaa"

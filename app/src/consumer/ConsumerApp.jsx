@@ -53,10 +53,8 @@ export function ConsumerApp() {
   const [state, setState] = useState({ status: 'loading' });
 
   useEffect(() => {
-    if (!token) {
-      setState({ status: 'error' });
-      return;
-    }
+    if (!token) return undefined; // no token → the entry form is shown
+    setState({ status: 'loading' });
     fetch(`/public/dpp/${token}`, { headers: { Accept: 'application/json' } })
       .then((r) => {
         if (!r.ok) throw new Error('not found');
@@ -64,15 +62,54 @@ export function ConsumerApp() {
       })
       .then((data) => setState({ status: 'ok', data }))
       .catch(() => setState({ status: 'error' }));
+    return undefined;
   }, [token]);
 
   return (
     <div className="min-h-full bg-canvas">
       <div className="mx-auto max-w-lg px-4 pb-12">
-        {state.status === 'loading' && <CenteredNote text="Loading passport…" />}
-        {state.status === 'error' && <NotFound />}
-        {state.status === 'ok' && <Passport dpp={state.data} />}
+        {!token && <TokenEntry />}
+        {token && state.status === 'loading' && <CenteredNote text="Loading passport…" />}
+        {token && state.status === 'error' && <NotFound />}
+        {token && state.status === 'ok' && <Passport dpp={state.data} />}
       </div>
+    </div>
+  );
+}
+
+// Public token-entry page (no QR scan): paste the QR token → open the consumer DPP.
+function TokenEntry() {
+  const [value, setValue] = useState('');
+  const submit = (e) => {
+    e.preventDefault();
+    const t = value.trim();
+    if (t) window.location.href = `/consumer.html?token=${encodeURIComponent(t)}`;
+  };
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-5 text-center">
+      <ShieldCheck className="h-10 w-10 text-brand-600" />
+      <div>
+        <h1 className="text-lg font-semibold text-ink">Open a product passport</h1>
+        <p className="mt-1 max-w-xs text-sm text-ink-muted">
+          Enter the QR token printed on the product to view its Digital Product Passport.
+        </p>
+      </div>
+      <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-3">
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="e.g. 369135ad-….<signature>"
+          className="w-full rounded-lg border border-black/10 bg-card px-4 py-2 text-sm text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+        />
+        <button
+          type="submit"
+          disabled={!value.trim()}
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-50"
+        >
+          View passport
+        </button>
+      </form>
     </div>
   );
 }
@@ -89,6 +126,9 @@ function NotFound() {
       <p className="max-w-xs text-sm text-ink-muted">
         This product passport could not be found, or the QR link is invalid or has expired.
       </p>
+      <a href="/lookup.html" className="text-sm font-medium text-brand-700 hover:underline">
+        Try another token
+      </a>
     </div>
   );
 }
