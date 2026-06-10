@@ -39,7 +39,7 @@ async function descendantsReach(startProductId, targetProductId, { ProductVarian
 module.exports = (srv) => {
   const {
     Products, ProductVariants,
-    ProductBOMs, BusinessPartners
+    ProductBOMs, BusinessPartners, Batches
   } = srv.entities;
 
   // ----- Tenant defaulting on CREATE + tenant guard on UPDATE -----
@@ -66,16 +66,31 @@ module.exports = (srv) => {
     rejectCrossOrgWrite(req, req.data.owning_organization_ID, req.user._appOrgId);
   });
 
-  // ----- Status defaults for hierarchy entities -----
+  // ----- Status defaults + field validation for hierarchy entities -----
 
-  srv.before('CREATE', ProductVariants, (req) => {
-    if (!req.data.status) req.data.status = 'draft';
+  srv.before(['CREATE', 'UPDATE'], ProductVariants, (req) => {
+    if (req.event === 'CREATE' && !req.data.status) req.data.status = 'draft';
+    const { weight_g } = req.data;
+    if (weight_g != null && weight_g <= 0) {
+      req.reject(400, 'Weight must be a positive number (in grams).');
+    }
+  });
+
+  srv.before(['CREATE', 'UPDATE'], Batches, (req) => {
+    const { co2_footprint_kg, recycled_content_pct } = req.data;
+    if (co2_footprint_kg != null && co2_footprint_kg < 0) {
+      req.reject(400, 'CO₂ footprint cannot be negative.');
+    }
+    if (recycled_content_pct != null && (recycled_content_pct < 0 || recycled_content_pct > 100)) {
+      req.reject(400, 'Recycled content must be between 0 and 100 %.');
+    }
   });
 
   // ----- BOM integrity: self-loop, quantity bounds, acyclic graph (US4.11) -----
 
   srv.before(['CREATE', 'UPDATE'], ProductBOMs, async (req) => {
-    const { parent_ID, component_ID, component_name, quantity, unit } = req.data;
+    const { parent_ID, component_ID, component_name, quantity, unit,
+            ext_co2_footprint, ext_recycled_content_pct } = req.data;
 
     // A line identifies its component either by an internal product (internal source)
     // or by a free-text name (external supplier component without an internal record).
@@ -103,6 +118,12 @@ module.exports = (srv) => {
     }
     if (quantity != null && quantity < 0) {
       req.reject(400, 'BOM quantity must not be negative.');
+    }
+    if (ext_co2_footprint != null && ext_co2_footprint < 0) {
+      req.reject(400, 'CO₂ footprint cannot be negative.');
+    }
+    if (ext_recycled_content_pct != null && (ext_recycled_content_pct < 0 || ext_recycled_content_pct > 100)) {
+      req.reject(400, 'Recycled content must be between 0 and 100 %.');
     }
     if (parentVariant && component_ID) {
       const dbEntities = cds.entities('dpp');
