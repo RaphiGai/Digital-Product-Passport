@@ -82,6 +82,13 @@ export function VariantView() {
         {/* Variant details */}
         <Card>
           <CardTitle>Variant details</CardTitle>
+          {(v.image_data || v.image_url) && (
+            <img
+              src={v.image_data || v.image_url}
+              alt={label}
+              className="mb-3 mt-3 h-32 w-32 rounded-lg border border-black/10 object-cover"
+            />
+          )}
           <div className="mt-2">
             <InfoRow label="Colour" value={v.color} visibility="public" />
             <InfoRow label="Size" value={v.size} visibility="public" />
@@ -105,9 +112,39 @@ export function VariantView() {
             <InfoRow label="Description" value={p?.description} visibility="public" />
             <InfoRow label="Fibre composition" value={p?.fibre_composition} visibility="public" />
             <InfoRow label="Country of origin" value={p?.country_of_origin} visibility="public" />
-            <InfoRow label="Care instructions" value={p?.care_instructions} visibility="public" />
+            <InfoRow label="Care & washing instructions" value={p?.care_instructions} visibility="public" />
             <InfoRow label="Repair instructions" value={p?.repair_instructions} visibility="public" />
+            <InfoRow label="Reuse instructions" value={p?.reuse_instructions} visibility="public" />
             <InfoRow label="Disposal instructions" value={p?.disposal_instructions} visibility="public" />
+            <InfoRow
+              label="Durability score"
+              value={p?.durability_score != null ? `${p.durability_score} / 10` : null}
+              visibility="public"
+            />
+            <InfoRow
+              label="Repairability score"
+              value={p?.repairability_score != null ? `${p.repairability_score} / 10` : null}
+              visibility="public"
+            />
+            {[
+              ['Care video', p?.care_video_url],
+              ['Repair video', p?.repair_video_url],
+              ['Reuse video', p?.reuse_video_url],
+              ['Disposal video', p?.disposal_video_url]
+            ].map(([label, url]) =>
+              url ? (
+                <InfoRow
+                  key={label}
+                  label={label}
+                  value={
+                    <a href={url} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                      Open video
+                    </a>
+                  }
+                  visibility="public"
+                />
+              ) : null
+            )}
             <InfoRow
               label="ESPR compliance"
               value={p ? <StatusBadge status={p.espr_compliance} /> : null}

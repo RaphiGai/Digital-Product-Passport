@@ -29,6 +29,13 @@ const EMPTY = {
   care_instructions: '',
   repair_instructions: '',
   disposal_instructions: '',
+  reuse_instructions: '',
+  durability_score: '',
+  repairability_score: '',
+  care_video_url: '',
+  repair_video_url: '',
+  disposal_video_url: '',
+  reuse_video_url: '',
   status: 'draft',
   espr_compliance: 'draft',
   storytelling: [{ title: '', body: '' }]
@@ -83,6 +90,20 @@ export function Step1Product({ ctx, setCtx, next }) {
       setError(`Please fill all mandatory fields (${missing.length} missing).`);
       return;
     }
+    for (const [key, label] of [['durability_score', 'Durability'], ['repairability_score', 'Repairability']]) {
+      const v = form[key];
+      if (v !== '' && (Number.isNaN(Number(v)) || Number(v) < 0 || Number(v) > 10)) {
+        setError(`${label} score must be a number between 0 and 10.`);
+        return;
+      }
+    }
+    for (const key of ['care_video_url', 'repair_video_url', 'disposal_video_url', 'reuse_video_url']) {
+      const v = form[key]?.trim();
+      if (v && !/^https?:\/\//i.test(v)) {
+        setError('Video links must start with https:// (or http://).');
+        return;
+      }
+    }
     const story = form.storytelling
       .map((s) => ({ title: s.title.trim(), body: s.body.trim() }))
       .filter((s) => s.title || s.body);
@@ -90,6 +111,13 @@ export function Step1Product({ ctx, setCtx, next }) {
       {
         ...form,
         gtin: form.gtin || null,
+        reuse_instructions: form.reuse_instructions || null,
+        durability_score: form.durability_score === '' ? null : Number(form.durability_score),
+        repairability_score: form.repairability_score === '' ? null : Number(form.repairability_score),
+        care_video_url: form.care_video_url?.trim() || null,
+        repair_video_url: form.repair_video_url?.trim() || null,
+        disposal_video_url: form.disposal_video_url?.trim() || null,
+        reuse_video_url: form.reuse_video_url?.trim() || null,
         storytelling: story.length ? JSON.stringify(story) : null,
         owning_organization_ID: me?.organizationId
       },
@@ -150,15 +178,31 @@ export function Step1Product({ ctx, setCtx, next }) {
             </FieldRow>
           </FormSection>
 
-          <FormSection title="Care, repair & end-of-life" description="Mandatory ESPR lifecycle information. All appear publicly.">
-            <FieldRow label="Care instructions" required visibility="public" htmlFor="care" className="md:col-span-2">
+          <FormSection title="Care, repair, reuse & end-of-life" description="Mandatory ESPR lifecycle information. All appear publicly. Each block can have an optional how-to video link, shown only when set.">
+            <FieldRow label="Care & washing instructions" required visibility="public" htmlFor="care" className="md:col-span-2">
               <Textarea id="care" value={form.care_instructions} onChange={set('care_instructions')} />
+              <Input className="mt-2" value={form.care_video_url} onChange={set('care_video_url')} placeholder="Care/washing video link (optional, https://…)" />
             </FieldRow>
             <FieldRow label="Repair instructions" required visibility="public" htmlFor="repair">
               <Textarea id="repair" value={form.repair_instructions} onChange={set('repair_instructions')} />
+              <Input className="mt-2" value={form.repair_video_url} onChange={set('repair_video_url')} placeholder="Repair video link (optional, https://…)" />
             </FieldRow>
             <FieldRow label="Disposal instructions" required visibility="public" htmlFor="disposal">
               <Textarea id="disposal" value={form.disposal_instructions} onChange={set('disposal_instructions')} />
+              <Input className="mt-2" value={form.disposal_video_url} onChange={set('disposal_video_url')} placeholder="Disposal video link (optional, https://…)" />
+            </FieldRow>
+            <FieldRow label="Reuse instructions" visibility="public" htmlFor="reuse" className="md:col-span-2" hint="Second-life / reuse guidance (resale, donation, repurposing…).">
+              <Textarea id="reuse" value={form.reuse_instructions} onChange={set('reuse_instructions')} />
+              <Input className="mt-2" value={form.reuse_video_url} onChange={set('reuse_video_url')} placeholder="Reuse video link (optional, https://…)" />
+            </FieldRow>
+          </FormSection>
+
+          <FormSection title="Durability & repairability (ESPR)" description="ESPR scores on a 0–10 scale (one decimal). Shown publicly when set.">
+            <FieldRow label="Durability score" visibility="public" htmlFor="durability" hint="0–10 (e.g. 8.5). Leave empty if not assessed.">
+              <Input id="durability" type="number" min="0" max="10" step="0.1" value={form.durability_score} onChange={set('durability_score')} placeholder="8.5" />
+            </FieldRow>
+            <FieldRow label="Repairability score" visibility="public" htmlFor="repairability" hint="0–10 (e.g. 7.0). Leave empty if not assessed.">
+              <Input id="repairability" type="number" min="0" max="10" step="0.1" value={form.repairability_score} onChange={set('repairability_score')} placeholder="7.0" />
             </FieldRow>
           </FormSection>
 

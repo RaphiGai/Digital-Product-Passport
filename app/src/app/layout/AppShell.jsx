@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, Navigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { useMe } from '@/auth/useMe';
@@ -6,18 +6,20 @@ import { ApiError } from '@/api/client';
 import { AccountNotActivated } from '@/app/pages/AccountNotActivated';
 
 /**
- * Authenticated shell. Resolves me() once; on 403 (no active Users row) shows the
- * not-activated page; on other errors shows a minimal message. The Approuter handles
- * 401/login in production, so here we mainly guard the "logged in but unprovisioned" case.
+ * Authenticated shell. Resolves me() once. With the app-managed auth, a 401 (no
+ * session) sends the user to the login screen; a 403 (authenticated but no active
+ * Users row) shows the not-activated page. A user still flagged mustResetPassword
+ * is bounced to /login to complete the forced change.
  */
 export function AppShell() {
-  const { isLoading, error } = useMe();
+  const { data: me, isLoading, error } = useMe();
 
   if (isLoading) {
     return <div className="flex h-full items-center justify-center text-ink-muted">Loading…</div>;
   }
 
   if (error) {
+    if (error instanceof ApiError && error.status === 401) return <Navigate to="/login" replace />;
     if (error instanceof ApiError && error.status === 403) return <AccountNotActivated />;
     return (
       <div className="flex h-full items-center justify-center text-ink-muted">
@@ -25,6 +27,8 @@ export function AppShell() {
       </div>
     );
   }
+
+  if (me?.mustResetPassword) return <Navigate to="/login" replace />;
 
   return (
     <div className="flex h-full">

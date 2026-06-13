@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { LogOut } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useMe } from '@/auth/useMe';
+import { logout as apiLogout } from '@/auth/authApi';
 
 /** @param {string} [name] */
 function initials(name) {
@@ -14,6 +16,7 @@ function initials(name) {
 
 export function Topbar() {
   const { data: me } = useMe();
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -30,9 +33,13 @@ export function Topbar() {
     };
   }, [open]);
 
-  // Central Approuter logout (xs-app.json logoutEndpoint). Ends the session so the
-  // next request requires a fresh BTP/XSUAA login.
-  const logout = () => { window.location.href = '/do/logout'; };
+  // App-managed logout: clear the dpp_session cookie on the backend, drop the
+  // cached identity, then go to the login screen.
+  const logout = async () => {
+    await apiLogout();
+    qc.clear();
+    window.location.assign('/login');
+  };
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-end gap-4 border-b border-black/5 bg-card px-6">

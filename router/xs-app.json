@@ -1,12 +1,17 @@
 {
   "welcomeFile": "/index.html",
-  "authenticationMethod": "route",
-  "sessionTimeout": 30,
-  "logout": { "logoutEndpoint": "/do/logout" },
+  "authenticationMethod": "none",
   "routes": [
     {
       "source": "^/healthz$",
       "target": "/healthz",
+      "destination": "srv-api",
+      "authenticationType": "none",
+      "csrfProtection": false
+    },
+    {
+      "source": "^/auth/(.*)$",
+      "target": "/auth/$1",
       "destination": "srv-api",
       "authenticationType": "none",
       "csrfProtection": false
@@ -22,7 +27,7 @@
       "source": "^/odata/(.*)$",
       "target": "/odata/$1",
       "destination": "srv-api",
-      "authenticationType": "xsuaa",
+      "authenticationType": "none",
       "csrfProtection": false
     },
     {
@@ -43,7 +48,7 @@
     {
       "source": "^(.*)$",
       "localDir": "resources",
-      "authenticationType": "xsuaa"
+      "authenticationType": "none"
     }
   ]
 }

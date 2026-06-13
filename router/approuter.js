@@ -23,10 +23,10 @@ const ar = approuter();
 const CONSUMER_HTML = path.join(__dirname, 'resources', 'consumer.html');
 
 // Backend paths (forwarded to srv-api) — never serve locally / never fall back.
-const BACKEND = /^\/(odata|public|healthz)(\/|$)/;
-// Approuter-reserved OAuth paths — MUST be left untouched, otherwise rewriting
-// /login/callback breaks the auth handshake and causes an endless login loop.
-const RESERVED = /^\/(login|logout)(\/|$)/;
+// /auth/* is the app-managed login API (login/logout/change-password). /login is
+// NOT listed here: it is a client-side SPA route, served via the index.html
+// fallback below (auth is app-managed now, so there is no XSUAA OAuth handshake).
+const BACKEND = /^\/(odata|public|healthz|auth)(\/|$)/;
 // QR target: /public/dpp/<token> but NOT /public/dpp/<token>/qr.png
 const CONSUMER_NAV = /^\/public\/dpp\/[^/]+\/?$/;
 
@@ -43,9 +43,8 @@ ar.first.use((req, res, next) => {
     return;
   }
 
-  // 2) Leave backend API calls AND approuter OAuth paths (/login/callback,
-  //    /logout) untouched — never apply the SPA fallback to them.
-  if (BACKEND.test(url) || RESERVED.test(url)) return next();
+  // 2) Leave backend API calls untouched — never apply the SPA fallback to them.
+  if (BACKEND.test(url)) return next();
 
   // 3) SPA deep-link fallback: HTML navigation to a non-file path → index.html.
   const lastSegment = url.slice(url.lastIndexOf('/') + 1);

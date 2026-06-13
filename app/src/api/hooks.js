@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { odataCreate, odataUpdate, callAction, newId } from './client';
+import { odataCreate, odataUpdate, callAction, callUnboundAction, newId } from './client';
 
 /**
  * Create an entity, then invalidate the given query keys (e.g. the list + counts).
@@ -44,6 +44,20 @@ export function useAction(entitySet, opts = {}) {
     mutationFn: ({ key, action, payload }) => callAction(entitySet, key, action, payload),
     onSuccess: () => {
       (opts.invalidate ?? [[entitySet]]).forEach((k) => qc.invalidateQueries({ queryKey: k }));
+    }
+  });
+}
+
+/**
+ * Invoke an unbound action (createUser, resetUserPassword, deactivateUser, …).
+ * @param {{ invalidate?: any[][] }} [opts]
+ */
+export function useUnboundAction(opts = {}) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ action, payload }) => callUnboundAction(action, payload),
+    onSuccess: () => {
+      (opts.invalidate ?? []).forEach((k) => qc.invalidateQueries({ queryKey: k }));
     }
   });
 }

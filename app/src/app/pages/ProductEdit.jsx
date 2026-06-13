@@ -28,6 +28,7 @@ export function ProductEdit() {
     care_instructions: 500,
     repair_instructions: 500,
     disposal_instructions: 500,
+    reuse_instructions: 500,
     storytelling_title: 100,
     storytelling_body: 1000
   };
@@ -47,7 +48,9 @@ export function ProductEdit() {
         try {
           const parsed = JSON.parse(p.storytelling);
           if (Array.isArray(parsed) && parsed.length) storytelling = parsed;
-        } catch {}
+        } catch {
+          /* ignore malformed storytelling JSON */
+        }
       }
       setForm({
         product_type: p.product_type ?? 'finished',
@@ -63,6 +66,13 @@ export function ProductEdit() {
         care_instructions: p.care_instructions ?? '',
         repair_instructions: p.repair_instructions ?? '',
         disposal_instructions: p.disposal_instructions ?? '',
+        reuse_instructions: p.reuse_instructions ?? '',
+        durability_score: p.durability_score ?? '',
+        repairability_score: p.repairability_score ?? '',
+        care_video_url: p.care_video_url ?? '',
+        repair_video_url: p.repair_video_url ?? '',
+        disposal_video_url: p.disposal_video_url ?? '',
+        reuse_video_url: p.reuse_video_url ?? '',
         status: p.status ?? 'draft',
         espr_compliance: p.espr_compliance ?? 'draft',
         storytelling
@@ -93,6 +103,21 @@ export function ProductEdit() {
       setMsg({ kind: 'error', text: 'Product name is required.' });
       return;
     }
+    for (const [key, label] of [['durability_score', 'Durability'], ['repairability_score', 'Repairability']]) {
+      const v = form[key];
+      if (v !== '' && (Number.isNaN(Number(v)) || Number(v) < 0 || Number(v) > 10)) {
+        setMsg({ kind: 'error', text: `${label} score must be a number between 0 and 10.` });
+        return;
+      }
+    }
+    const videoFields = ['care_video_url', 'repair_video_url', 'disposal_video_url', 'reuse_video_url'];
+    for (const key of videoFields) {
+      const v = form[key]?.trim();
+      if (v && !/^https?:\/\//i.test(v)) {
+        setMsg({ kind: 'error', text: 'Video links must start with https:// (or http://).' });
+        return;
+      }
+    }
     const story = form.storytelling
       .map((s) => ({ title: s.title.trim(), body: s.body.trim() }))
       .filter((s) => s.title || s.body);
@@ -113,6 +138,13 @@ export function ProductEdit() {
           care_instructions: form.care_instructions || null,
           repair_instructions: form.repair_instructions || null,
           disposal_instructions: form.disposal_instructions || null,
+          reuse_instructions: form.reuse_instructions || null,
+          durability_score: form.durability_score === '' ? null : Number(form.durability_score),
+          repairability_score: form.repairability_score === '' ? null : Number(form.repairability_score),
+          care_video_url: form.care_video_url?.trim() || null,
+          repair_video_url: form.repair_video_url?.trim() || null,
+          disposal_video_url: form.disposal_video_url?.trim() || null,
+          reuse_video_url: form.reuse_video_url?.trim() || null,
           status: form.status,
           espr_compliance: form.espr_compliance,
           storytelling: story.length ? JSON.stringify(story) : null
@@ -243,14 +275,16 @@ export function ProductEdit() {
         </FormSection>
 
         <FormSection
-          title="Care, repair & end-of-life"
-          description="Mandatory ESPR lifecycle information. All appear publicly."
+          title="Care, repair, reuse & end-of-life"
+          description="Mandatory ESPR lifecycle information. All appear publicly. Each block can have an optional how-to video link, shown only when set."
         >
-          <FieldRow label="Care instructions" visibility="public" htmlFor="care" className="md:col-span-2" hint={remaining(form.care_instructions, LIMITS.care_instructions)}>
+          <FieldRow label="Care & washing instructions" visibility="public" htmlFor="care" className="md:col-span-2" hint={remaining(form.care_instructions, LIMITS.care_instructions)}>
             <Textarea id="care" value={form.care_instructions} onChange={set('care_instructions')} maxLength={LIMITS.care_instructions} />
+            <Input className="mt-2" value={form.care_video_url} onChange={set('care_video_url')} placeholder="Care/washing video link (optional, https://…)" />
           </FieldRow>
           <FieldRow label="Repair instructions" visibility="public" htmlFor="repair" hint={remaining(form.repair_instructions, LIMITS.repair_instructions)}>
             <Textarea id="repair" value={form.repair_instructions} onChange={set('repair_instructions')} maxLength={LIMITS.repair_instructions} />
+            <Input className="mt-2" value={form.repair_video_url} onChange={set('repair_video_url')} placeholder="Repair video link (optional, https://…)" />
           </FieldRow>
           <FieldRow label="Disposal instructions" visibility="public" htmlFor="disposal" hint={remaining(form.disposal_instructions, LIMITS.disposal_instructions)}>
             <Textarea
@@ -259,6 +293,23 @@ export function ProductEdit() {
               onChange={set('disposal_instructions')}
               maxLength={LIMITS.disposal_instructions}
             />
+            <Input className="mt-2" value={form.disposal_video_url} onChange={set('disposal_video_url')} placeholder="Disposal video link (optional, https://…)" />
+          </FieldRow>
+          <FieldRow label="Reuse instructions" visibility="public" htmlFor="reuse" className="md:col-span-2" hint={remaining(form.reuse_instructions, LIMITS.reuse_instructions)}>
+            <Textarea id="reuse" value={form.reuse_instructions} onChange={set('reuse_instructions')} maxLength={LIMITS.reuse_instructions} placeholder="Second-life / reuse guidance (resale, donation, repurposing…)" />
+            <Input className="mt-2" value={form.reuse_video_url} onChange={set('reuse_video_url')} placeholder="Reuse video link (optional, https://…)" />
+          </FieldRow>
+        </FormSection>
+
+        <FormSection
+          title="Durability & repairability (ESPR)"
+          description="ESPR scores on a 0–10 scale (one decimal). Shown publicly when set."
+        >
+          <FieldRow label="Durability score" visibility="public" htmlFor="durability" hint="0–10 (e.g. 8.5). Leave empty if not assessed.">
+            <Input id="durability" type="number" min="0" max="10" step="0.1" value={form.durability_score} onChange={set('durability_score')} />
+          </FieldRow>
+          <FieldRow label="Repairability score" visibility="public" htmlFor="repairability" hint="0–10 (e.g. 7.0). Leave empty if not assessed.">
+            <Input id="repairability" type="number" min="0" max="10" step="0.1" value={form.repairability_score} onChange={set('repairability_score')} />
           </FieldRow>
         </FormSection>
 

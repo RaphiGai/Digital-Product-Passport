@@ -7,6 +7,7 @@ import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { FormSection, FieldRow, Input, Select } from '@/ui/Form';
+import { ImageUpload } from '@/ui/ImageUpload';
 import { BomEditor } from '@/ui/BomEditor';
 
 export function VariantEdit() {
@@ -39,6 +40,7 @@ export function VariantEdit() {
         gtin: v.gtin ?? '',
         weight_g: v.weight_g ?? '',
         image_url: v.image_url ?? '',
+        image_data: v.image_data ?? '',
         status: v.status ?? 'active'
       });
     }
@@ -74,6 +76,7 @@ export function VariantEdit() {
           gtin: form.gtin || null,
           weight_g: form.weight_g === '' ? null : Number(form.weight_g),
           image_url: form.image_url?.trim() || null,
+          image_data: form.image_data || null,
           status: form.status
         }
       },
@@ -126,9 +129,19 @@ export function VariantEdit() {
             hint="Mass basis for rolling component CO₂/recycled content up to this product">
             <Input id="weight" type="number" value={form.weight_g} onChange={set('weight_g')} />
           </FieldRow>
-          <FieldRow label="Image URL" visibility="public" htmlFor="img"
-            hint="Colour-correct product image — shown in the consumer story for this variant.">
-            <Input id="img" value={form.image_url} onChange={set('image_url')} />
+          <FieldRow label="Product image" visibility="public" htmlFor="img" className="md:col-span-2"
+            hint="Colour-correct product image — shown top-right in the green header of the consumer passport.">
+            <ImageUpload
+              value={form.image_data || null}
+              onChange={(dataUrl) => setForm((f) => ({ ...f, image_data: dataUrl ?? '' }))}
+            />
+            <Input
+              id="img"
+              className="mt-2"
+              value={form.image_url}
+              onChange={set('image_url')}
+              placeholder="…or paste an image URL (https://…)"
+            />
           </FieldRow>
           <FieldRow label="Status" visibility="internal" htmlFor="status">
             <Select

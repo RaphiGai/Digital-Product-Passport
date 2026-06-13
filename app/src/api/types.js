@@ -18,6 +18,20 @@
  * @property {UserRole} role
  * @property {string} organizationId
  * @property {string} tenantId
+ * @property {boolean} mustResetPassword
+ */
+
+/**
+ * A user row as exposed by the DPPService.Users projection (no credential fields).
+ * @typedef {Object} User
+ * @property {string} ID
+ * @property {string} username
+ * @property {string} email
+ * @property {string} [display_name]
+ * @property {UserRole} role
+ * @property {boolean} active
+ * @property {boolean} must_reset_password
+ * @property {string} [organization_ID]
  */
 
 /** @typedef {'finished' | 'material' | 'component' | 'packaging'} ProductType */
