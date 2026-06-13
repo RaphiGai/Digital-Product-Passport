@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
@@ -7,26 +7,11 @@ import path from 'node:path';
 // app always uses relative paths (/odata, /public, /healthz) — identical in both worlds.
 const BACKEND = 'http://localhost:4004';
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
-
-  // Local-only: inject Basic Auth for the CAP mocked-auth provider so app code stays
-  // auth-agnostic. Pick a mock user via VITE_DEV_USER (default alice.advanced), password `x`.
-  // In production the Approuter terminates auth — no header is injected there.
-  const devUser = env.VITE_DEV_USER || 'alice.advanced';
-  const basicAuth = 'Basic ' + Buffer.from(`${devUser}:x`).toString('base64');
-
-  const withAuth = (target) => ({
-    target,
-    changeOrigin: true,
-    configure: (proxy) => {
-      proxy.on('proxyReq', (proxyReq) => {
-        if (!proxyReq.getHeader('authorization')) {
-          proxyReq.setHeader('authorization', basicAuth);
-        }
-      });
-    }
-  });
+export default defineConfig(() => {
+  // The app uses the backend's own username/password login (cookie `dpp_session`).
+  // We forward /auth (login/logout/change-password) and /odata to the backend and
+  // let the Set-Cookie flow back to the browser; /login is a SPA route (NOT proxied).
+  const toBackend = { target: BACKEND, changeOrigin: true, cookieDomainRewrite: '' };
 
   return {
     plugins: [react()],
@@ -36,7 +21,8 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       proxy: {
-        '/odata': withAuth(BACKEND),
+        '/odata': toBackend,
+        '/auth': toBackend,
         // The QR code points here (/public/dpp/:token). A browser navigating to it
         // (Accept: text/html) should get the rendered consumer page; the page's own
         // JSON fetch and the qr.png image fall through to the backend.

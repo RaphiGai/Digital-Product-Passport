@@ -56,6 +56,9 @@ export function keyLiteral(key) {
 async function request(path, init) {
   const res = await fetch(path, {
     ...init,
+    // Send the app-managed dpp_session cookie on every call (same-origin in prod,
+    // via the Vite proxy in dev).
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
       ...(init && init.body ? { 'Content-Type': 'application/json' } : {}),
@@ -64,6 +67,11 @@ async function request(path, init) {
   });
 
   if (!res.ok) {
+    // No (valid) session → bounce to the login screen. The /auth/* endpoints
+    // handle their own 401s (wrong credentials), so they opt out via init.noAuthRedirect.
+    if (res.status === 401 && !(init && init.noAuthRedirect)) {
+      redirectToLogin();
+    }
     let body = null;
     try {
       body = await res.json();
@@ -76,6 +84,13 @@ async function request(path, init) {
 
   if (res.status === 204) return undefined;
   return res.json();
+}
+
+/** Navigate the browser to the SPA login route (full navigation; guards against loops). */
+function redirectToLogin() {
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    window.location.assign('/login');
+  }
 }
 
 /**
@@ -165,6 +180,19 @@ export function callAction(entitySet, key, action, payload) {
  */
 export function callFunction(fn) {
   return request(`${ODATA_BASE}/${fn}`);
+}
+
+/**
+ * Invoke an unbound action, e.g. callUnboundAction('createUser', { username, … }).
+ * Unbound actions POST to `${ODATA_BASE}/${action}` (no DPPService. prefix, no key).
+ * @param {string} action
+ * @param {unknown} [payload]
+ */
+export function callUnboundAction(action, payload) {
+  return request(`${ODATA_BASE}/${action}`, {
+    method: 'POST',
+    body: JSON.stringify(payload || {})
+  });
 }
 
 /**

@@ -18,11 +18,16 @@ import { DppDetail } from './pages/DppDetail';
 import { ComingSoon } from './pages/ComingSoon';
 import { BatchEdit } from './pages/BatchEdit';
 import { PartnerEdit } from './pages/PartnerEdit';
+import { Login } from './pages/Login';
+import { Settings } from './pages/Settings';
 
 export function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public login route — rendered OUTSIDE AppShell (no me() / no auth gate). */}
+        <Route path="/login" element={<Login />} />
+
         <Route element={<AppShell />}>
           <Route index element={<Dashboard />} />
 
@@ -48,7 +53,7 @@ export function App() {
           {/* Sidebar items without backend yet */}
           <Route path="validation" element={<ComingSoon title="Validation" />} />
           <Route path="reports" element={<ComingSoon title="Reports" />} />
-          <Route path="settings" element={<ComingSoon title="Settings" />} />
+          <Route path="settings" element={<Settings />} />
 
           <Route path="*" element={<ComingSoon title="Not found" />} />
         </Route>

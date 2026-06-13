@@ -6,8 +6,9 @@ import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Banner } from '@/ui/Breadcrumb';
 import { FormSection, FieldRow, Input, Select } from '@/ui/Form';
+import { ImageUpload } from '@/ui/ImageUpload';
 
-const EMPTY = { color: '', size: '', sku: '', gtin: '', weight_g: '', image_url: '', status: 'active' };
+const EMPTY = { color: '', size: '', sku: '', gtin: '', weight_g: '', image_url: '', image_data: '', status: 'active' };
 
 /**
  * Add one or more variants to ctx.productId. Reused by the wizard and the focused
@@ -55,6 +56,7 @@ export function Step2Variant({ ctx, setCtx, onPrimary, primaryLabel, onBack }) {
         gtin: form.gtin || null,
         weight_g: form.weight_g ? Number(form.weight_g) : null,
         image_url: form.image_url.trim() || null,
+        image_data: form.image_data || null,
         status: form.status
       },
       { onError: (err) => setError(err instanceof ApiError ? err.message : 'Could not save the variant.') }
@@ -91,9 +93,19 @@ export function Step2Variant({ ctx, setCtx, onPrimary, primaryLabel, onBack }) {
             hint="Mass basis for rolling component CO₂/recycled content up to this product">
             <Input id="weight" type="number" value={form.weight_g} onChange={set('weight_g')} placeholder="180" />
           </FieldRow>
-          <FieldRow label="Image URL" visibility="public" htmlFor="img" className="md:col-span-2"
-            hint="Colour-correct product image — shown in the consumer story for this variant.">
-            <Input id="img" value={form.image_url} onChange={set('image_url')} placeholder="https://…/product-blue.jpg" />
+          <FieldRow label="Product image" visibility="public" htmlFor="img" className="md:col-span-2"
+            hint="Colour-correct product image — shown top-right in the green header of the consumer passport.">
+            <ImageUpload
+              value={form.image_data || null}
+              onChange={(dataUrl) => setForm((f) => ({ ...f, image_data: dataUrl ?? '' }))}
+            />
+            <Input
+              id="img"
+              className="mt-2"
+              value={form.image_url}
+              onChange={set('image_url')}
+              placeholder="…or paste an image URL (https://…)"
+            />
           </FieldRow>
           <FieldRow label="Status" visibility="internal" htmlFor="status">
             <Select

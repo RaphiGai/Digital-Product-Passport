@@ -9,7 +9,8 @@ import { Badge, StatusBadge } from '@/ui/Badge';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { Textarea } from '@/ui/Form';
 import { RequireRole } from '@/auth/RequireRole';
-import { ChevronRight } from 'lucide-react';
+import { printLabels } from '@/lib/printLabels';
+import { ChevronRight, Printer } from 'lucide-react';
 
 /** @param {{ label: string, value: React.ReactNode }} props */
 function Row({ label, value }) {
@@ -81,6 +82,14 @@ export function DppDetail() {
     queryKey: ['DPPs', id, 'qr'],
     queryFn: () => callFunction(`DPPs('${id}')/DPPService.generateQRCode`),
     enabled: !!dpp?.qr_token
+  });
+
+  // Owning organization's website — printed on the QR label.
+  const orgQ = useQuery({
+    queryKey: ['Organizations', dpp?.product?.owning_organization_ID],
+    queryFn: () =>
+      odataGet('Organizations', dpp.product.owning_organization_ID, { select: ['ID', 'website_url'] }),
+    enabled: !!dpp?.product?.owning_organization_ID
   });
 
   const invalidate = [['DPPs', id], ['DPPs']];
@@ -342,9 +351,12 @@ export function DppDetail() {
               <Row label="Fibre composition" value={product?.fibre_composition} />
               <Row label="Country of origin" value={product?.country_of_origin} />
               <Row label="Substances of concern" value={product?.substances_of_concern} />
-              <Row label="Care" value={product?.care_instructions} />
+              <Row label="Care & washing" value={product?.care_instructions} />
               <Row label="Repair" value={product?.repair_instructions} />
+              <Row label="Reuse" value={product?.reuse_instructions} />
               <Row label="Disposal" value={product?.disposal_instructions} />
+              <Row label="Durability score" value={product?.durability_score != null ? `${deNum(product.durability_score, 1)} / 10` : null} />
+              <Row label="Repairability score" value={product?.repairability_score != null ? `${deNum(product.repairability_score, 1)} / 10` : null} />
               <Row label="ESPR compliance" value={product?.espr_compliance} />
             </div>
           </Card>
@@ -353,6 +365,13 @@ export function DppDetail() {
           {variant && (
             <Card>
               <CardTitle>Variant</CardTitle>
+              {(variant.image_data || variant.image_url) && (
+                <img
+                  src={variant.image_data || variant.image_url}
+                  alt={variant.sku || 'Variant'}
+                  className="mb-3 mt-3 h-28 w-28 rounded-lg border border-black/10 object-cover"
+                />
+              )}
               <div className="mt-2">
                 <Row label="Colour" value={variant.color} />
                 <Row label="Size" value={variant.size} />
@@ -430,13 +449,38 @@ export function DppDetail() {
           <Card>
             <CardTitle>QR code</CardTitle>
             {qrQ.data?.png ? (
-              <div className="mt-3 flex flex-col items-center gap-2">
+              <div className="mt-3 flex flex-col items-center gap-3">
                 <img
                   src={`data:image/png;base64,${qrQ.data.png}`}
                   alt="DPP QR code"
                   className="h-44 w-44 rounded-lg border border-black/5"
                 />
-                <span className="text-xs text-ink-muted">Printable label QR</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const ok = printLabels(
+                      [
+                        {
+                          token: dpp.qr_token,
+                          name: product?.name,
+                          brand: product?.brand,
+                          dpp_id: dpp.ID,
+                          product_id: product?.ID,
+                          batch_number: batch?.batch_number,
+                          serial_number: item?.serial_number,
+                          upi: item?.upi,
+                          website: orgQ.data?.website_url
+                        }
+                      ],
+                      { title: `QR label — ${product?.name ?? dpp.ID}` }
+                    );
+                    if (!ok) setMsg({ kind: 'error', text: 'Could not open the print window — allow pop-ups for this site.' });
+                  }}
+                >
+                  <Printer className="h-4 w-4" /> Print label
+                </Button>
+                <span className="text-xs text-ink-muted">Label includes product &amp; identification data</span>
               </div>
             ) : (
               <p className="mt-3 text-sm text-ink-muted">

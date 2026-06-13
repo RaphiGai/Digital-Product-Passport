@@ -17,12 +17,19 @@ export const PRODUCT_CATALOGUE = [
   { key: 'fibre_composition', label: 'FibreComposition', mandatory: true, visibility: 'public' },
   { key: 'care_instructions', label: 'CareInstructions', mandatory: true, visibility: 'public' },
   { key: 'repair_instructions', label: 'RepairInstructions', mandatory: true, visibility: 'public' },
+  { key: 'reuse_instructions', label: 'ReuseInstructions', mandatory: false, visibility: 'public' },
   {
     key: 'disposal_instructions',
     label: 'DisposalInstructions',
     mandatory: true,
     visibility: 'public'
   },
+  { key: 'durability_score', label: 'DurabilityScore', mandatory: false, visibility: 'public' },
+  { key: 'repairability_score', label: 'RepairabilityScore', mandatory: false, visibility: 'public' },
+  { key: 'care_video_url', label: 'CareVideoLink', mandatory: false, visibility: 'public' },
+  { key: 'repair_video_url', label: 'RepairVideoLink', mandatory: false, visibility: 'public' },
+  { key: 'disposal_video_url', label: 'DisposalVideoLink', mandatory: false, visibility: 'public' },
+  { key: 'reuse_video_url', label: 'ReuseVideoLink', mandatory: false, visibility: 'public' },
   { key: 'country_of_origin', label: 'CountryOfOrigin', mandatory: true, visibility: 'public' },
   {
     key: 'substances_of_concern',
@@ -70,6 +77,12 @@ export const ESPR_STATUSES = [
   { value: 'in_review', label: 'In review', hint: 'Documentation being gathered' },
   { value: 'compliant', label: 'Compliant', hint: 'All ESPR requirements met' },
   { value: 'non_compliant', label: 'Non-compliant', hint: 'One or more requirements not met' }
+];
+
+/** App user roles for the Settings → user management screen. */
+export const USER_ROLES = [
+  { value: 'company_user', label: 'User (read-only)', hint: 'Can view everything in the organisation, but cannot edit.' },
+  { value: 'company_advanced', label: 'Advanced (full access)', hint: 'Full access, incl. creating/managing users.' }
 ];
 
 export const PARTNER_ROLES = [

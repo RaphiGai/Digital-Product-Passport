@@ -11,7 +11,11 @@ import {
   ExternalLink,
   BadgeCheck,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Repeat,
+  PlayCircle,
+  Gauge,
+  Fingerprint
 } from 'lucide-react';
 
 /**
@@ -161,11 +165,21 @@ function Passport({ dpp }) {
           {b.production_date && <KeyVal label="Produced" value={deDate(b.production_date)} />}
         </Section>
 
-        <Section icon={Droplets} title="Care, repair & end-of-life">
-          <CareBlock icon={Droplets} label="Care" text={p.care_instructions} />
-          <CareBlock icon={Wrench} label="Repair" text={p.repair_instructions} />
-          <CareBlock icon={Trash2} label="End-of-life" text={p.disposal_instructions} />
-        </Section>
+        {(p.durability_score != null || p.repairability_score != null) && (
+          <Section icon={Gauge} title="Durability & repairability">
+            <ScoreBar label="Durability" score={p.durability_score} />
+            <ScoreBar label="Repairability" score={p.repairability_score} />
+          </Section>
+        )}
+
+        {hasCareInfo(p) && (
+          <Section icon={Droplets} title="Care, repair, reuse & end-of-life">
+            <CareBlock icon={Droplets} label="Care & washing" text={p.care_instructions} videoUrl={p.care_video_url} />
+            <CareBlock icon={Wrench} label="Repair" text={p.repair_instructions} videoUrl={p.repair_video_url} />
+            <CareBlock icon={Repeat} label="Reuse" text={p.reuse_instructions} videoUrl={p.reuse_video_url} />
+            <CareBlock icon={Trash2} label="End-of-life" text={p.disposal_instructions} videoUrl={p.disposal_video_url} />
+          </Section>
+        )}
 
         {dpp.materials?.length > 0 && (
           <Section icon={Layers} title="What it's made of">
@@ -175,13 +189,6 @@ function Passport({ dpp }) {
 
         {p.storytelling?.length > 0 && (
           <Section icon={Sparkles} title="The story">
-            {v.image_url && (
-              <img
-                src={v.image_url}
-                alt={p.name ?? 'Product'}
-                className="mb-3 aspect-[4/3] w-full rounded-xl border border-black/5 object-cover"
-              />
-            )}
             <div className="space-y-3">
               {p.storytelling.map((s, i) => (
                 <div key={i}>
@@ -213,6 +220,8 @@ function Passport({ dpp }) {
           </Section>
         )}
 
+        <Identification ident={dpp.identification} />
+
         <Authenticity dpp={dpp} />
       </div>
 
@@ -225,22 +234,34 @@ function Passport({ dpp }) {
 }
 
 function Hero({ product, variant, espr }) {
+  const image = variant.image_data || variant.image_url;
   return (
     <header className="-mx-4 rounded-b-3xl bg-gradient-to-br from-brand-600 to-brand-800 px-6 pb-7 pt-8 text-white shadow-sm">
-      <div className="flex items-center gap-2 text-brand-100">
-        <ShieldCheck className="h-4 w-4" />
-        <span className="text-xs font-medium uppercase tracking-wider">Digital Product Passport</span>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-brand-100">
+            <ShieldCheck className="h-4 w-4" />
+            <span className="text-xs font-medium uppercase tracking-wider">Digital Product Passport</span>
+          </div>
+          <h1 className="mt-3 text-2xl font-semibold leading-tight">{product.name ?? 'Product'}</h1>
+          <p className="mt-1 text-sm text-brand-100">
+            {[product.brand, product.category, product.model].filter(Boolean).join(' · ')}
+          </p>
+          {(variant.color || variant.size) && (
+            <p className="mt-0.5 text-xs text-brand-200">
+              {[variant.color, variant.size].filter(Boolean).join(' / ')}
+              {variant.sku ? ` · ${variant.sku}` : ''}
+            </p>
+          )}
+        </div>
+        {image && (
+          <img
+            src={image}
+            alt={product.name ?? 'Product'}
+            className="h-24 w-24 shrink-0 rounded-2xl border border-white/25 object-cover shadow-md sm:h-28 sm:w-28"
+          />
+        )}
       </div>
-      <h1 className="mt-3 text-2xl font-semibold leading-tight">{product.name ?? 'Product'}</h1>
-      <p className="mt-1 text-sm text-brand-100">
-        {[product.brand, product.category, product.model].filter(Boolean).join(' · ')}
-      </p>
-      {(variant.color || variant.size) && (
-        <p className="mt-0.5 text-xs text-brand-200">
-          {[variant.color, variant.size].filter(Boolean).join(' / ')}
-          {variant.sku ? ` · ${variant.sku}` : ''}
-        </p>
-      )}
       {product.description && (
         <p className="mt-3 text-sm leading-relaxed text-white/90">{product.description}</p>
       )}
@@ -304,14 +325,53 @@ function KeyVal({ label, value }) {
   );
 }
 
-function CareBlock({ icon: Icon, label, text }) {
-  if (!text) return null;
+/** True when the product has any care/repair/reuse/end-of-life text or video. */
+function hasCareInfo(p) {
+  return Boolean(
+    p.care_instructions || p.care_video_url ||
+    p.repair_instructions || p.repair_video_url ||
+    p.reuse_instructions || p.reuse_video_url ||
+    p.disposal_instructions || p.disposal_video_url
+  );
+}
+
+function CareBlock({ icon: Icon, label, text, videoUrl }) {
+  if (!text && !videoUrl) return null;
   return (
     <div className="flex gap-3 border-t border-black/5 py-2.5 first:border-0 first:pt-0">
       <Icon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</p>
-        <p className="mt-0.5 text-sm text-ink">{text}</p>
+        {text && <p className="mt-0.5 text-sm text-ink">{text}</p>}
+        {videoUrl && (
+          <a
+            href={videoUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
+          >
+            <PlayCircle className="h-4 w-4" /> Watch video
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** ESPR score (0–10) rendered as a labelled progress bar. */
+function ScoreBar({ label, score }) {
+  if (score == null || score === '') return null;
+  const n = Number(score);
+  if (Number.isNaN(n)) return null;
+  const pct = Math.max(0, Math.min(100, (n / 10) * 100));
+  return (
+    <div className="border-t border-black/5 py-3 first:border-0 first:pt-0">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-ink">{label}</span>
+        <span className="text-sm font-semibold text-ink">{deNum(n, 1)} / 10</span>
+      </div>
+      <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+        <div className="h-2 rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -360,6 +420,31 @@ function Materials({ items, depth = 0 }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Product identification & traceability (US6.11). Renders only the fields present. */
+function Identification({ ident }) {
+  if (!ident) return null;
+  const rows = [
+    ['Product ID', ident.product_id],
+    ['Batch number', ident.batch_number],
+    ['Serial number', ident.serial_number],
+    ['UPI', ident.upi],
+    ['Passport ID', ident.dpp_id]
+  ].filter(([, v]) => v);
+  if (!rows.length) return null;
+  return (
+    <Section icon={Fingerprint} title="Identification & traceability">
+      <dl>
+        {rows.map(([label, value]) => (
+          <div key={label} className="border-t border-black/5 py-2.5 first:border-0 first:pt-0">
+            <dt className="text-xs uppercase tracking-wide text-ink-muted">{label}</dt>
+            <dd className="mt-0.5 break-all font-mono text-sm text-ink">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Section>
   );
 }
 

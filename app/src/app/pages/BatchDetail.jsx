@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
+import { Printer } from 'lucide-react';
 import { odataGet, odataList } from '@/api/client';
+import { printLabels } from '@/lib/printLabels';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
-import { Breadcrumb } from '@/ui/Breadcrumb';
+import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 
 function InfoRow({ label, value, visibility }) {
   return (
@@ -24,6 +27,7 @@ function InfoRow({ label, value, visibility }) {
 
 export function BatchDetail() {
   const { pid, vid, bid } = useParams();
+  const [msg, setMsg] = useState(null);
 
   const batchQ = useQuery({
     queryKey: ['Batches', 'one', bid],
@@ -47,9 +51,16 @@ export function BatchDetail() {
     queryFn: () =>
       odataList('DPPs', {
         filter: `batch_ID eq '${bid}'`,
-        select: ['ID', 'item_ID', 'status', 'current_version'],
+        select: ['ID', 'item_ID', 'status', 'current_version', 'qr_token'],
         top: 1000
       })
+  });
+  // Owning organization's website — printed on the QR labels.
+  const orgQ = useQuery({
+    queryKey: ['Organizations', productQ.data?.owning_organization_ID],
+    queryFn: () =>
+      odataGet('Organizations', productQ.data.owning_organization_ID, { select: ['ID', 'website_url'] }),
+    enabled: !!productQ.data?.owning_organization_ID
   });
 
   const b = batchQ.data;
@@ -59,6 +70,36 @@ export function BatchDetail() {
   const dpps = dppsQ.data ?? [];
   const dppByItem = Object.fromEntries(dpps.map((d) => [d.item_ID, d]));
   const publishedCount = dpps.filter((d) => d.status === 'published').length;
+
+  // Printable QR labels for every item that already has a QR token (US6.13).
+  const printableLabels = items
+    .map((it) => {
+      const d = dppByItem[it.ID];
+      return d?.qr_token
+        ? {
+            token: d.qr_token,
+            name: p?.name,
+            brand: p?.brand,
+            dpp_id: d.ID,
+            product_id: p?.ID,
+            batch_number: b?.batch_number,
+            serial_number: it.serial_number,
+            upi: it.upi,
+            website: orgQ.data?.website_url
+          }
+        : null;
+    })
+    .filter(Boolean);
+
+  const handlePrintLabels = () => {
+    const ok = printLabels(printableLabels, { title: `QR labels — batch ${b?.batch_number ?? bid}` });
+    if (!ok) {
+      setMsg({
+        kind: 'error',
+        text: 'Could not open the print window — allow pop-ups for this site, or create/publish item DPPs first.'
+      });
+    }
+  };
 
   if (batchQ.isLoading || variantQ.isLoading) return <p className="text-ink-muted">Loading…</p>;
   if (!b) return <p className="text-ink-muted">Batch not found.</p>;
@@ -102,6 +143,8 @@ export function BatchDetail() {
           </Link>
         </div>
       </div>
+
+      {msg && <Banner kind={msg.kind}>{msg.text}</Banner>}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Batch details */}
@@ -153,15 +196,22 @@ export function BatchDetail() {
 
       {/* Items */}
       <Card className="p-0">
-        <div className="px-5 pt-5 pb-3">
-          <CardTitle>Items</CardTitle>
-          <p className="mt-0.5 text-xs text-ink-muted">
-            {itemsQ.isLoading
-              ? '…'
-              : `${items.length} item${items.length !== 1 ? 's' : ''}`}
-            {dpps.length > 0 &&
-              ` · ${publishedCount} of ${dpps.length} DPP${dpps.length !== 1 ? 's' : ''} published`}
-          </p>
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+          <div>
+            <CardTitle>Items</CardTitle>
+            <p className="mt-0.5 text-xs text-ink-muted">
+              {itemsQ.isLoading
+                ? '…'
+                : `${items.length} item${items.length !== 1 ? 's' : ''}`}
+              {dpps.length > 0 &&
+                ` · ${publishedCount} of ${dpps.length} DPP${dpps.length !== 1 ? 's' : ''} published`}
+            </p>
+          </div>
+          {printableLabels.length > 0 && (
+            <Button variant="outline" size="sm" onClick={handlePrintLabels}>
+              <Printer className="h-4 w-4" /> Print all labels ({printableLabels.length})
+            </Button>
+          )}
         </div>
 
         {items.length > 0 && (
