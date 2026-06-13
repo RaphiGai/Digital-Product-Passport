@@ -73,7 +73,7 @@ export function VariantView() {
             <Button variant="ghost">Batches</Button>
           </Link>
           <Link to={`/products/${pid}/variants/${vid}`}>
-            <Button variant="outline">Edit variant</Button>
+            <Button variant="outline">Edit</Button>
           </Link>
         </div>
       </div>

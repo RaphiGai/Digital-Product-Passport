@@ -93,6 +93,12 @@ export function ProductEdit() {
       setMsg({ kind: 'error', text: 'Product name is required.' });
       return;
     }
+
+    if (form.gtin && form.gtin.length < 8) {
+      setMsg({ kind: 'error', text: 'GTIN must contain at least 8 digits.' });
+      return;
+    }
+
     const story = form.storytelling
       .map((s) => ({ title: s.title.trim(), body: s.body.trim() }))
       .filter((s) => s.title || s.body);
@@ -180,18 +186,27 @@ export function ProductEdit() {
           <FieldRow label="Model" visibility="public" htmlFor="model" hint="Season or model line.">
             <Input id="model" value={form.model} onChange={set('model')} maxLength={LIMITS.model} />
           </FieldRow>
-          <FieldRow label="GTIN" visibility="internal" htmlFor="gtin">
+          <FieldRow
+            label="GTIN"
+            visibility="internal"
+            htmlFor="gtin"
+            hint={
+              form.gtin && form.gtin.length < 8
+                ? 'GTIN must contain at least 8 digits.'
+                : remaining(form.gtin, LIMITS.gtin)
+            }
+          >
             <Input
               id="gtin"
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              maxLength={14}
+              maxLength={LIMITS.gtin}
               value={form.gtin}
               onChange={(e) =>
                 setForm((f) => ({
                   ...f,
-                  gtin: e.target.value.replace(/\D/g, '')
+                  gtin: e.target.value.replace(/\D/g, '').slice(0, LIMITS.gtin)
                 }))
               }
             />

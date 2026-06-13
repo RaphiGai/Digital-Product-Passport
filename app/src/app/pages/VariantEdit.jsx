@@ -9,33 +9,47 @@ import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { FormSection, FieldRow, Input, Select } from '@/ui/Form';
 import { BomEditor } from '@/ui/BomEditor';
 
+const LIMITS = {
+  color: 70,
+  size: 30,
+  gtin: 14,
+  image_url: 500
+};
+
 export function VariantEdit() {
   const { pid, vid } = useParams();
   const navigate = useNavigate();
   const [form, setForm] = useState(null);
   const [msg, setMsg] = useState(null);
 
+  const remaining = (value, max) => `${max - (value?.length ?? 0)} characters remaining`;
+
   const variantQ = useQuery({
     queryKey: ['ProductVariants', 'one', vid],
     queryFn: () => odataGet('ProductVariants', vid)
   });
+
   const productQ = useQuery({
     queryKey: ['Products', pid, 'name'],
     queryFn: () => odataGet('Products', pid, { select: ['ID', 'name'] })
   });
+
   const siblingsQ = useQuery({
     queryKey: ['ProductVariants', pid],
-    queryFn: () => odataList('ProductVariants', { filter: `product_ID eq '${pid}'`, orderby: 'sku', top: 200 })
+    queryFn: () =>
+      odataList('ProductVariants', {
+        filter: `product_ID eq '${pid}'`,
+        orderby: 'sku',
+        top: 200
+      })
   });
 
-  // Seed the form once the variant loads.
   useEffect(() => {
     if (variantQ.data && !form) {
       const v = variantQ.data;
       setForm({
         color: v.color ?? '',
         size: v.size ?? '',
-        sku: v.sku ?? '',
         gtin: v.gtin ?? '',
         weight_g: v.weight_g ?? '',
         image_url: v.image_url ?? '',
@@ -45,32 +59,40 @@ export function VariantEdit() {
   }, [variantQ.data, form]);
 
   const update = useUpdate('ProductVariants', {
-    invalidate: [['ProductVariants', 'one', vid], ['ProductVariants', pid], ['Products', pid], ['Products']]
+    invalidate: [
+      ['ProductVariants', 'one', vid],
+      ['ProductVariants', pid],
+      ['Products', pid],
+      ['Products']
+    ]
   });
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const save = () => {
     setMsg(null);
-    if (!form.sku.trim()) {
-      setMsg({ kind: 'error', text: 'SKU is required.' });
+
+    if (form.gtin && form.gtin.length < 8) {
+      setMsg({ kind: 'error', text: 'GTIN must contain at least 8 digits.' });
       return;
     }
+
     if (form.weight_g !== '' && Number(form.weight_g) <= 0) {
       setMsg({ kind: 'error', text: 'Weight must be a positive number (in grams).' });
       return;
     }
+
     if (form.image_url?.trim() && !/^https?:\/\//i.test(form.image_url.trim())) {
-      setMsg({ kind: 'error', text: 'Image URL must start with https:// (or http://).' });
+      setMsg({ kind: 'error', text: 'Image URL must start with https:// or http://.' });
       return;
     }
+
     update.mutate(
       {
         key: vid,
         payload: {
           color: form.color || null,
           size: form.size || null,
-          sku: form.sku.trim(),
           gtin: form.gtin || null,
           weight_g: form.weight_g === '' ? null : Number(form.weight_g),
           image_url: form.image_url?.trim() || null,
@@ -78,8 +100,14 @@ export function VariantEdit() {
         }
       },
       {
-        onSuccess: () => setMsg({ kind: 'success', text: 'Variant saved.' }),
-        onError: (err) => setMsg({ kind: 'error', text: err instanceof ApiError ? err.message : 'Could not save.' })
+        onSuccess: () => {
+          navigate(`/products/${pid}/variants/${vid}/view`);
+        },
+        onError: (err) =>
+          setMsg({
+            kind: 'error',
+            text: err instanceof ApiError ? err.message : 'Could not save.'
+          })
       }
     );
   };
@@ -99,6 +127,7 @@ export function VariantEdit() {
           { label: label }
         ]}
       />
+
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-ink">Variant: {label}</h1>
         <Link to={`/products/${pid}/variants/${vid}/batches`}>
@@ -109,27 +138,111 @@ export function VariantEdit() {
       {msg && <Banner kind={msg.kind}>{msg.text}</Banner>}
 
       <Card className="p-6">
-        <FormSection title="Variant details" description="Identifies a concrete colour/size of the product.">
-          <FieldRow label="Colour" visibility="public" htmlFor="color">
-            <Input id="color" value={form.color} onChange={set('color')} />
+        <FormSection
+          title="Variant details"
+          description="Identifies a concrete colour/size of the product."
+        >
+          <FieldRow
+            label="SKU"
+            visibility="internal"
+            htmlFor="sku"
+            hint="Automatically generated. Cannot be changed."
+          >
+            <div className="rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700">
+              {variantQ.data?.sku}
+            </div>
           </FieldRow>
-          <FieldRow label="Size" visibility="public" htmlFor="size">
-            <Input id="size" value={form.size} onChange={set('size')} />
+          <FieldRow
+            label="Colour"
+            visibility="public"
+            htmlFor="color"
+            hint={remaining(form.color, LIMITS.color)}
+          >
+            <Input
+              id="color"
+              value={form.color}
+              onChange={set('color')}
+              maxLength={LIMITS.color}
+            />
           </FieldRow>
-          <FieldRow label="SKU" required visibility="internal" htmlFor="sku">
-            <Input id="sku" value={form.sku} onChange={set('sku')} />
+
+          <FieldRow
+            label="Size"
+            visibility="public"
+            htmlFor="size"
+            hint={remaining(form.size, LIMITS.size)}
+          >
+            <Input
+              id="size"
+              value={form.size}
+              onChange={set('size')}
+              maxLength={LIMITS.size}
+            />
           </FieldRow>
-          <FieldRow label="GTIN" visibility="internal" htmlFor="gtin">
-            <Input id="gtin" value={form.gtin} onChange={set('gtin')} />
+
+          
+
+          <FieldRow
+            label="GTIN"
+            visibility="internal"
+            htmlFor="gtin"
+            hint={
+              form.gtin && form.gtin.length < 8
+                ? 'GTIN must contain at least 8 digits.'
+                : remaining(form.gtin, LIMITS.gtin)
+            }
+          >
+            <Input
+              id="gtin"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={LIMITS.gtin}
+              value={form.gtin}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  gtin: e.target.value.replace(/\D/g, '').slice(0, LIMITS.gtin)
+                }))
+              }
+            />
           </FieldRow>
-          <FieldRow label="Weight (g)" visibility="internal" htmlFor="weight"
-            hint="Mass basis for rolling component CO₂/recycled content up to this product">
-            <Input id="weight" type="number" value={form.weight_g} onChange={set('weight_g')} />
+
+          <FieldRow
+            label="Weight (g)"
+            visibility="internal"
+            htmlFor="weight"
+            hint="Mass basis for rolling component CO₂/recycled content up to this product."
+          >
+            <Input
+              id="weight"
+              type="number"
+              min="1"
+              step="1"
+              value={form.weight_g}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  weight_g: e.target.value.replace(/\D/g, '')
+                }))
+              }
+            />
           </FieldRow>
-          <FieldRow label="Image URL" visibility="public" htmlFor="img"
-            hint="Colour-correct product image — shown in the consumer story for this variant.">
-            <Input id="img" value={form.image_url} onChange={set('image_url')} />
+
+          <FieldRow
+            label="Image URL"
+            visibility="public"
+            htmlFor="img"
+            hint={remaining(form.image_url, LIMITS.image_url)}
+          >
+            <Input
+              id="img"
+              value={form.image_url}
+              onChange={set('image_url')}
+              maxLength={LIMITS.image_url}
+            />
           </FieldRow>
+
           <FieldRow label="Status" visibility="internal" htmlFor="status">
             <Select
               id="status"
@@ -143,12 +256,18 @@ export function VariantEdit() {
             />
           </FieldRow>
         </FormSection>
+
         <div className="flex justify-end gap-3 border-t border-black/5 pt-5">
-          <Button type="button" variant="outline" onClick={() => navigate(`/products/${pid}`)}>
-            Back to product
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate(`/products/${pid}/variants/${vid}/view`)}
+          >
+            Cancel
           </Button>
+
           <Button type="button" disabled={update.isPending} onClick={save}>
-            {update.isPending ? 'Saving…' : 'Save variant'}
+            {update.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
       </Card>
