@@ -22,13 +22,19 @@ service DPPService @(
   };
 
   type MeInfo : {
-    id             : String;
-    displayName    : String;
-    email          : String;
-    role           : String;
-    organizationId : String;
-    tenantId       : String;
+    id               : String;
+    displayName      : String;
+    email            : String;
+    role             : String;
+    organizationId   : String;
+    tenantId         : String;
+    mustResetPassword: Boolean;
   };
+
+  // Results of the user-management actions. Temp passwords are returned ONCE to
+  // the calling company_advanced and are never persisted in plaintext.
+  type NewUserResult      : { userId : String; username : String; email : String; role : String; tempPassword : String; };
+  type TempPasswordResult : { userId : String; tempPassword : String; };
 
   // Live-aggregated footprint for the pre-publication review (computed by srv/lib/aggregator).
   type AggregatedFootprint : {
@@ -40,7 +46,18 @@ service DPPService @(
   };
 
   entity Organizations         as projection on db.Organizations;
-  entity Users                 as projection on db.Users;
+
+  // Credential/security fields (password_hash, password_updated_at,
+  // failed_login_count, locked_until) are deliberately NOT projected — they can
+  // be neither read nor written via OData. `username` + `must_reset_password`
+  // are exposed for the admin UI; `must_reset_password` is read-only (only the
+  // user-management actions flip it).
+  entity Users as projection on db.Users {
+    ID, email, display_name, organization, role, external_user_id, active,
+    username, must_reset_password
+  };
+  annotate Users with { must_reset_password @readonly; }
+
   entity BusinessPartners      as projection on db.BusinessPartners;
   entity BusinessPartnerRoles  as projection on db.BusinessPartnerRoles;
 
@@ -78,4 +95,16 @@ service DPPService @(
   entity DPPMarketingLinks     as projection on db.DPPMarketingLinks;
 
   function me() returns MeInfo;
+
+  // ----- User management (own auth) — see srv/handlers/user-handlers.js -----
+  // createUser / resetUserPassword / deactivateUser / reactivateUser are
+  // company_advanced-only (enforced via auth-helpers.WRITE_EVENTS + the
+  // before('*') gate). changePassword is callable by any active user on their
+  // OWN account (NOT a write event), so read-only company_user can complete the
+  // forced first-login change.
+  action createUser(username : String(60), email : db.EmailAddr, displayName : String(120), role : db.UserRole) returns NewUserResult;
+  action resetUserPassword(userId : String) returns TempPasswordResult;
+  action changePassword(currentPassword : String, newPassword : String) returns Boolean;
+  action deactivateUser(userId : String) returns Boolean;
+  action reactivateUser(userId : String) returns Boolean;
 }

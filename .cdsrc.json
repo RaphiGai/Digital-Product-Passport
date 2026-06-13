@@ -1,33 +1,13 @@
 {
   "requires": {
     "auth": {
+      "[production]": {
+        "kind": "custom",
+        "impl": "srv/auth/session-auth.js"
+      },
       "[development]": {
-        "kind": "mocked",
-        "users": {
-          "kka_learn_235": {
-            "password": "x",
-            "roles": ["company_advanced"],
-            "attr": { "tenant": "ORG-A" }
-          },
-          "alice.advanced": {
-            "password": "x",
-            "roles": ["company_advanced"],
-            "attr": { "tenant": "ORG-A" }
-          },
-          "carol.user": {
-            "password": "x",
-            "roles": ["company_user"],
-            "attr": { "tenant": "ORG-A" }
-          },
-          "dan.advanced.b": {
-            "password": "x",
-            "roles": ["company_advanced"],
-            "attr": { "tenant": "ORG-B" }
-          },
-          "ghost.unknown": {
-            "password": "x"
-          }
-        }
+        "kind": "custom",
+        "impl": "srv/auth/session-auth.js"
       }
     }
   },

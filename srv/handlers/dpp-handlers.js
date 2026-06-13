@@ -165,7 +165,9 @@ module.exports = (srv) => {
     const nextVersion = previouslyPublished ? dpp.current_version + 1 : dpp.current_version;
     const qrToken = dpp.qr_token || tokens.generate();
     const payloadUrl = `${process.env.PUBLIC_BASE_URL || ''}/public/dpp/${qrToken}`;
-    const publicUrl = `${process.env.PUBLIC_BASE_URL || ''}/dpp/${id}`;
+    // Shareable direct link (US6.10): token-based, identical to the QR target so a
+    // browser opening it gets the consumer SPA shell (see router/approuter.js).
+    const publicUrl = payloadUrl;
 
     await UPDATE(DPPs).set({
       status: 'published',
@@ -215,8 +217,9 @@ module.exports = (srv) => {
     const qrToken = tokens.generate();
     const payloadUrl = `${process.env.PUBLIC_BASE_URL || ''}/public/dpp/${qrToken}`;
     const qrImageUrl = `${process.env.PUBLIC_BASE_URL || ''}/public/dpp/${qrToken}/qr.png`;
+    // Keep the shareable direct link in sync with the rotated token (US6.10/US6.14).
     await UPDATE(DPPs)
-      .set({ qr_token: qrToken, qr_payload_url: payloadUrl })
+      .set({ qr_token: qrToken, qr_payload_url: payloadUrl, public_url: payloadUrl })
       .where({ ID: id });
 
     await rotateActiveQRCode(id, payloadUrl, qrImageUrl);
@@ -233,8 +236,13 @@ module.exports = (srv) => {
     if (!dpp) req.reject(404, `DPP '${id}' not found.`);
     if (!dpp.qr_token) req.reject(409, `DPP '${id}' has no QR token. Publish it first.`);
 
-    const payload = dpp.qr_payload_url ||
-      `${process.env.PUBLIC_BASE_URL || ''}/public/dpp/${dpp.qr_token}`;
+    // Always anchor the scan target to the current PUBLIC_BASE_URL + token. The
+    // stored qr_payload_url is denormalized and can be host-less (seed data ships
+    // a relative `/public/dpp/<token>`, which a phone scanner shows as raw text)
+    // or stale across environments (dev :5173 vs prod domain). The token is the
+    // canonical key; PUBLIC_BASE_URL is the per-environment source of truth.
+    const base = process.env.PUBLIC_BASE_URL || '';
+    const payload = `${base}/public/dpp/${dpp.qr_token}`;
 
     const QRCode = require('qrcode');
     const pngBuffer = await QRCode.toBuffer(payload, { type: 'png', margin: 1, scale: 6 });

@@ -24,8 +24,8 @@ modules:
       buildpack: nodejs_buildpack
     build-parameters:
       builder: npm-ci
-    # Runtime secrets (QR_TOKEN_HMAC_SECRET, PUBLIC_BASE_URL) are not stored in
-    # the descriptor. They come from the bound user-provided service `dpp-secrets`
+    # Runtime secrets (QR_TOKEN_HMAC_SECRET, SESSION_SECRET, PUBLIC_BASE_URL) are
+    # not stored in the descriptor. They come from the bound service `dpp-secrets`
     # and are projected into process.env by srv/lib/secrets.js on boot. See README
     # for the one-time `cf cups dpp-secrets …` setup.
     requires:
@@ -92,9 +92,10 @@ resources:
         tenant-mode: dedicated
 
   # Pre-created user-provided service holding runtime secrets.
+  # SESSION_SECRET signs the app-managed login session cookie (own auth) — 32+ char random.
   # Create once per space before `cf deploy`:
-  #   cf cups dpp-secrets -p '{"QR_TOKEN_HMAC_SECRET":"<32+ char random>","PUBLIC_BASE_URL":"https://<approuter-host>"}'
-  # Rotate without redeploying:
+  #   cf cups dpp-secrets -p '{"QR_TOKEN_HMAC_SECRET":"<32+ char random>","SESSION_SECRET":"<32+ char random>","PUBLIC_BASE_URL":"https://<approuter-host>"}'
+  # Rotate without redeploying (rotating SESSION_SECRET invalidates all active sessions):
   #   cf uups dpp-secrets -p '{...}' && cf restart dpp-srv
   - name: dpp-secrets
     type: org.cloudfoundry.existing-service

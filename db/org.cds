@@ -46,9 +46,23 @@ entity Users : identified {
   role             : UserRole not null;
   external_user_id : String(120);
   active           : Boolean default true;
+
+  // ---- App-managed credentials (own auth, replaces XSUAA) ----
+  // The login layer authenticates `username` + password against `password_hash`.
+  // Credential/security fields are NEVER exposed through the OData projection
+  // (see srv/dpp-service.cds) and are only written via the user-management
+  // actions in srv/handlers/user-handlers.js — never via raw CRUD.
+  username            : String(60) not null;   // global login handle
+  password_hash       : String(255);           // bcrypt; null = cannot log in yet
+  must_reset_password : Boolean default true;   // forces a change on first login
+  password_updated_at : Timestamp;
+  failed_login_count  : Integer default 0;     // brute-force counter (login layer)
+  locked_until        : Timestamp;             // lockout window (login layer)
 }
 
 annotate Users with @assert.unique : { email_per_org : [email, organization] };
+// Separate block — username must be unique DB-wide so login resolves to one row.
+annotate Users with @assert.unique : { username : [username] };
 
 entity BusinessPartners : identified, audited {
   owning_organization : Association to Organizations not null;

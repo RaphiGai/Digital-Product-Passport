@@ -1,6 +1,5 @@
 'use strict';
 
-const cds = require('@sap/cds');
 const authHelpers = require('./handlers/auth-helpers');
 
 const productHandlers     = require('./handlers/product-handlers');
@@ -8,6 +7,7 @@ const productItemHandlers = require('./handlers/product-item-handlers');
 const dppHandlers         = require('./handlers/dpp-handlers');
 const marketingHandlers   = require('./handlers/marketing-handlers');
 const meHandler           = require('./handlers/me-handler');
+const userHandlers        = require('./handlers/user-handlers');
 
 /**
  * App-internal RBAC + tenant isolation is enforced here in handlers instead
@@ -77,9 +77,18 @@ module.exports = (srv) => {
     });
   }
 
-  srv.before(['CREATE', 'UPDATE'], 'Users', (req) => {
-    const callerOrgId = req.user._appOrgId;
-    if (!callerOrgId) return;
+  // Guard for raw OData CRUD on Users (the supported path for credentials is the
+  // createUser / resetUserPassword / changePassword actions). Credential columns
+  // are not part of the Users projection, so they cannot be written here anyway.
+  // Resolve the caller inline because this entity-specific handler can run ahead
+  // of the central before('*') gate, so _appOrgId may not be set yet.
+  srv.before(['CREATE', 'UPDATE'], 'Users', async (req) => {
+    const callerOrgId = await authHelpers.requireActiveUser(req);
+    // Role can be changed via PATCH (promote/demote read-only ↔ full) but must
+    // stay a valid app role.
+    if (req.data.role !== undefined && !['company_advanced', 'company_user'].includes(req.data.role)) {
+      req.reject(400, 'role must be one of: company_advanced, company_user.');
+    }
     if (req.data.organization_ID === undefined && req.event === 'CREATE') {
       req.data.organization_ID = callerOrgId;
     } else if (req.data.organization_ID && req.data.organization_ID !== callerOrgId) {
@@ -104,4 +113,5 @@ module.exports = (srv) => {
   dppHandlers(srv);
   marketingHandlers(srv);
   meHandler(srv);
+  userHandlers(srv);
 };

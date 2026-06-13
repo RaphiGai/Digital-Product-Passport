@@ -14,7 +14,7 @@
  */
 
 const SERVICE_NAME = process.env.SECRETS_SERVICE_NAME || 'dpp-secrets';
-const KNOWN_KEYS = ['QR_TOKEN_HMAC_SECRET', 'PUBLIC_BASE_URL'];
+const KNOWN_KEYS = ['QR_TOKEN_HMAC_SECRET', 'PUBLIC_BASE_URL', 'SESSION_SECRET'];
 
 function findUserProvided(vcap, name) {
   const entries = vcap['user-provided'];

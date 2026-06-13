@@ -1,12 +1,25 @@
 {
-  "welcomeFile": "/$api-docs/odata/v4/dpp",
-  "authenticationMethod": "route",
+  "welcomeFile": "/login",
+  "authenticationMethod": "none",
   "sessionTimeout": 30,
-  "logout": { "logoutEndpoint": "/do/logout" },
   "routes": [
     {
       "source": "^/healthz$",
       "target": "/healthz",
+      "destination": "srv-api",
+      "authenticationType": "none",
+      "csrfProtection": false
+    },
+    {
+      "source": "^/login$",
+      "target": "/login",
+      "destination": "srv-api",
+      "authenticationType": "none",
+      "csrfProtection": false
+    },
+    {
+      "source": "^/auth/(.*)$",
+      "target": "/auth/$1",
       "destination": "srv-api",
       "authenticationType": "none",
       "csrfProtection": false
@@ -22,21 +35,21 @@
       "source": "^/odata/(.*)$",
       "target": "/odata/$1",
       "destination": "srv-api",
-      "authenticationType": "xsuaa",
+      "authenticationType": "none",
       "csrfProtection": false
     },
     {
       "source": "^/\\$api-docs/(.*)$",
       "target": "/$api-docs/$1",
       "destination": "srv-api",
-      "authenticationType": "xsuaa",
+      "authenticationType": "none",
       "csrfProtection": false
     },
     {
       "source": "^/$",
       "target": "/$api-docs/odata/v4/dpp",
       "destination": "srv-api",
-      "authenticationType": "xsuaa"
+      "authenticationType": "none"
     }
   ]
 }

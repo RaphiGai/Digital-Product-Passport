@@ -31,9 +31,18 @@ entity Products : identified, audited {
   care_instructions     : String(500);
   repair_instructions   : String(500);
   disposal_instructions : String(500);
+  reuse_instructions    : String(500);                       // reuse / second-life guidance (ESPR)
   country_of_origin     : CountryISO2;
   substances_of_concern : String(500);                       // catalogue Sheet 3 R37 (Text)
   espr_compliance       : ESPRComplianceStatus default 'draft';
+  // ESPR durability & repairability scores, 0.0–10.0 (EU/FR repair-index scale).
+  durability_score      : Decimal(3, 1);
+  repairability_score   : Decimal(3, 1);
+  // Optional how-to video links — shown on the consumer DPP only when set.
+  care_video_url        : URL;
+  repair_video_url      : URL;
+  disposal_video_url    : URL;
+  reuse_video_url        : URL;
   status                : ProductStatus        default 'draft';
   storytelling          : LargeString;                         // JSON array [{title, body}] — consumer story (per product)
 
@@ -50,7 +59,8 @@ entity ProductVariants : identified, audited {
   sku      : String(40);
   gtin     : GTIN;
   weight_g : Integer;
-  image_url : URL;                            // colour-correct product image (consumer story / hero)
+  image_url : URL;                            // colour-correct product image (external URL)
+  image_data : LargeString;                   // uploaded product image as a base64 data URL (preferred over image_url)
   status   : VariantStatus default 'active';
 
   batches : Association to many Batches    on batches.variant = $self;

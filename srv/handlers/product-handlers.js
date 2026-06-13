@@ -56,6 +56,16 @@ module.exports = (srv) => {
     rejectCrossOrgWrite(req, req.data.owning_organization_ID, req.user._appOrgId);
   });
 
+  // ESPR durability / repairability scores are on a 0–10 scale.
+  srv.before(['CREATE', 'UPDATE'], Products, (req) => {
+    for (const field of ['durability_score', 'repairability_score']) {
+      const v = req.data[field];
+      if (v != null && (v < 0 || v > 10)) {
+        req.reject(400, 'Durability and repairability scores must be between 0 and 10.');
+      }
+    }
+  });
+
   srv.before('CREATE', BusinessPartners, async (req) => {
     const org = await getUserOrg(req);
     rejectCrossOrgWrite(req, req.data.owning_organization_ID, org.ID);

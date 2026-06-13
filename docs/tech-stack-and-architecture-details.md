@@ -23,8 +23,8 @@ Produktion* bzw. *generiert vs. selbst geschrieben* bzw. *Modul vs. Resource*.
 |---|---|---|---|---|
 | **Runtime** (führt den Code aus) | **Node.js** | direkt gestartet | läuft *innerhalb* der **Cloud Foundry Runtime** | macht aus JS ein laufendes Programm |
 | **Framework** (strukturiert) | **SAP CAP** (`@sap/cds` 9) | ✓ | ✓ | generiert OData/Swagger, verdrahtet DB + Auth, ruft eure Handler |
-| **Web-/HTTP-Schicht** | **Express** | ✓ | ✓ | trägt unter CAP die Public-REST-Routen |
-| **Datenmodell-Sprache** | **CDS** | ✓ | ✓ | definiert die 12 Entitäten + den Service-Vertrag |
+| **Web-/HTTP-Schicht** | **Express** | ✓ | ✓ | trägt unter CAP die Public-REST-Routen (`/public/dpp/:token`, `/healthz`) |
+| **Datenmodell-Sprache** | **CDS** | ✓ | ✓ | definiert die 13 Entitäten + den Service-Vertrag |
 | **API – intern** | **OData V4** | ✓ | ✓ | auto-generiertes CRUD für die Firmen-App |
 | **API – öffentlich** | **Public REST** | ✓ | ✓ | handgeschriebene Consumer- + Health-Endpoints |
 | **Datenbank** | **SQLite** / **SAP HANA Cloud** | SQLite | HANA (HDI-Container) | speichert die Daten |
@@ -42,20 +42,21 @@ Produktion* bzw. *generiert vs. selbst geschrieben* bzw. *Modul vs. Resource*.
 | **Runtime** | der **Browser** des Nutzers | führt die App aus (nicht Vite!) |
 | **UI-Framework** | **React 18** | baut die Oberfläche aus Komponenten |
 | **Sprache** | **JavaScript (JSX)** + JSDoc | statt TypeScript; JSDoc nur fürs Autocomplete |
-| **Build-Tool / Dev-Server** | **Vite** | bündelt den Code; lokal mit Proxy zum Backend |
+| **Build-Tool / Dev-Server** | **Vite** | bündelt den Code (3 Entry-Points: App, Consumer-View, Token-Lookup); lokal mit Proxy zum Backend |
 | **Styling** | **Tailwind CSS** | eigene UI-Komponenten, keine Library |
 | **Server-State / Datenabruf** | **TanStack Query** | holt + cached OData-Daten |
 | **Routing** | **React Router** | Navigation zwischen Seiten |
 | **Icons** | **lucide-react** | — |
-| **Auslieferung (Prod)** | **Application Router** (localDir) | serviert die gebaute SPA **aus dem eigenen Container**, leitet API weiter |
+| **Auslieferung (Prod)** | **Application Router** (localDir) | serviert die gebauten Seiten (App + öffentliche Consumer- & Token-Lookup-Views) **aus dem eigenen Container**, leitet API weiter |
 
 ### Präzisierungen
 1. **Node.js vs. Cloud Foundry:** In Prod ist es *weiterhin Node.js* — es läuft nur **innerhalb** der Cloud Foundry Runtime (CF stellt Container + Buildpack). Also nicht „CF *ersetzt* Node.js", sondern „CF *hostet* Node.js".
 2. **Vite ist keine Runtime**, sondern Build-Tool + Dev-Server. Die *Runtime* des Frontends ist der **Browser**.
 3. **CAP läuft auf Express**, nicht daneben: Express ist die HTTP-Basis, CAP die Schicht darüber — die Public-REST-Routen klinken sich direkt in Express ein.
+4. **Drei Frontend-Einstiege:** ein authentifizierter Studio-Einstieg (`index.html`) und **zwei öffentliche Views ohne Login** — der Consumer-Pass (`consumer.html`, vom QR-Scan) und die Token-Eingabeseite (`lookup.html`, manuelle Token-Eingabe → Consumer-Pass).
 
 ### Sprech-Satz
-> „Im Backend ist **SAP CAP** das Framework, **Node.js** die Runtime — lokal direkt, in Prod gehostet von der **Cloud Foundry Runtime**. **CDS** ist die Datenmodell-Sprache, **OData V4** und **REST** sind die API, **XSUAA** die Authentifizierung, und die Datenbank ist **SQLite** lokal bzw. **SAP HANA Cloud** in Prod. Das Frontend ist **React mit Vite und Tailwind**, ausgeliefert über den **Application Router**, der die gebaute SPA aus seinem eigenen Container serviert — beide MTAs teilen sich dieselbe XSUAA."
+> „Im Backend ist **SAP CAP** das Framework, **Node.js** die Runtime — lokal direkt, in Prod gehostet von der **Cloud Foundry Runtime**. **CDS** ist die Datenmodell-Sprache, **OData V4** und **REST** sind die API, **XSUAA** die Authentifizierung, und die Datenbank ist **SQLite** lokal bzw. **SAP HANA Cloud** in Prod. Das Frontend ist **React mit Vite und Tailwind**, ausgeliefert über den **Application Router**, der die gebauten Seiten — die Studio-App plus zwei öffentliche Views (Consumer-Pass und Token-Lookup) — aus seinem eigenen Container serviert — beide MTAs teilen sich dieselbe XSUAA."
 
 ---
 
@@ -83,7 +84,7 @@ Betriebsaufwand** (horizontale Skalierung übernimmt die Plattform).
 | Technologie | Warum gewählt |
 |---|---|
 | **React 18** | Größte Frontend-Community + Ökosystem → viele Bibliotheken, Lernressourcen und verfügbare Entwickler; Komponentenmodell → wartbar und teamfähig. |
-| **Vite** | Schneller HMR-Dev-Server + schlanker Prod-Build; einfache Multi-Entry-Konfiguration (App + Consumer-View); aktueller De-facto-Standard. |
+| **Vite** | Schneller HMR-Dev-Server + schlanker Prod-Build; einfache Multi-Entry-Konfiguration (App + Consumer-View + Token-Lookup); aktueller De-facto-Standard. |
 | **Tailwind CSS** | Utility-first → schnelle, konsistente UI ohne CSS-Namens-Overhead; ungenutzte Klassen werden entfernt → kleines Bundle; kein Library-Lock-in. |
 | **TanStack Query** | Bewährtes Caching, Invalidierung und Lade-/Fehlerzustände → deutlich weniger Boilerplate als selbst gebauter Fetch-State. |
 | **React Router** | De-facto-Standard-Routing für React-SPAs. |
@@ -97,23 +98,24 @@ Betriebsaufwand** (horizontale Skalierung übernimmt die Plattform).
 
 | Schicht | Konkrete Komponente (Datei) | Herkunft | Aufgabe |
 |---|---|---|---|
-| **Client** | React-SPA + Consumer-View (Frontend) · HTTP-Client (Behörde) | selbst / extern | sendet Anfragen, zeigt an — **keine** Regeln, **keine** Secrets |
+| **Client** | React-SPA (Login) + Consumer-View + öffentliche Token-Lookup-Seite (Frontend) · HTTP-Client (Behörde) | selbst / extern | sendet Anfragen, zeigt an — **keine** Regeln, **keine** Secrets |
 | **Platform boundary** | Application Router + XSUAA | Plattform | lässt rein, prüft „eingeloggt ja/nein" |
-| **API · Vertrag** | [srv/dpp-service.cds](../srv/dpp-service.cds) | selbst (deklarativ) | definiert **was** aufrufbar ist: 12 Projektionen, Actions, `me()` |
+| **API · Vertrag** | [srv/dpp-service.cds](../srv/dpp-service.cds) | selbst (deklarativ) | definiert **was** aufrufbar ist: 13 Projektionen, Actions, `me()` |
 | **API · CRUD-Endpunkte** | OData V4 | **CAP-generiert** | Lesen/Schreiben + `$metadata` + Swagger automatisch |
-| **API · Türsteher** | [srv/dpp-service.js](../srv/dpp-service.js), [srv/handlers/auth-helpers.js](../srv/handlers/auth-helpers.js) | selbst | Rolle + Mandant aus DB, Tenant-Filter — **vor** jedem Handler |
+| **API · Türsteher** | [srv/dpp-service.js](../srv/dpp-service.js), [srv/handlers/auth-helpers.js](../srv/handlers/auth-helpers.js) | selbst | Rolle + Mandant aus DB (Tenant aus Users/Org in den Token injiziert), Tenant-Filter — **vor** jedem Handler |
 | **API · öffentlich** | [srv/server.js](../srv/server.js) (Express-Mounts) | selbst | `/public`, `/healthz` — bewusst außerhalb der CAP-Auth |
-| **Business Logic** | [srv/handlers/](../srv/handlers/)*.js | selbst | Defaults, Lifecycle-Automat, BOM-Check, Consumer-DTO |
-| **Supporting Libs** | [srv/lib/](../srv/lib/){token, secrets, aggregator}.js | selbst | HMAC-Token, Secret-Loader, hierarchische Aggregation |
-| **Persistence** | [db/](../db/)*.cds → SQLite/HANA | **CAP-generiert** | Schema + SQL-Queries automatisch aus dem Modell |
+| **Business Logic** | [srv/handlers/](../srv/handlers/)*.js | selbst | Defaults, Lifecycle-Automat, BOM-Check, Per-Charge-Sourcing, Consumer-DTO (mit Storytelling, Variant-Bild, real verbautem Komponenten-Pass) |
+| **Supporting Libs** | [srv/lib/](../srv/lib/){token, secrets, aggregator}.js | selbst | HMAC-Token, Secret-Loader, hierarchische Aggregation mit Per-Charge-Mittelung |
+| **Persistence** | [db/](../db/)*.cds → SQLite/HANA | **CAP-generiert** | Schema + SQL-Queries automatisch aus dem Modell (13 Entitäten) |
 
 ### Präzisierungen
 1. **Reihenfolge ist Teil des Frameworks:** CAP arbeitet jede Anfrage in Phasen `before → on → after` ab. Die Guards sind `before`, die Lifecycle-Logik ist `on`. Der Türsteher läuft also **garantiert vor** der Business-Logik.
 2. **Arbeitsteilung Framework ↔ eigener Code:** CAP generiert **CRUD + Schema** aus dem Modell; alles Fachliche (Guards, Lifecycle, Aggregation, Consumer-DTO) ist **selbst geschrieben**.
 3. **Deployment-agnostisch:** diese Sicht stimmt auch lokal (SQLite + Mock-Auth) — nur die Platform boundary wechselt.
+4. **Per-Charge-Sourcing & Consumer-Einstieg:** Welche konkreten Komponenten-Chargen eine Produktionscharge verbraucht hat, hält `BatchComponents` fest — es überschreibt den Varianten-BOM-Standard, mehrere Chargen werden im Aggregator **gemittelt** (`firstItemDpp` löst den repräsentativen Pass einer Charge auf). `ProductBOMs` trägt zusätzlich Felder für **externe Komponenten** (frei eingetragene Werte ohne internes Produkt). Verbraucher erreichen den öffentlichen Pass auf zwei Wegen: **QR-Scan** → `/public/dpp/:token` oder **manuelle Token-Eingabe** auf `/lookup.html`.
 
 ### Sprech-Satz
-> „Die Software-Architektur ist sechs Schichten von oben nach unten: Client, Platform boundary, API, Business Logic, Libs, Persistence. **CAP generiert** das CRUD und das Schema aus dem Modell; alles Fachliche — die Guards, der Lifecycle-Automat und die Aggregation — ist **selbst geschrieben**. Der Türsteher resolved Rolle und Mandant aus der DB und läuft vor jeder Logik."
+> „Die Software-Architektur ist sechs Schichten von oben nach unten: Client, Platform boundary, API, Business Logic, Libs, Persistence. **CAP generiert** das CRUD und das Schema aus dem Modell; alles Fachliche — die Guards, der Lifecycle-Automat und die Aggregation (inkl. Per-Charge-Mittelung) — ist **selbst geschrieben**. Der Türsteher resolved Rolle und Mandant aus der DB und läuft vor jeder Logik."
 
 ---
 
@@ -127,18 +129,19 @@ Zentrale Unterscheidung: **Modul** = wird deployt und *läuft* · **Resource** =
 |---|---|---|---|---|
 | **Einstieg / Routing** | dpp-approuter | **Modul** (`approuter.nodejs`) | Backend | öffentliche Tür, leitet API mit JWT weiter |
 | **App-Laufzeit** | dpp-srv | **Modul** (`nodejs`) | Backend | der laufende CAP-Service |
-| **Schema-Deploy** | dpp-db-deployer | **Modul** (`hdb`) | Backend | erzeugt das HANA-Schema, läuft einmal, beendet sich |
-| **SPA-Auslieferung** | dpp-frontend-approuter | **Modul** (`approuter.nodejs`) | Frontend | serviert die SPA **aus localDir** (eigener Container), leitet `/odata`,`/public` weiter |
-| **UI-Build** | dpp-ui | **Modul** (`html5`) | Frontend | Vite-Build → `dist`; `dist` wird beim Build **in den Approuter kopiert** |
-| **Datenbank** | dpp-db | **Resource** (HANA HDI, `hdi-shared`) | geteilt | speichert die 12 Tabellen |
+| **Schema-Deploy** | dpp-db-deployer | **Modul** (`hdb`) | Backend | erzeugt das HANA-Schema, läuft einmal, beendet sich; `auto_undeploy` entfernt aus dem Modell entfernte Objekte |
+| **SPA-Auslieferung** | dpp-frontend-approuter | **Modul** (`approuter.nodejs`) | Frontend | serviert die 3 Entry-Points **aus localDir** (eigener Container); `consumer.html` + `lookup.html` öffentlich ohne Auth; zentraler Logout `/do/logout`; leitet `/odata`,`/public` weiter |
+| **UI-Build** | dpp-ui | **Modul** (`html5`) | Frontend | Vite-Build (3 Bundles: App, Consumer, Lookup) → `dist`; `dist` wird beim Build **in den Approuter kopiert** |
+| **Datenbank** | dpp-db | **Resource** (HANA HDI, `hdi-shared`) | geteilt | speichert die 13 Tabellen |
 | **Identität** | dpp-uaa | **Resource** (XSUAA, `application`) | **von beiden MTAs geteilt** | stellt Tokens aus / prüft sie |
 | **Geheimnisse** | dpp-secrets | **Resource** (user-provided, vorab angelegt) | Backend | HMAC-Key + Public Base URL |
 
 ### Präzisierungen
-1. **Binding = die Verbindung:** ein Modul „requires" eine Resource → CF spielt die Zugangsdaten als `VCAP_SERVICES` in die Umgebung. Genau das liest [srv/lib/secrets.js](../srv/lib/secrets.js) beim Boot.
+1. **Binding = die Verbindung:** ein Modul „requires" eine Resource → CF spielt die Zugangsdaten als `VCAP_SERVICES` in die Umgebung. Genau das liest [srv/lib/secrets.js](../srv/lib/secrets.js) beim Boot. Lokale `process.env`/`.env`-Werte haben Vorrang; VCAP füllt nur **fehlende** Keys.
 2. **Geteilte XSUAA:** das Frontend bucht **keine** neue XSUAA, sondern bindet die bestehende (`existing-service`) → **gleicher `xsappname`** → das vom Frontend-Approuter weitergereichte JWT wird vom Backend akzeptiert.
-3. **Zwei Approuter:** jedes MTA hat seinen eigenen — Backend-Einstieg vs. Frontend-SPA-Auslieferung. **Beide** leiten an `dpp-srv` weiter.
+3. **Zwei Approuter:** jedes MTA hat seinen eigenen — Backend-Einstieg vs. Frontend-SPA-Auslieferung. **Beide** leiten an `dpp-srv` weiter (das Frontend über eine inline in `mta.yaml` gesetzte Destination, das Backend über `xs-app.json`).
 4. **Build vs. Deploy:** `mbt build` packt alles in ein `.mtar` (Module + Resource-Deklarationen); `cf deploy` legt die Resources an und startet die Module.
+5. **Saubere Schema-Migrationen:** der DB-Deployer läuft mit `HDI_DEPLOY_OPTIONS: auto_undeploy=true` — aus dem CDS-Modell entfernte HANA-Objekte (z. B. ein alter Unique-Index nach Modelländerung) werden im Container automatisch gedroppt, sodass Migrationen konfliktfrei durchlaufen.
 
 ### Sprech-Satz
 > „Auf BTP gibt es zwei Arten von Bausteinen: **Module**, die laufen — Approuter, der CAP-Service `dpp-srv` und der DB-Deployer — und **Resources**, also gebuchte Dienste: HANA als HDI-Container, XSUAA und die Runtime-Secrets. Module docken per **Binding** an Resources an. Der Clou: **beide MTAs — Backend und Frontend — teilen sich eine XSUAA**, deshalb wird das durchgereichte Token akzeptiert."

@@ -40,7 +40,6 @@ Mock users for local mocked auth (Basic Auth, password `x`):
 
 | User              | App role          | Tenant              |
 | ----------------- | ----------------- | ------------------- |
-| `kka_learn_235`   | company_advanced  | ORG-A (Greenline)   |
 | `alice.advanced`  | company_advanced  | ORG-A               |
 | `carol.user`      | company_user      | ORG-A               |
 | `dan.advanced.b`  | company_advanced  | ORG-B (Fashionista) |

@@ -60,7 +60,6 @@ The mocked auth provider accepts **HTTP Basic Authentication**:
 | `alice.advanced` | `x` | company_advanced | ORG-A |
 | `carol.user` | `x` | company_user | ORG-A |
 | `dan.advanced.b` | `x` | company_advanced | ORG-B |
-| `kka_learn_235` | `x` | company_advanced | ORG-A |
 
 The same backend logic runs (user table lookup, tenant filter, role gates) — only the way the identity is presented changes.
 

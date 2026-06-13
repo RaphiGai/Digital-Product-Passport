@@ -8,7 +8,11 @@ const WRITE_EVENTS = new Set([
   'CREATE', 'UPDATE', 'DELETE', 'UPSERT',
   'approveDPP', 'publishDPP', 'archiveDPP', 'regenerateQRToken',
   'archiveProduct',
-  'importProducts', 'importBatches', 'importBOM'
+  'importProducts', 'importBatches', 'importBOM',
+  // User management — company_advanced only. NOTE: 'changePassword' is
+  // intentionally NOT listed: every active user (incl. read-only company_user)
+  // must be able to change their own password (forced first-login flow).
+  'createUser', 'resetUserPassword', 'deactivateUser', 'reactivateUser'
 ]);
 
 /**
@@ -84,6 +88,8 @@ async function resolveAppUserInline(req) {
   let userRow = null;
   for (const c of candidates) {
     userRow = await SELECT.one.from(Users).where({ external_user_id: c });
+    if (userRow) break;
+    userRow = await SELECT.one.from(Users).where({ username: c });
     if (userRow) break;
     userRow = await SELECT.one.from(Users).where({ email: c });
     if (userRow) break;

@@ -4,6 +4,7 @@ require('./lib/secrets').load();
 
 const cds = require('@sap/cds');
 const publicHandler = require('./handlers/public-handler');
+const authRoutes = require('./handlers/auth-routes');
 
 // Swagger UI is loaded lazily so test environments without the dev-only
 // dependency installed can still boot.
@@ -21,7 +22,6 @@ const MOCK_USERS_NOTE = [
   '',
   '| User              | App role          | Tenant              |',
   '| ----------------- | ----------------- | ------------------- |',
-  '| `kka_learn_235`   | company_advanced  | ORG-A (Greenline)   |',
   '| `alice.advanced`  | company_advanced  | ORG-A               |',
   '| `carol.user`      | company_user      | ORG-A               |',
   '| `dan.advanced.b`  | company_advanced  | ORG-B (Fashionista) |',
@@ -120,6 +120,10 @@ function postprocessOpenApiProd(req, res, next) {
 // for OData requests, so the inline approach is the only reliable wire-up.
 cds.on('bootstrap', (app) => {
   app.get('/healthz', (_req, res) => res.json({ status: 'ok', service: 'dpp-capgemini' }));
+
+  // App-managed login mask + auth endpoints (own auth, replaces XSUAA).
+  // Mounted here so they sit OUTSIDE the per-service auth gate, like /public/*.
+  authRoutes.register(app);
 
   // Public consumer endpoints. No authentication; visibility-filtered DTO.
   app.get('/public/dpp/:token', publicHandler.resolveDPPByToken);

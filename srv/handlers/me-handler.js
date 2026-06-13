@@ -10,12 +10,12 @@ module.exports = (srv) => {
 
     let userRow = await SELECT.one
       .from(Users)
-      .columns('email', 'display_name')
+      .columns('email', 'display_name', 'must_reset_password')
       .where({ external_user_id: req.user.id });
     if (!userRow) {
       userRow = await SELECT.one
         .from(Users)
-        .columns('email', 'display_name')
+        .columns('email', 'display_name', 'must_reset_password')
         .where({ email: req.user.id });
     }
 
@@ -25,12 +25,13 @@ module.exports = (srv) => {
       .where({ ID: orgId });
 
     return {
-      id:             req.user.id,
-      displayName:    userRow?.display_name || req.user.id,
-      email:          userRow?.email || '',
-      role:           getAppRole(req),
-      organizationId: orgId,
-      tenantId:       org?.tenant_id || ''
+      id:               req.user.id,
+      displayName:      userRow?.display_name || req.user.id,
+      email:            userRow?.email || '',
+      role:             getAppRole(req),
+      organizationId:   orgId,
+      tenantId:         org?.tenant_id || '',
+      mustResetPassword: !!userRow?.must_reset_password
     };
   });
 };

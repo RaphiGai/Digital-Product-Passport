@@ -21,12 +21,13 @@ describe('GET /odata/v4/dpp/me()', () => {
   test('returns identity, role and org for company_advanced user', async () => {
     const { data } = await GET('/odata/v4/dpp/me()', alice);
     expect(data).toMatchObject({
-      id:             'alice.advanced',
-      displayName:    'Alice Advanced',
-      email:          'alice.advanced@greenline.example',
-      role:           'company_advanced',
-      organizationId: 'org-greenline',
-      tenantId:       'ORG-A'
+      id:               'alice.advanced',
+      displayName:      'Alice Advanced',
+      email:            'alice.advanced@greenline.example',
+      role:             'company_advanced',
+      organizationId:   'org-greenline',
+      tenantId:         'ORG-A',
+      mustResetPassword: false
     });
   });
 

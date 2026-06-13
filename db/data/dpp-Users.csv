@@ -1,7 +1,4 @@
-ID;email;display_name;organization_ID;role;external_user_id;active
-usr-kaa-235;kaa_learn_235@example.com;BTP Bootstrap Admin (235);org-greenline;company_advanced;kaa_learn_235;true
-usr-kaa-234;kaa_learn_234@example.com;BTP Admin (234);org-greenline;company_advanced;kaa_learn_234;true
-usr-kaa-248;kaa_learn_248@example.com;BTP Admin (248);org-greenline;company_advanced;kaa_learn_248;true
-usr-alice;alice.advanced@greenline.example;Alice Advanced;org-greenline;company_advanced;alice.advanced;true
-usr-carol;carol.user@greenline.example;Carol User;org-greenline;company_user;carol.user;true
-usr-dan;dan.advanced.b@fashionista.example;Dan Advanced;org-fashionista;company_advanced;dan.advanced.b;true
+ID;email;display_name;organization_ID;role;external_user_id;active;username;password_hash;must_reset_password;password_updated_at;failed_login_count;locked_until
+usr-alice;alice.advanced@greenline.example;Alice Advanced;org-greenline;company_advanced;alice.advanced;true;alice.advanced;$2a$12$V/qT1EVflbcQP2.GxpzfJOzxxU9xq5rS.oPBEng4O3EHkOiutsthy;false;;0;
+usr-carol;carol.user@greenline.example;Carol User;org-greenline;company_user;carol.user;true;carol.user;;true;;0;
+usr-dan;dan.advanced.b@fashionista.example;Dan Advanced;org-fashionista;company_advanced;dan.advanced.b;true;dan.advanced.b;;true;;0;

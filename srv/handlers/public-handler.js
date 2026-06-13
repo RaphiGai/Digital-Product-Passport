@@ -115,6 +115,13 @@ function toConsumerDTO(dpp, ctx) {
           care_instructions: ctx.product.care_instructions,
           repair_instructions: ctx.product.repair_instructions,
           disposal_instructions: ctx.product.disposal_instructions,
+          reuse_instructions: ctx.product.reuse_instructions,
+          durability_score: ctx.product.durability_score,
+          repairability_score: ctx.product.repairability_score,
+          care_video_url: ctx.product.care_video_url,
+          repair_video_url: ctx.product.repair_video_url,
+          disposal_video_url: ctx.product.disposal_video_url,
+          reuse_video_url: ctx.product.reuse_video_url,
           country_of_origin: ctx.product.country_of_origin,
           substances_of_concern: ctx.product.substances_of_concern,
           espr_compliance: ctx.product.espr_compliance,
@@ -128,6 +135,7 @@ function toConsumerDTO(dpp, ctx) {
           sku: ctx.variant.sku,
           gtin: ctx.variant.gtin,
           image_url: ctx.variant.image_url,
+          image_data: ctx.variant.image_data,
         }
       : null,
     batch: ctx.batch
@@ -142,6 +150,14 @@ function toConsumerDTO(dpp, ctx) {
     materials: ctx.materialsTree,
     aggregated: ctx.aggregated,
     marketing: ctx.marketing || [],
+    // Identification & traceability shown on the consumer view (US6.11).
+    identification: {
+      dpp_id: dpp.ID,
+      product_id: dpp.product_ID,
+      batch_number: ctx.batch?.batch_number ?? null,
+      serial_number: ctx.item?.serial_number ?? null,
+      upi: ctx.item?.upi ?? null,
+    },
   };
 }
 
@@ -172,9 +188,14 @@ async function loadMarketingLinks(owningOrgId, dppId) {
 }
 
 async function loadDPPContext(dpp) {
-  const { Products, ProductVariants, Batches, ProductBOMs, BatchComponents } = cds.entities('dpp');
+  const { Products, ProductVariants, Batches, ProductItems, ProductBOMs, BatchComponents } = cds.entities('dpp');
 
   const product = await SELECT.one.from(Products).where({ ID: dpp.product_ID });
+
+  // Serialized item-level DPP: load the item for its serial number / UPI (US6.11).
+  const item = dpp.item_ID
+    ? await SELECT.one.from(ProductItems).where({ ID: dpp.item_ID })
+    : null;
 
   let variant = null;
   let batch = null;
@@ -223,7 +244,7 @@ async function loadDPPContext(dpp) {
   const aggregated = await aggregate(dpp.ID);
   const marketing = await loadMarketingLinks(owningOrgId, dpp.ID);
 
-  return { product, variant, batch, materialsTree, aggregated, marketing };
+  return { product, variant, batch, item, materialsTree, aggregated, marketing };
 }
 
 async function loadDPPByToken(token) {
