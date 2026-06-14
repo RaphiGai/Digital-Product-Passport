@@ -13,7 +13,7 @@ const EMPTY = {
   batch_number: '',
   production_date: '',
   country_of_origin: '',
-  co2_footprint_kg: '',
+  co2_footprint_kg: '00,00',
   recycled_content_pct: '',
   factory_ID: '',
   supplier_ID: ''
@@ -118,14 +118,15 @@ function BatchSourcingPicker({ boms, batchesFor, nameOf, loadingBatches, selecti
                 htmlFor={`extbn-${b.ID}`}
                 hint="Traceability info only — footprint values come from the BOM line."
               >
-                <Input
-                  id={`extbn-${b.ID}`}
-                  key={`extbn-${b.ID}-${sel.extNo}`}
-                  defaultValue={sel.extNo}
-                  placeholder="e.g. ELA-2026-04"
-                  disabled={disabled}
-                  onBlur={(e) => onSetExtNo(b.ID, e.target.value.trim())}
-                />
+              <Input
+                id={`extbn-${b.ID}`}
+                key={`extbn-${b.ID}-${sel.extNo}`}
+                defaultValue={sel.extNo}
+                maxLength={40}
+                placeholder="e.g. ELA-2026-04"
+                disabled={disabled}
+                onBlur={(e) => onSetExtNo(b.ID, e.target.value.trim())}
+              />
               </FieldRow>
             ) : loadingBatches ? (
               <p className="text-xs text-ink-muted">Loading batches…</p>
@@ -489,6 +490,31 @@ function BatchRow({ batch, pid, vid, onMsg }) {
 
 // ── Main BatchView ────────────────────────────────────────────────────────────
 
+function formatCo2Input(value) {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (!digits) return '00,00';
+
+  const padded = digits.padStart(3, '0');
+  const euros = padded.slice(0, -2);
+  const cents = padded.slice(-2);
+
+  return `${euros},${cents}`;
+}
+
+function parseCo2(value) {
+  return Number(value.replace(',', '.'));
+}
+
+function isPastDate(value) {
+  if (!value) return true;
+
+  const selected = new Date(`${value}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return selected < today;
+}
+
 export function BatchView() {
   const { pid, vid } = useParams();
   const qc = useQueryClient();
@@ -526,7 +552,16 @@ export function BatchView() {
   // computed from its BOM, so it isn't entered on a finished batch.
   const showRecycled = productQ.data?.product_type !== 'finished';
 
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+const set = (key) => (e) => {
+  const value = e.target.value;
+
+  if (key === 'co2_footprint_kg') {
+    setForm((f) => ({ ...f, [key]: formatCo2Input(value) }));
+    return;
+  }
+
+  setForm((f) => ({ ...f, [key]: value }));
+};
 
   // Component sourcing collected up-front and saved together with the new batch.
   const { boms, componentBatches, nameOf, batchesFor, loadingBatches } = useVariantSourcing(vid);
@@ -568,7 +603,7 @@ export function BatchView() {
         batch_number: form.batch_number.trim(),
         production_date: form.production_date || null,
         country_of_origin: form.country_of_origin || null,
-        co2_footprint_kg: form.co2_footprint_kg ? Number(form.co2_footprint_kg) : null,
+        co2_footprint_kg: parseCo2(form.co2_footprint_kg),
         recycled_content_pct: showRecycled && form.recycled_content_pct ? Number(form.recycled_content_pct) : null,
         factory_ID: form.factory_ID || null,
         supplier_ID: form.supplier_ID || null,
@@ -600,17 +635,36 @@ export function BatchView() {
       setMsg({ kind: 'error', text: err instanceof ApiError ? err.message : 'Could not add batch.' })
   });
 
-  const submit = (e) => {
+const submit = (e) => {
     e.preventDefault();
     setMsg(null);
-    if (!form.batch_number.trim()) {
+
+    const batchNumber = form.batch_number.trim();
+
+    if (!batchNumber) {
       setMsg({ kind: 'error', text: 'Batch number is required.' });
       return;
     }
-    if (form.co2_footprint_kg !== '' && Number(form.co2_footprint_kg) < 0) {
-      setMsg({ kind: 'error', text: 'CO₂ footprint cannot be negative.' });
+
+    if (batchNumber.length > 40) {
+      setMsg({ kind: 'error', text: 'Batch number can have maximum 40 characters.' });
       return;
     }
+
+    const exists = (batchesQ.data ?? []).some(
+      (b) => b.batch_number?.trim().toLowerCase() === batchNumber.toLowerCase()
+    );
+
+    if (exists) {
+      setMsg({ kind: 'error', text: 'This batch number already exists.' });
+      return;
+    }
+
+    if (!isPastDate(form.production_date)) {
+      setMsg({ kind: 'error', text: 'Production date must be in the past.' });
+      return;
+    }
+
     if (form.recycled_content_pct !== '') {
       const rec = Number(form.recycled_content_pct);
       if (rec < 0 || rec > 100) {
@@ -618,6 +672,7 @@ export function BatchView() {
         return;
       }
     }
+
     addBatch.mutate();
   };
 
@@ -676,7 +731,7 @@ export function BatchView() {
         <Card className="p-6">
           <FormSection title="Add batch" description="A concrete production run of this variant.">
             <FieldRow label="Batch number" required visibility="internal" htmlFor="bn">
-              <Input id="bn" value={form.batch_number} onChange={set('batch_number')} placeholder="2026-06-A" />
+              <Input id="bn" value={form.batch_number} onChange={set('batch_number')} maxLength={40} placeholder="2026-06-A" />
             </FieldRow>
             <FieldRow label="Production date" visibility="internal" htmlFor="pd">
               <Input id="pd" type="date" value={form.production_date} onChange={set('production_date')} />
@@ -692,7 +747,13 @@ export function BatchView() {
             </FieldRow>
             <FieldRow label="CO₂ footprint (own production)" visibility="public" htmlFor="co2"
               hint="This product's OWN production, per its consumption unit (per finished piece for finished goods, per kg for a material sold by weight).">
-              <Input id="co2" type="number" step="0.001" value={form.co2_footprint_kg} onChange={set('co2_footprint_kg')} />
+              <Input
+                id="co2"
+                inputMode="numeric"
+                value={form.co2_footprint_kg}
+                onChange={set('co2_footprint_kg')}
+                placeholder="00,00"
+              />
             </FieldRow>
             {showRecycled && (
               <FieldRow label="Recycled content (%)" visibility="public" htmlFor="rc"

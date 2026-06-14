@@ -370,10 +370,88 @@ export function ProductDetail() {
             <Row label="Fibre composition" value={p.fibre_composition} visibility="public" />
             <Row label="Substances of concern" value={p.substances_of_concern} visibility="public" />
             <Row label="Country of origin" value={p.country_of_origin} visibility="public" />
-            <Row label="Care & washing instructions" value={p.care_instructions} visibility="public" />
-            <Row label="Repair instructions" value={p.repair_instructions} visibility="public" />
-            <Row label="Reuse instructions" value={p.reuse_instructions} visibility="public" />
+            <Row
+              label="Care & washing instructions"
+              value={p.care_instructions}
+              visibility="public"
+            />
+            <Row
+              label="Care video"
+              value={
+                p.care_video_url ? (
+                  <a
+                    href={p.care_video_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand-700 hover:underline"
+                  >
+                    Open video
+                  </a>
+                ) : null
+              }
+              visibility="public"
+            />
+
+            <Row
+              label="Repair instructions"
+              value={p.repair_instructions}
+              visibility="public"
+            />
+            <Row
+              label="Repair video"
+              value={
+                p.repair_video_url ? (
+                  <a
+                    href={p.repair_video_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand-700 hover:underline"
+                  >
+                    Open video
+                  </a>
+                ) : null
+              }
+              visibility="public"
+            />
+
+            <Row
+              label="Reuse instructions"
+              value={p.reuse_instructions}
+              visibility="public"
+            />
+            <Row
+              label="Reuse video"
+              value={
+                p.reuse_video_url ? (
+                  <a
+                    href={p.reuse_video_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand-700 hover:underline"
+                  >
+                    Open video
+                  </a>
+                ) : null
+              }
+              visibility="public"
+            />
             <Row label="Disposal instructions" value={p.disposal_instructions} visibility="public" />
+            <Row
+              label="Disposal video"
+              value={
+                p.disposal_video_url ? (
+                  <a
+                    href={p.disposal_video_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand-700 hover:underline"
+                  >
+                    Open video
+                  </a>
+                ) : null
+              }
+              visibility="public"
+            />
             <Row label="Durability score" value={p.durability_score != null ? `${p.durability_score} / 10` : null} visibility="public" />
             <Row label="Repairability score" value={p.repairability_score != null ? `${p.repairability_score} / 10` : null} visibility="public" />
             <Row label="ESPR compliance" value={<StatusBadge status={p.espr_compliance} />} visibility="public" />

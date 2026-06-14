@@ -407,7 +407,7 @@ export function ProductEdit() {
             Cancel
           </Button>
           <Button type="button" disabled={update.isPending} onClick={save}>
-            {update.isPending ? 'Saving…' : 'Save product'}
+            {update.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
       </Card>
