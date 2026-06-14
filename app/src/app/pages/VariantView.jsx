@@ -6,6 +6,7 @@ import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
 import { Breadcrumb } from '@/ui/Breadcrumb';
 import { BomEditor } from '@/ui/BomEditor';
+import { RequireRole } from '@/auth/RequireRole';
 
 function InfoRow({ label, value, visibility }) {
   return (
@@ -72,9 +73,11 @@ export function VariantView() {
           <Link to={`/products/${pid}/variants/${vid}/batches`}>
             <Button variant="ghost">Batches</Button>
           </Link>
-          <Link to={`/products/${pid}/variants/${vid}`}>
-            <Button variant="outline">Edit</Button>
-          </Link>
+          <RequireRole role="company_advanced">
+            <Link to={`/products/${pid}/variants/${vid}`}>
+              <Button variant="outline">Edit</Button>
+            </Link>
+          </RequireRole>
         </div>
       </div>
 

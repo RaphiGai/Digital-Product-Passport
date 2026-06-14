@@ -8,6 +8,7 @@ import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { StatusBadge } from '@/ui/Badge';
 import { FormSection, FieldRow, Input, Select, CountrySelect, CheckboxCard } from '@/ui/Form';
+import { RequireRole } from '@/auth/RequireRole';
 
 const EMPTY = {
   batch_number: '',
@@ -362,10 +363,11 @@ function BatchRow({ batch, pid, vid, onMsg }) {
               .filter(Boolean).join(' · ')}
           </div>
         </div>
-
-        <Link to={`/products/${pid}/variants/${vid}/batches/${batch.ID}/edit`}>
-          <Button variant="ghost" size="sm">Edit batch</Button>
-        </Link>
+        <RequireRole role="company_advanced">
+          <Link to={`/products/${pid}/variants/${vid}/batches/${batch.ID}/edit`}>
+            <Button variant="ghost" size="sm">Edit batch</Button>
+          </Link>
+        </RequireRole>
 
         {/* Stats */}
         <div className="flex items-center gap-4 text-sm">
@@ -380,6 +382,7 @@ function BatchRow({ batch, pid, vid, onMsg }) {
         </div>
 
         {/* Add items */}
+        <RequireRole role="company_advanced">
         <div className="flex items-center gap-1.5">
           <input
             type="number"
@@ -421,6 +424,7 @@ function BatchRow({ batch, pid, vid, onMsg }) {
             {publishAll.isPending ? 'Publishing…' : `Publish ${approvedDpps.length}`}
           </Button>
         )}
+        </RequireRole>
 
         {publishedCount > 0 && (
           <span className="text-xs text-green-700 font-medium">
@@ -732,6 +736,7 @@ const submit = (e) => {
       </Card>
 
       {/* Add batch form */}
+      <RequireRole role="company_advanced">
       <form onSubmit={submit}>
         <Card className="p-6">
           <FormSection title="Add batch" description="A concrete production run of this variant.">
@@ -799,6 +804,7 @@ const submit = (e) => {
           </div>
         </Card>
       </form>
+      </RequireRole>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
+import { RequireRole } from '@/auth/RequireRole';
 
 function InfoRow({ label, value, visibility }) {
   return (
@@ -138,9 +139,11 @@ export function BatchDetail() {
           <Link to={`/products/${pid}/variants/${vid}/batches`}>
             <Button variant="ghost">All batches</Button>
           </Link>
-          <Link to={`/products/${pid}/variants/${vid}/batches/${bid}/edit`}>
-            <Button variant="outline">Edit batch</Button>
-          </Link>
+          <RequireRole role="company_advanced">
+            <Link to={`/products/${pid}/variants/${vid}/batches/${bid}/edit`}>
+              <Button variant="outline">Edit</Button>
+            </Link>
+          </RequireRole>
         </div>
       </div>
 
