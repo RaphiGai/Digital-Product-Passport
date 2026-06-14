@@ -349,7 +349,12 @@ function BatchRow({ batch, pid, vid, onMsg }) {
       <div className="flex flex-wrap items-center gap-3 px-5 py-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-ink">{batch.batch_number ?? batch.ID}</span>
+            <Link
+              to={`/products/${pid}/variants/${vid}/batches/${batch.ID}`}
+              className="font-medium text-brand-700 hover:underline"
+            >
+              {batch.batch_number ?? batch.ID}
+            </Link>
             <StatusBadge status={batch.status} />
           </div>
           <div className="mt-0.5 text-xs text-ink-muted">
@@ -735,6 +740,9 @@ const submit = (e) => {
             </FieldRow>
             <FieldRow label="Production date" visibility="internal" htmlFor="pd">
               <Input id="pd" type="date" value={form.production_date} onChange={set('production_date')} />
+            </FieldRow>
+            <FieldRow label="Production stage" visibility="internal" htmlFor="ps" hint="e.g. Cut & Sew">
+            <Input id="ps" value={form.production_stage} onChange={set('production_stage')} placeholder="Cut & Sew" />
             </FieldRow>
             <FieldRow label="Country of origin" visibility="public" htmlFor="coo">
               <CountrySelect id="coo" value={form.country_of_origin} onChange={set('country_of_origin')} />

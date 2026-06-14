@@ -149,7 +149,7 @@ export function VariantEdit() {
             label="SKU"
             visibility="internal"
             htmlFor="sku"
-            hint="Automatically generated. Cannot be changed."
+            
           >
             <div className="rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700">
               {variantQ.data?.sku}

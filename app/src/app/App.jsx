@@ -41,7 +41,10 @@ export function App() {
           <Route path="products/:pid/variants/:vid/batches" element={<BatchView />} />
           <Route path="products/:pid/variants/:vid/batches/:bid" element={<BatchDetail />} />
           <Route path="products/:pid/variants/:vid/batches/:bid/edit" element={<BatchEdit />} />
-
+          <Route
+            path="/products/:pid/variants/:vid/batches/:bid"
+            element={<BatchDetail />}
+          />
           <Route path="partners" element={<Partners />} />
           <Route path="partners/new" element={<CreatePartner />} />
           <Route path="partners/:id" element={<PartnerDetail />} />

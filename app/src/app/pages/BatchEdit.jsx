@@ -14,6 +14,43 @@ export function BatchEdit() {
   const [form, setForm] = useState(null);
   const [msg, setMsg] = useState(null);
 
+  const today = new Date().toISOString().slice(0, 10);
+
+  const toCo2Input = (value) => {
+    if (value === null || value === undefined || value === '') return '';
+    return String(value).replace('.', ',');
+  };
+
+  const co2ToNumber = (value) => Number(String(value).replace(',', '.'));
+
+  const isPastDate = (value) => {
+    if (!value) return true;
+    return value < today;
+  };
+
+  const setCo2 = (e) => {
+    let value = e.target.value;
+
+    // only digits and comma
+    value = value.replace(/[^\d,]/g, '');
+
+    // only one comma
+    const parts = value.split(',');
+    if (parts.length > 2) {
+      value = `${parts[0]},${parts.slice(1).join('')}`;
+    }
+
+    const [beforeComma = '', afterComma = ''] = value.split(',');
+
+    // max 7 before comma, max 2 after comma
+    const cleaned =
+      value.includes(',')
+        ? `${beforeComma.slice(0, 7)},${afterComma.slice(0, 2)}`
+        : beforeComma.slice(0, 7);
+
+    setForm((f) => ({ ...f, co2_footprint_kg: cleaned }));
+  };
+
   const batchQ = useQuery({
     queryKey: ['Batches', 'one', bid],
     queryFn: () => odataGet('Batches', bid, { expand: ['factory', 'supplier'] })
@@ -42,7 +79,7 @@ export function BatchEdit() {
         production_stage:   b.production_stage ?? '',
         factory_ID:         b.factory_ID ?? '',
         supplier_ID:        b.supplier_ID ?? '',
-        co2_footprint_kg:   b.co2_footprint_kg ?? '',
+        co2_footprint_kg:   toCo2Input(b.co2_footprint_kg),
         recycled_content_pct: b.recycled_content_pct ?? '',
         status:             b.status ?? 'draft'
       });
@@ -69,8 +106,24 @@ export function BatchEdit() {
       setMsg({ kind: 'error', text: 'Batch number is required.' });
       return;
     }
-    if (form.co2_footprint_kg !== '' && Number(form.co2_footprint_kg) < 0) {
-      setMsg({ kind: 'error', text: 'CO₂ footprint cannot be negative.' });
+    if (form.production_date && !isPastDate(form.production_date)) {
+      setMsg({ kind: 'error', text: 'Production date must be in the past.' });
+      return;
+    }
+
+    if (form.production_stage.trim().length > 60) {
+      setMsg({ kind: 'error', text: 'Production stage can have maximum 60 characters.' });
+      return;
+    }
+
+    if (
+      form.co2_footprint_kg !== '' &&
+      !/^\d{1,7}(,\d{1,2})?$/.test(form.co2_footprint_kg)
+    ) {
+      setMsg({
+        kind: 'error',
+        text: 'CO₂ footprint must have max. 7 digits before comma and max. 2 digits after comma.'
+      });
       return;
     }
     if (form.recycled_content_pct !== '') {
@@ -90,7 +143,7 @@ export function BatchEdit() {
           production_stage:     form.production_stage || null,
           factory_ID:           form.factory_ID || null,
           supplier_ID:          form.supplier_ID || null,
-          co2_footprint_kg:     form.co2_footprint_kg !== '' ? Number(form.co2_footprint_kg) : null,
+          co2_footprint_kg:     form.co2_footprint_kg !== '' ? co2ToNumber(form.co2_footprint_kg) : null,
           recycled_content_pct: showRecycled && form.recycled_content_pct !== '' ? Number(form.recycled_content_pct) : null,
           status:               form.status
         }
@@ -141,17 +194,35 @@ export function BatchEdit() {
           title="Batch details"
           description="Production run information. Status controls DPP generation eligibility."
         >
-          <FieldRow label="Batch number" required visibility="internal" htmlFor="bn">
-            <Input id="bn" value={form.batch_number} onChange={set('batch_number')} />
+          <FieldRow
+            label="Batch number"
+            visibility="internal"
+            htmlFor="Batch number"
+          >
+            <div className="rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700">
+              {form.batch_number}
+            </div>
           </FieldRow>
           <FieldRow label="Production date" visibility="internal" htmlFor="pd">
-            <Input id="pd" type="date" value={form.production_date} onChange={set('production_date')} />
+            <Input
+              id="pd"
+              type="date"
+              max={today}
+              value={form.production_date}
+              onChange={set('production_date')}
+            />
           </FieldRow>
           <FieldRow label="Country of origin" visibility="public" htmlFor="coo">
             <CountrySelect id="coo" value={form.country_of_origin} onChange={set('country_of_origin')} />
           </FieldRow>
           <FieldRow label="Production stage" visibility="internal" htmlFor="ps" hint="e.g. Cut & Sew">
-            <Input id="ps" value={form.production_stage} onChange={set('production_stage')} placeholder="Cut & Sew" />
+            <Input
+              id="ps"
+              maxLength={60}
+              value={form.production_stage}
+              onChange={set('production_stage')}
+              placeholder="Cut & Sew"
+            /> 
           </FieldRow>
           <FieldRow label="Factory" visibility="internal" htmlFor="factory">
             <Select id="factory" value={form.factory_ID} onChange={set('factory_ID')} options={partnerOptions} />
@@ -161,7 +232,15 @@ export function BatchEdit() {
           </FieldRow>
           <FieldRow label="CO₂ footprint (own production)" visibility="public" htmlFor="co2"
             hint="This product's OWN production, per its consumption unit: per finished piece for assembled/finished goods (added on top of components), per kg for a material sold by weight.">
-            <Input id="co2" type="number" step="0.001" value={form.co2_footprint_kg} onChange={set('co2_footprint_kg')} />
+            <Input
+              id="co2"
+              type="text"
+              inputMode="decimal"
+              maxLength={10}
+              value={form.co2_footprint_kg}
+              onChange={setCo2}
+              placeholder="00,00"
+            />
           </FieldRow>
           {showRecycled && (
             <FieldRow label="Recycled content (%)" visibility="public" htmlFor="rc"
@@ -192,7 +271,7 @@ export function BatchEdit() {
             Back to batches
           </Button>
           <Button type="button" disabled={update.isPending} onClick={save}>
-            {update.isPending ? 'Saving…' : 'Save batch'}
+            {update.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
       </Card>
