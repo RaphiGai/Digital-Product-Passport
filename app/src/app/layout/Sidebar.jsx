@@ -6,6 +6,7 @@ import {
   QrCode,
   ScanLine,
   Layers,
+  Megaphone,
   ShieldCheck,
   FileBarChart,
   Settings
@@ -20,6 +21,7 @@ const NAV = [
       { to: '/products', label: 'Products', icon: Shirt },
       { to: '/partners', label: 'Business partners', icon: Building2 },
       { to: '/dpps', label: 'DPPs', icon: QrCode },
+      { to: '/marketing', label: 'Marketing', icon: Megaphone, adminOnly: true },
       // Public token-entry page (lookup.html → ConsumerApp's TokenEntry form). It is a
       // separate, unauthenticated HTML entry point, so this is a plain link (new tab),
       // not an in-app NavLink route.

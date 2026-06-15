@@ -9,6 +9,8 @@
  * need no CSRF token. The Approuter session cookie travels automatically.
  */
 
+import { toUserMessage } from './errors';
+
 export class ApiError extends Error {
   /**
    * @param {number} status
@@ -24,6 +26,33 @@ export class ApiError extends Error {
 }
 
 const ODATA_BASE = '/odata/v4/dpp';
+
+/**
+ * Build an ApiError from a failed Response and set a clean, user-facing `message`.
+ * The raw OData message / status line is preserved on `body` for debugging, but never
+ * shown — `toUserMessage()` decides what the user sees.
+ * @param {Response} res
+ * @returns {Promise<ApiError>}
+ */
+async function buildApiError(res) {
+  let body = null;
+  try {
+    body = await res.json();
+  } catch {
+    /* non-JSON / empty / binary error body */
+  }
+  const rawMessage = body?.error?.message ?? `${res.status} ${res.statusText}`;
+  const err = new ApiError(res.status, body, rawMessage);
+  err.message = toUserMessage(err);
+  return err;
+}
+
+/** ApiError for a network-level failure (no HTTP response reached us). Status 0 → network msg. */
+function networkError() {
+  const err = new ApiError(0, null, '');
+  err.message = toUserMessage(err);
+  return err;
+}
 
 /**
  * Generate a client-side UUID for entity keys.
@@ -54,17 +83,23 @@ export function keyLiteral(key) {
  * @returns {Promise<any>}
  */
 async function request(path, init) {
-  const res = await fetch(path, {
-    ...init,
-    // Send the app-managed dpp_session cookie on every call (same-origin in prod,
-    // via the Vite proxy in dev).
-    credentials: 'include',
-    headers: {
-      Accept: 'application/json',
-      ...(init && init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init && init.headers)
-    }
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      ...init,
+      // Send the app-managed dpp_session cookie on every call (same-origin in prod,
+      // via the Vite proxy in dev).
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        ...(init && init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(init && init.headers)
+      }
+    });
+  } catch {
+    // fetch rejects only on network-level failures (server unreachable, DNS, offline).
+    throw networkError();
+  }
 
   if (!res.ok) {
     // No (valid) session → bounce to the login screen. The /auth/* endpoints
@@ -72,14 +107,7 @@ async function request(path, init) {
     if (res.status === 401 && !(init && init.noAuthRedirect)) {
       redirectToLogin();
     }
-    let body = null;
-    try {
-      body = await res.json();
-    } catch {
-      /* non-JSON error body */
-    }
-    const message = body?.error?.message ?? `${res.status} ${res.statusText}`;
-    throw new ApiError(res.status, body, message);
+    throw await buildApiError(res);
   }
 
   if (res.status === 204) return undefined;
@@ -158,6 +186,34 @@ export function odataUpdate(entitySet, key, payload) {
  */
 export function odataDelete(entitySet, key) {
   return request(`${ODATA_BASE}/${entitySet}(${keyLiteral(key)})`, { method: 'DELETE' });
+}
+
+/**
+ * Upload raw bytes to a CAP media stream, e.g. Documents(ID)/content. Unlike the
+ * JSON helpers above this sends the file body verbatim (no base64, no JSON), with the
+ * file's own MIME type — CAP stores that into the @Core.IsMediaType element. The two-step
+ * pattern is: odataCreate the metadata row first, then PUT the bytes to this endpoint.
+ * @param {string} entitySet
+ * @param {string} key
+ * @param {string} mediaProp   media stream property name, e.g. 'content'
+ * @param {File|Blob} file
+ */
+export async function odataUploadMedia(entitySet, key, mediaProp, file) {
+  let res;
+  try {
+    res = await fetch(`${ODATA_BASE}/${entitySet}(${keyLiteral(key)})/${mediaProp}`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: file
+    });
+  } catch {
+    throw networkError();
+  }
+  if (!res.ok) {
+    if (res.status === 401) redirectToLogin();
+    throw await buildApiError(res);
+  }
 }
 
 /**

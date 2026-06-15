@@ -15,7 +15,9 @@ import {
   Repeat,
   PlayCircle,
   Gauge,
-  Fingerprint
+  Fingerprint,
+  FileCheck,
+  Download
 } from 'lucide-react';
 
 /**
@@ -50,6 +52,19 @@ const deDate = (v) => {
   if (!v) return null;
   const [y, m, d] = String(v).slice(0, 10).split('-');
   return d && m && y ? `${d}.${m}.${y}` : String(v).slice(0, 10);
+};
+
+/** Human-readable file size. */
+const fmtSize = (b) =>
+  b == null ? '' : b < 1024 ? `${b} B` : b < 1048576 ? `${Math.round(b / 1024)} KB` : `${(b / 1048576).toFixed(1)} MB`;
+
+const DOC_TYPE_LABEL = {
+  certificate: 'Certificate',
+  test_report: 'Test report',
+  declaration_of_conformity: 'Declaration of conformity',
+  safety_data_sheet: 'Safety data sheet',
+  manual: 'Manual',
+  other: 'Document'
 };
 
 export function ConsumerApp() {
@@ -197,6 +212,30 @@ function Passport({ dpp }) {
                 </div>
               ))}
             </div>
+          </Section>
+        )}
+
+        {dpp.documents?.length > 0 && (
+          <Section icon={FileCheck} title="Certificates & documents">
+            <ul className="space-y-2">
+              {dpp.documents.map((d) => (
+                <li key={d.id}>
+                  <a
+                    href={d.download_url}
+                    download={d.file_name || true}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-gray-50"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Download className="h-4 w-4 shrink-0 text-ink-muted" />
+                      <span className="truncate">{d.title || d.file_name}</span>
+                    </span>
+                    <span className="shrink-0 text-xs text-ink-muted">
+                      {[DOC_TYPE_LABEL[d.doc_type] ?? d.doc_type, fmtSize(d.file_size)].filter(Boolean).join(' · ')}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </Section>
         )}
 

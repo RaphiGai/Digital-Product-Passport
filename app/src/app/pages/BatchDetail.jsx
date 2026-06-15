@@ -9,6 +9,7 @@ import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { RequireRole } from '@/auth/RequireRole';
+import { DocumentManager } from '@/ui/DocumentManager';
 
 function InfoRow({ label, value, visibility }) {
   return (
@@ -196,6 +197,9 @@ export function BatchDetail() {
           </div>
         </Card>
       </div>
+
+      {/* Certificates & documents (read-only; managed via batch edit) */}
+      <DocumentManager scope="batch" ownerId={bid} readOnly />
 
       {/* Items */}
       <Card className="p-0">

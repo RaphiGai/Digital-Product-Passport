@@ -7,6 +7,7 @@ import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { FormSection, FieldRow, Input, Select, CountrySelect } from '@/ui/Form';
+import { DocumentManager } from '@/ui/DocumentManager';
 
 export function BatchEdit() {
   const { pid, vid, bid } = useParams();
@@ -275,6 +276,9 @@ export function BatchEdit() {
           </Button>
         </div>
       </Card>
+
+      {/* Certificates & proofs at batch level (e.g. per-run lab/test reports). */}
+      <DocumentManager scope="batch" ownerId={bid} />
     </div>
   );
 }

@@ -23,14 +23,17 @@ export default defineConfig(() => {
       proxy: {
         '/odata': toBackend,
         '/auth': toBackend,
-        // The QR code points here (/public/dpp/:token). A browser navigating to it
-        // (Accept: text/html) should get the rendered consumer page; the page's own
-        // JSON fetch and the qr.png image fall through to the backend.
+        // The QR code points here (/public/dpp/:token). A browser navigating to the
+        // consumer PAGE (Accept: text/html) should get the rendered SPA; the page's own
+        // JSON fetch, the qr.png image, and per-token sub-resources (e.g. document
+        // downloads at /public/dpp/:token/documents/:id) must fall through to the backend.
         '/public': {
           target: BACKEND,
           changeOrigin: true,
           bypass: (req) => {
-            if (req.method === 'GET' && (req.headers.accept || '').includes('text/html')) {
+            // Only the bare consumer page path is the SPA shell — NOT its sub-resources.
+            const isConsumerPage = /^\/public\/dpp\/[^/?#]+\/?(?:[?#].*)?$/.test(req.url || '');
+            if (req.method === 'GET' && isConsumerPage && (req.headers.accept || '').includes('text/html')) {
               return '/consumer.html';
             }
           }

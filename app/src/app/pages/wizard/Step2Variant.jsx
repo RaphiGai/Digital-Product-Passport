@@ -47,6 +47,16 @@ export function Step2Variant({ ctx, setCtx, onPrimary, primaryLabel, onBack }) {
       setError('SKU is required for a variant.');
       return;
     }
+    // Mirror VariantEdit so invalid input is caught here, with a clear message,
+    // before the backend rejects it.
+    if (form.gtin && form.gtin.length < 8) {
+      setError('GTIN must contain at least 8 digits.');
+      return;
+    }
+    if (form.weight_g !== '' && Number(form.weight_g) <= 0) {
+      setError('Weight must be a positive number (in grams).');
+      return;
+    }
     create.mutate(
       {
         product_ID: ctx.productId,

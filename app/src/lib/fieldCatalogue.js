@@ -85,6 +85,38 @@ export const USER_ROLES = [
   { value: 'company_advanced', label: 'Advanced (full access)', hint: 'Full access, incl. creating/managing users.' }
 ];
 
+/**
+ * Document types for certificates & proofs (DocumentManager). Values mirror the
+ * CDS `DocumentType` enum exactly.
+ */
+export const DOCUMENT_TYPES = [
+  { value: 'certificate', label: 'Certificate' },
+  { value: 'test_report', label: 'Test report' },
+  { value: 'declaration_of_conformity', label: 'Declaration of conformity' },
+  { value: 'safety_data_sheet', label: 'Safety data sheet' },
+  { value: 'manual', label: 'Manual' },
+  { value: 'other', label: 'Other' }
+];
+
+/** Quick value→label lookup for rendering document rows. */
+export const DOC_TYPE_LABEL = Object.fromEntries(DOCUMENT_TYPES.map((t) => [t.value, t.label]));
+
+/**
+ * Marketing/advertising link types (MarketingLinksManager). Values mirror the CDS
+ * `MarketingLinkType` enum exactly.
+ */
+export const MARKETING_LINK_TYPES = [
+  { value: 'advertisement', label: 'Advertisement' },
+  { value: 'product_info', label: 'Product info' },
+  { value: 'care_product', label: 'Care product' },
+  { value: 'promotion', label: 'Promotion' },
+  { value: 'related_product', label: 'Related product' },
+  { value: 'other', label: 'Other' }
+];
+
+/** Quick value→label lookup for rendering marketing-link rows. */
+export const MARKETING_LINK_LABEL = Object.fromEntries(MARKETING_LINK_TYPES.map((t) => [t.value, t.label]));
+
 export const PARTNER_ROLES = [
   { value: 'supplier', label: 'Supplier', hint: 'Provides raw materials or components' },
   { value: 'manufacturer', label: 'Manufacturer', hint: 'Produces or assembles the finished product' },

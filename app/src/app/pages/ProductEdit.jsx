@@ -8,6 +8,7 @@ import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { FormSection, FieldRow, Input, Textarea, RadioCards, CountrySelect } from '@/ui/Form';
+import { DocumentManager } from '@/ui/DocumentManager';
 
 export function ProductEdit() {
   const { id } = useParams();
@@ -411,6 +412,9 @@ export function ProductEdit() {
           </Button>
         </div>
       </Card>
+
+      {/* Certificates & proofs at product level — self-persisting, like the BOM editor. */}
+      <DocumentManager scope="product" ownerId={id} />
     </div>
   );
 }

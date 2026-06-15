@@ -9,6 +9,7 @@ import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
 import { Breadcrumb } from '@/ui/Breadcrumb';
 import { RequireRole } from '@/auth/RequireRole';
+import { DocumentManager } from '@/ui/DocumentManager';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -458,6 +459,9 @@ export function ProductDetail() {
           </div>
         </Card>
       </div>
+
+      {/* Certificates & documents (read-only; managed via product edit) */}
+      <DocumentManager scope="product" ownerId={id} readOnly />
 
       {/* Product hierarchy explorer */}
       <Card className="p-0">

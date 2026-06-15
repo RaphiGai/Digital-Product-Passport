@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
-import { odataGet, callFunction } from '@/api/client';
+import { odataGet, odataList, callFunction } from '@/api/client';
 import { useAction, useUpdate } from '@/api/hooks';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
@@ -9,6 +9,8 @@ import { Badge, StatusBadge } from '@/ui/Badge';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { Textarea } from '@/ui/Form';
 import { RequireRole } from '@/auth/RequireRole';
+import { DocumentManager } from '@/ui/DocumentManager';
+import { MarketingLinksManager } from '@/ui/MarketingLinksManager';
 import { printLabels } from '@/lib/printLabels';
 import { ChevronRight, Printer } from 'lucide-react';
 
@@ -19,6 +21,93 @@ function Row({ label, value }) {
       <span className="text-sm text-ink-muted">{label}</span>
       <span className="min-w-0 text-right text-sm text-ink">{value ?? '—'}</span>
     </div>
+  );
+}
+
+/** One version row (US5.9), expandable to the frozen snapshot of that publish. */
+function VersionRow({ v }) {
+  const [open, setOpen] = useState(false);
+  let snap = null;
+  if (open && v.snapshot_data) {
+    try {
+      snap = JSON.parse(v.snapshot_data);
+    } catch {
+      snap = null;
+    }
+  }
+  return (
+    <div className="border-b border-black/5 py-3 last:border-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-start justify-between gap-4 text-left"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-ink-muted transition-transform ${open ? 'rotate-90' : ''}`} />
+          <span className="min-w-0">
+            <span className="text-sm font-medium text-ink">v{v.version_number}</span>
+            {v.change_reason && <span className="ml-2 text-xs text-ink-muted">{v.change_reason}</span>}
+          </span>
+        </span>
+        <span className="shrink-0 text-right text-xs text-ink-muted">
+          {fmtDate(v.snapshot_date)}
+          {v.changed_by?.display_name ? ` · ${v.changed_by.display_name}` : ''}
+        </span>
+      </button>
+      {open && snap && (
+        <div className="ml-5 mt-2 space-y-0.5 rounded-lg bg-gray-50/60 px-3 py-2 text-xs text-ink-muted">
+          {snap.product?.name && (
+            <div>
+              Product: <span className="text-ink">{[snap.product.name, snap.product.brand, snap.product.category].filter(Boolean).join(' · ')}</span>
+            </div>
+          )}
+          {snap.variant && (
+            <div>
+              Variant: <span className="text-ink">{[snap.variant.color, snap.variant.size, snap.variant.sku].filter(Boolean).join(' / ') || '—'}</span>
+            </div>
+          )}
+          {snap.batch && (
+            <div>
+              Batch: <span className="text-ink">{[snap.batch.batch_number, fmtDate(snap.batch.production_date)].filter(Boolean).join(' · ') || '—'}</span>
+            </div>
+          )}
+          {snap.captured_at && (
+            <div>Captured: <span className="text-ink">{fmtDate(snap.captured_at)}</span></div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Read-only version history card (US5.9). One row per published version. */
+function VersionHistoryCard({ dppId }) {
+  const q = useQuery({
+    queryKey: ['DPPVersions', dppId],
+    queryFn: () =>
+      odataList('DPPVersions', {
+        filter: `dpp_ID eq '${dppId}'`,
+        orderby: 'version_number desc',
+        expand: ['changed_by($select=ID,display_name)']
+      }),
+    enabled: !!dppId
+  });
+  const rows = q.data ?? [];
+  return (
+    <Card>
+      <CardTitle>Version history</CardTitle>
+      {q.isLoading ? (
+        <p className="mt-3 text-sm text-ink-muted">Loading…</p>
+      ) : rows.length ? (
+        <div className="mt-2">
+          {rows.map((v) => (
+            <VersionRow key={v.ID} v={v} />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-ink-muted">No version history yet — publish the passport to record a version.</p>
+      )}
+    </Card>
   );
 }
 
@@ -414,6 +503,20 @@ export function DppDetail() {
               </div>
             </Card>
           )}
+
+          {/* ── Certificates & documents (read-only; managed on the product/batch pages) ── */}
+          {product && (
+            <DocumentManager scope="product" ownerId={product.ID} readOnly title="Product documents & certificates" />
+          )}
+          {batch && (
+            <DocumentManager scope="batch" ownerId={batch.ID} readOnly title="Batch documents & certificates" />
+          )}
+
+          {/* ── Marketing links (US5.8) ── */}
+          <MarketingLinksManager dppId={id} />
+
+          {/* ── Version history (US5.9) ── */}
+          <VersionHistoryCard dppId={id} />
         </div>
 
         <div className="space-y-6">
