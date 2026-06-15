@@ -15,6 +15,7 @@ import { PartnerDetail } from './pages/PartnerDetail';
 import { CreatePartner } from './pages/CreatePartner';
 import { Dpps } from './pages/Dpps';
 import { DppDetail } from './pages/DppDetail';
+import { Boms } from './pages/Boms';
 import { ComingSoon } from './pages/ComingSoon';
 import { BatchEdit } from './pages/BatchEdit';
 import { PartnerEdit } from './pages/PartnerEdit';
@@ -52,6 +53,7 @@ export function App() {
 
           <Route path="dpps" element={<Dpps />} />
           <Route path="dpps/:id" element={<DppDetail />} />
+          <Route path="boms" element={<Boms />} />
 
           {/* Sidebar items without backend yet */}
           <Route path="validation" element={<ComingSoon title="Validation" />} />

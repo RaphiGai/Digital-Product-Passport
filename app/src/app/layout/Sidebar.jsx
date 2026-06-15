@@ -5,6 +5,7 @@ import {
   Building2,
   QrCode,
   ScanLine,
+  Layers,
   ShieldCheck,
   FileBarChart,
   Settings
@@ -22,7 +23,8 @@ const NAV = [
       // Public token-entry page (lookup.html → ConsumerApp's TokenEntry form). It is a
       // separate, unauthenticated HTML entry point, so this is a plain link (new tab),
       // not an in-app NavLink route.
-      { href: '/lookup.html', label: 'Open passport (QR token)', icon: ScanLine, external: true }
+      { href: '/lookup.html', label: 'Open passport (QR token)', icon: ScanLine, external: true },
+      { to: '/boms', label: 'Bill of materials', icon: Layers }
     ]
   },
   {

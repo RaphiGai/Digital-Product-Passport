@@ -384,8 +384,25 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
       setMsg({ kind: 'error', text: 'External DPP URL must start with https:// (or http://).' });
       return;
     }
+    if (!isExternal && row.component_ID) {
+      const isDuplicate = rows.some(
+        (r) => r.component_ID === row.component_ID && r.ID !== editingId
+      );
+      if (isDuplicate) {
+        const productName = products.data?.find((p) => p.ID === row.component_ID)?.name;
+        setMsg({
+          kind: 'error',
+          text: `"${productName ?? row.component_ID}" is already in this BOM. Each component product can only appear once per bill of materials.`
+        });
+        return;
+      }
+    }
     if (row.quantity !== '' && Number(row.quantity) <= 0) {
       setMsg({ kind: 'error', text: 'Quantity must be greater than 0.' });
+      return;
+    }
+    if (row.unit === 'pcs' && row.quantity !== '' && !Number.isInteger(Number(row.quantity))) {
+      setMsg({ kind: 'error', text: 'Number of pieces must be a whole number (e.g. 3, not 1.5).' });
       return;
     }
     if (row.unit === '%' && row.quantity !== '') {
@@ -527,6 +544,7 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
                   value={row.component_name}
                   onChange={set('component_name')}
                   placeholder="e.g. Recycled polyester thread"
+                  maxLength={200}
                 />
               </FieldRow>
               <FieldRow label="Category" htmlFor="bom-ccat">
@@ -535,6 +553,7 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
                   value={row.component_category}
                   onChange={set('component_category')}
                   placeholder="e.g. Trim"
+                  maxLength={100}
                 />
               </FieldRow>
               <FieldRow label="Fibre composition" htmlFor="bom-cfib">
@@ -543,6 +562,7 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
                   value={row.component_fibre}
                   onChange={set('component_fibre')}
                   placeholder="e.g. 100% Polyester"
+                  maxLength={500}
                 />
               </FieldRow>
             </>
@@ -564,6 +584,7 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
               value={row.component_role}
               onChange={set('component_role')}
               placeholder="Main fabric"
+              maxLength={100}
             />
           </FieldRow>
 
@@ -580,6 +601,7 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
                   value={row.external_dpp_url}
                   onChange={set('external_dpp_url')}
                   placeholder="https://supplier.example/dpp/…"
+                  maxLength={2048}
                 />
               </FieldRow>
               <FieldRow
