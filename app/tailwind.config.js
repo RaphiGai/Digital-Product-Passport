@@ -4,24 +4,25 @@ export default {
   theme: {
     extend: {
       colors: {
-        // DPP Studio palette derived from the mockups (green/olive on warm beige).
         brand: {
-          50: '#f3f7ee',
-          100: '#e4eed6',
-          200: '#cadfae',
-          300: '#a8c97e',
-          400: '#84ad52',
-          500: '#5f8d34',
-          600: '#2f5e1f', // primary action green
-          700: '#274d1c',
-          800: '#213f1a',
-          900: '#1d3518'
+          50: 'rgb(var(--brand-50) / <alpha-value>)',
+          100: 'rgb(var(--brand-100) / <alpha-value>)',
+          200: 'rgb(var(--brand-200) / <alpha-value>)',
+          300: 'rgb(var(--brand-300) / <alpha-value>)',
+          400: 'rgb(var(--brand-400) / <alpha-value>)',
+          500: 'rgb(var(--brand-500) / <alpha-value>)',
+          600: 'rgb(var(--brand-600) / <alpha-value>)',
+          700: 'rgb(var(--brand-700) / <alpha-value>)',
+          800: 'rgb(var(--brand-800) / <alpha-value>)',
+          900: 'rgb(var(--brand-900) / <alpha-value>)'
         },
-        canvas: '#f4f3ee', // warm beige page background
-        card: '#ffffff',
+
+        canvas: 'rgb(var(--canvas) / <alpha-value>)',
+        card: 'rgb(var(--card) / <alpha-value>)',
+
         ink: {
-          DEFAULT: '#1f2421',
-          muted: '#6b7280'
+          DEFAULT: 'rgb(var(--ink) / <alpha-value>)',
+          muted: 'rgb(var(--ink-muted) / <alpha-value>)'
         }
       },
       borderRadius: {

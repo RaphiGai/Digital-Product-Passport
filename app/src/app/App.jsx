@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
+import { useEffect } from 'react';
 import { Dashboard } from './pages/Dashboard';
 import { Products } from './pages/Products';
 import { ProductDetail } from './pages/ProductDetail';
@@ -25,7 +26,13 @@ import { Settings } from './pages/Settings';
 import { ProfileSettings } from './pages/ProfileSettings';
 import { AppearanceSettings } from './pages/AppearanceSettings';
 
+
 export function App() {
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('appearanceTheme') || 'green';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
