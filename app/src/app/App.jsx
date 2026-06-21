@@ -22,6 +22,8 @@ import { BatchEdit } from './pages/BatchEdit';
 import { PartnerEdit } from './pages/PartnerEdit';
 import { Login } from './pages/Login';
 import { Settings } from './pages/Settings';
+import { ProfileSettings } from './pages/ProfileSettings';
+import { AppearanceSettings } from './pages/AppearanceSettings';
 
 export function App() {
   return (
@@ -57,10 +59,15 @@ export function App() {
           <Route path="marketing" element={<Marketing />} />
           <Route path="boms" element={<Boms />} />
 
+
+          <Route path="/profile" element={<ProfileSettings />} />
+          <Route path="/appearance" element={<AppearanceSettings />} />
+
           {/* Sidebar items without backend yet */}
           <Route path="validation" element={<ComingSoon title="Validation" />} />
           <Route path="reports" element={<ComingSoon title="Reports" />} />
           <Route path="settings" element={<Settings />} />
+
 
           <Route path="*" element={<ComingSoon title="Not found" />} />
         </Route>

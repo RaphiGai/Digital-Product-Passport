@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { LogOut } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { LogOut, User, Palette } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMe } from '@/auth/useMe';
 import { logout as apiLogout } from '@/auth/authApi';
@@ -66,6 +67,25 @@ export function Topbar() {
               {me?.role && <p className="truncate text-xs text-ink-muted">{me.role}</p>}
               {me?.tenantId && <p className="truncate text-xs text-ink-muted">{me.tenantId}</p>}
             </div>
+            <Link
+              to="/profile"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-gray-50"
+            >
+              <User className="h-4 w-4 text-ink-muted" />
+              My Profile
+            </Link>
+
+            <Link
+              to="/appearance"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-gray-50"
+            >
+              <Palette className="h-4 w-4 text-ink-muted" />
+              Appearance
+            </Link>
             <button
               type="button"
               role="menuitem"

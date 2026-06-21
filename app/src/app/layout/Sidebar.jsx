@@ -38,8 +38,10 @@ const NAV = [
   },
   {
     heading: 'System',
-    // User management lives here — visible to company_advanced only.
-    items: [{ to: '/settings', label: 'Settings', icon: Settings, adminOnly: true }]
+    adminOnly: true,
+    items: [
+      { to: '/settings', label: 'Administrator Settings', icon: Settings }
+    ]
   }
 ];
 
@@ -57,8 +59,14 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-6 px-3 py-2">
         {NAV.map((group, i) => {
-          const items = group.items.filter((it) => !it.adminOnly || isAdvanced);
+          if (group.adminOnly && !isAdvanced) return null;
+
+          const items = group.items.filter(
+            (it) => !it.adminOnly || isAdvanced
+          );
+
           if (items.length === 0) return null;
+
           return (
           <div key={i}>
             {group.heading && (
