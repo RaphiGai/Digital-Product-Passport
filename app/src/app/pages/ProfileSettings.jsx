@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMe } from '@/auth/useMe';
+import { useUnboundAction } from '@/api/hooks';
+import { ApiError } from '@/api/client';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
@@ -9,7 +11,8 @@ import { changePassword as apiChangePassword } from '@/auth/authApi';
 
 export function ProfileSettings() {
   const { data: me, isLoading } = useMe();
-  
+  // Self-service profile update; invalidating ['me'] refreshes the topbar + this page.
+  const updateProfile = useUnboundAction({ invalidate: [['me']] });
 
   const [form, setForm] = useState({
     displayName: '',
@@ -43,7 +46,7 @@ export function ProfileSettings() {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
-  const savePersonalInformation = async () => {
+  const savePersonalInformation = () => {
     setMsg(null);
 
     if (!form.displayName.trim()) {
@@ -61,10 +64,14 @@ export function ProfileSettings() {
       return;
     }
 
-    setMsg({
-      kind: 'success',
-      text: 'Personal information updated successfully.'
-    });
+    updateProfile.mutate(
+      { action: 'updateProfile', payload: { displayName: form.displayName.trim(), email: form.email.trim() } },
+      {
+        onSuccess: () => setMsg({ kind: 'success', text: 'Personal information updated successfully.' }),
+        onError: (err) =>
+          setMsg({ kind: 'error', text: err instanceof ApiError ? err.message : 'Could not update your profile.' })
+      }
+    );
   };
 
   const submitPasswordChange = async (e) => {
@@ -171,9 +178,9 @@ export function ProfileSettings() {
           <Button
             type="button"
             onClick={savePersonalInformation}
-            disabled={saving}
+            disabled={updateProfile.isPending}
           >
-            Save
+            {updateProfile.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
         </Card>
