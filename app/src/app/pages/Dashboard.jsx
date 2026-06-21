@@ -14,14 +14,16 @@ function greeting(date = new Date()) {
   return 'Good evening';
 }
 
-/** @param {{ label: string, value: string | number, hint?: string }} props */
-function Kpi({ label, value, hint }) {
+/** @param {{ label: string, value: string | number, hint?: string, to: string }} props */
+function Kpi({ label, value, hint, to }) {
   return (
-    <Card>
-      <p className="text-sm text-ink-muted">{label}</p>
-      <p className="mt-1 text-3xl font-semibold text-ink">{value}</p>
-      {hint && <p className="mt-1 text-xs text-ink-muted">{hint}</p>}
-    </Card>
+    <Link to={to} className="block">
+      <Card className="cursor-pointer transition hover:-translate-y-0.5 hover:shadow-md">
+        <p className="text-sm text-ink-muted">{label}</p>
+        <p className="mt-1 text-3xl font-semibold text-ink">{value}</p>
+        {hint && <p className="mt-1 text-xs text-ink-muted">{hint}</p>}
+      </Card>
+    </Link>
   );
 }
 
@@ -58,17 +60,19 @@ export function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Kpi label="Total products" value={products.data ?? '—'} />
-        <Kpi
-          label="Business partners"
-          value={partners.data ?? '—'}
-          hint="Suppliers, factories, recyclers"
-        />
-        <Kpi
-          label="Digital product passports"
-          value={dpps.data ?? '—'}
-          hint="Across all product variants"
-        />
+      <Kpi label="Total products" value={products.data ?? '—'} hint="Access all products" to="/products" />
+      <Kpi
+        label="Business partners"
+        value={partners.data ?? '—'}
+        hint="Suppliers, factories, recyclers"
+        to="/partners"
+      />
+      <Kpi
+        label="Digital product passports"
+        value={dpps.data ?? '—'}
+        hint="Across all product variants"
+        to="/dpps"
+      />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
