@@ -39,18 +39,11 @@ export function ProfileSettings() {
     setForm((f) => ({ ...f, [key]: e.target.value }));
   };
 
-  const savePersonalInformation = async () => {
-  setMsg(null);
-
-  // later: call backend endpoint
-  setMsg({
-    kind: 'success',
-    text: 'Personal information updated successfully.'
-  });
+  const isValidEmail = (email) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const savePersonalInformation = async () => {
     setMsg(null);
 
     if (!form.displayName.trim()) {
@@ -63,21 +56,34 @@ export function ProfileSettings() {
       return;
     }
 
-    if (form.newPassword || form.confirmPassword || form.currentPassword) {
-      if (!form.currentPassword) {
-        setMsg({ kind: 'error', text: 'Current password is required to change password.' });
-        return;
-      }
+    if (!isValidEmail(form.email)) {
+      setMsg({ kind: 'error', text: 'Please enter a valid email address.' });
+      return;
+    }
 
-      if (form.newPassword.length < 8) {
-        setMsg({ kind: 'error', text: 'New password must have at least 8 characters.' });
-        return;
-      }
+    setMsg({
+      kind: 'success',
+      text: 'Personal information updated successfully.'
+    });
+  };
 
-      if (form.newPassword !== form.confirmPassword) {
-        setMsg({ kind: 'error', text: 'New passwords do not match.' });
-        return;
-      }
+  const submitPasswordChange = async (e) => {
+    e.preventDefault();
+    setMsg(null);
+
+    if (!form.currentPassword) {
+      setMsg({ kind: 'error', text: 'Current password is required to change password.' });
+      return;
+    }
+
+    if (form.newPassword.length < 8) {
+      setMsg({ kind: 'error', text: 'New password must have at least 8 characters.' });
+      return;
+    }
+
+    if (form.newPassword !== form.confirmPassword) {
+      setMsg({ kind: 'error', text: 'New passwords do not match.' });
+      return;
     }
 
     setSaving(true);
@@ -129,7 +135,7 @@ export function ProfileSettings() {
 
       {msg && <Banner kind={msg.kind}>{msg.text}</Banner>}
 
-      <form onSubmit={submit}>
+      <form>
         <Card className="p-6">
           <CardTitle>Personal information</CardTitle>
 
@@ -238,9 +244,9 @@ export function ProfileSettings() {
           </div>
 
           <div className="mt-6 flex justify-end border-t border-black/5 pt-5">
-            <Button type="submit" disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
-            </Button>
+          <Button type="button" onClick={submitPasswordChange} disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
           </div>
         </Card>
       </form>
