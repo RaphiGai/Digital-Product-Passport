@@ -56,6 +56,21 @@ export function Settings() {
     e.preventDefault();
     setError('');
     setNotice(null);
+
+      if (form.username.trim().length > 50) {
+    setError('Username may contain a maximum of 50 characters.');
+    return;
+    }
+
+    if (form.displayName.trim().length > 50) {
+      setError('Display name may contain a maximum of 50 characters.');
+      return;
+    }
+
+    if (form.email.trim().length > 80) {
+      setError('Email may contain a maximum of 80 characters.');
+      return;
+    }
     if (!form.username.trim() || !form.email.trim()) {
       setError('Username and email are required.');
       return;
@@ -163,13 +178,13 @@ export function Settings() {
         <form onSubmit={submit} className="mt-4">
           <FormSection title="Account">
             <FieldRow label="Username" required htmlFor="username" hint="Used to sign in. Must be unique.">
-              <Input id="username" value={form.username} onChange={set('username')} maxLength={60} placeholder="jane.doe" />
+              <Input id="username" value={form.username} onChange={set('username')} placeholder="jane.doe" maxLength={50} />
             </FieldRow>
             <FieldRow label="Email" required htmlFor="email">
-              <Input id="email" type="email" value={form.email} onChange={set('email')} maxLength={120} placeholder="jane.doe@company.com" />
+              <Input id="email" type="email" value={form.email} onChange={set('email')} placeholder="jane.doe@company.com" maxLength={80} />
             </FieldRow>
             <FieldRow label="Display name" htmlFor="displayName">
-              <Input id="displayName" value={form.displayName} onChange={set('displayName')} maxLength={120} placeholder="Jane Doe" />
+              <Input id="displayName" value={form.displayName} onChange={set('displayName')}  placeholder="Jane Doe" maxLength={50}/>
             </FieldRow>
           </FormSection>
 
