@@ -29,6 +29,7 @@ service DPPService @(
     organizationId   : String;
     tenantId         : String;
     mustResetPassword: Boolean;
+    appearanceTheme  : String;
   };
 
   // Results of the user-management actions. Temp passwords are returned ONCE to
@@ -108,12 +109,13 @@ service DPPService @(
   // ----- User management (own auth) — see srv/handlers/user-handlers.js -----
   // createUser / resetUserPassword / deactivateUser / reactivateUser are
   // company_advanced-only (enforced via auth-helpers.WRITE_EVENTS + the
-  // before('*') gate). changePassword is callable by any active user on their
-  // OWN account (NOT a write event), so read-only company_user can complete the
-  // forced first-login change.
+  // before('*') gate). changePassword and updateProfile are callable by any active
+  // user on their OWN account (NOT write events), so read-only company_user can both
+  // complete the forced first-login change and maintain their own name/email.
   action createUser(username : String(60), email : db.EmailAddr, displayName : String(120), role : db.UserRole) returns NewUserResult;
   action resetUserPassword(userId : String) returns TempPasswordResult;
   action changePassword(currentPassword : String, newPassword : String) returns Boolean;
+  action updateProfile(displayName : String(120), email : db.EmailAddr, appearanceTheme : String(20)) returns Boolean;
   action deactivateUser(userId : String) returns Boolean;
   action reactivateUser(userId : String) returns Boolean;
 }

@@ -3,6 +3,7 @@ using {
   dpp.CountryISO2,
   dpp.GLN,
   dpp.UserRole,
+  dpp.AppearanceTheme,
   dpp.BusinessPartnerRole,
   dpp.EmailAddr,
   dpp.URL
@@ -46,6 +47,8 @@ entity Users : identified {
   role             : UserRole not null;
   external_user_id : String(120);
   active           : Boolean default true;
+  // Per-user UI colour theme (self-service via the updateProfile action). green | blue | purple.
+  appearance_theme : AppearanceTheme default 'green';
 
   // ---- App-managed credentials (own auth, replaces XSUAA) ----
   // The login layer authenticates `username` + password against `password_hash`.

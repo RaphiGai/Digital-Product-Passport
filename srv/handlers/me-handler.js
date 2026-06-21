@@ -10,12 +10,12 @@ module.exports = (srv) => {
 
     let userRow = await SELECT.one
       .from(Users)
-      .columns('email', 'display_name', 'must_reset_password')
+      .columns('email', 'display_name', 'must_reset_password', 'appearance_theme')
       .where({ external_user_id: req.user.id });
     if (!userRow) {
       userRow = await SELECT.one
         .from(Users)
-        .columns('email', 'display_name', 'must_reset_password')
+        .columns('email', 'display_name', 'must_reset_password', 'appearance_theme')
         .where({ email: req.user.id });
     }
 
@@ -31,7 +31,8 @@ module.exports = (srv) => {
       role:             getAppRole(req),
       organizationId:   orgId,
       tenantId:         org?.tenant_id || '',
-      mustResetPassword: !!userRow?.must_reset_password
+      mustResetPassword: !!userRow?.must_reset_password,
+      appearanceTheme:  userRow?.appearance_theme || 'green'
     };
   });
 };

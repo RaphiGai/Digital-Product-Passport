@@ -100,6 +100,13 @@ type UserRole : String(20) enum {
   company_user;
 }
 
+// Per-user UI colour theme (self-service, see Users.appearance_theme).
+type AppearanceTheme : String(20) enum {
+  green;
+  blue;
+  purple;
+}
+
 type BusinessPartnerRole : String(24) enum {
   supplier;
   manufacturer;
