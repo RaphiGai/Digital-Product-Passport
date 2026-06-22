@@ -9,7 +9,8 @@ import {
   Megaphone,
   ShieldCheck,
   FileBarChart,
-  Settings
+  Settings,
+  Activity
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useMe } from '@/auth/useMe';
@@ -38,8 +39,10 @@ const NAV = [
   },
   {
     heading: 'System',
-    // User management lives here — visible to company_advanced only.
-    items: [{ to: '/settings', label: 'Administartive Settings', icon: Settings, adminOnly: true }]
+    items: [
+      { to: '/settings', label: 'Administrative Settings', icon: Settings, adminOnly: true },
+      { to: '/activity-logs', label: 'Activity Logs', icon: Activity, adminOnly: true }
+    ]
   }
 ];
 

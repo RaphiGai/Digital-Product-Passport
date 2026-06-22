@@ -25,7 +25,7 @@ const EMPTY_ROW = {
 // Fixed px widths so header and data rows share identical column sizes across
 // independent grid containers. (minmax(Xpx,auto) would resolve "auto" per-row
 // and produce different widths between header and data rows.)
-const COLS = 'grid-cols-[minmax(0,3fr)_76px_96px_68px_minmax(0,2fr)_72px]';
+const COLS = 'grid-cols-[180px_minmax(0,3fr)_76px_96px_68px_minmax(0,2fr)_72px]';
 
 function pickComponentDpp(dpps) {
   if (!dpps?.length) return null;
@@ -98,31 +98,36 @@ function BomTableRow({ r, depth, dppById, allProducts, editingId, onEdit, onDele
   return (
     <>
       <div
-        className={`grid ${COLS} items-center border-b border-black/5 last:border-0 transition-colors ${
-          editingId === r.ID ? 'bg-brand-50' : 'hover:bg-black/[0.015]'
-        }`}
+        className={`grid ${COLS} items-center border-b border-black/5 last:border-0 transition-colors ...`}
       >
+        <div className="flex items-center gap-2 border-r border-black/10 px-3 py-3">
+          {isInternal ? (
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              className="text-ink-muted hover:text-ink"
+              aria-label={open ? 'Collapse sub-components' : 'Expand sub-components'}
+            >
+              {open ? (
+                <ChevronDown className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5" />
+              )}
+            </button>
+          ) : (
+            <span className="w-[14px]" />
+          )}
+
+          <span className="font-mono text-xs text-ink-muted">
+            {r.ID}
+          </span>
+        </div>
         {/* Component — indent + optional chevron + name/role */}
         <div
           className="flex min-w-0 items-center border-r border-black/10 py-3 pr-3"
           style={{ paddingLeft: `${12 + indent}px` }}
         >
-          <span className="mr-1.5 flex h-4 w-4 shrink-0 items-center justify-center">
-            {isInternal && (
-              <button
-                type="button"
-                onClick={() => setOpen((o) => !o)}
-                className="text-ink-muted hover:text-ink"
-                aria-label={open ? 'Collapse sub-components' : 'Expand sub-components'}
-              >
-                {open ? (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronRight className="h-3.5 w-3.5" />
-                )}
-              </button>
-            )}
-          </span>
+          <span className="mr-1.5 flex h-4 w-4 shrink-0 items-center justify-center" />
           <div className="min-w-0">
             <div className="truncate text-sm font-medium text-ink">{name}</div>
             {r.component_role && (
@@ -467,6 +472,7 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
             <div
               className={`grid ${COLS} border-b border-black/10 text-xs font-medium uppercase tracking-wide text-ink-muted`}
             >
+              <span className="border-r border-black/10 px-4 py-2">BOM ID</span>
               <span className="border-r border-black/10 px-4 py-2">Component</span>
               <span className="border-r border-black/10 px-3 py-2 text-right">Qty</span>
               <span className="border-r border-black/10 px-3 py-2 text-right">CO₂ kg/kg</span>

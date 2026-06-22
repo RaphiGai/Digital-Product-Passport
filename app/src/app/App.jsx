@@ -25,7 +25,7 @@ import { Login } from './pages/Login';
 import { Settings } from './pages/Settings';
 import { ProfileSettings } from './pages/ProfileSettings';
 import { AppearanceSettings } from './pages/AppearanceSettings';
-
+import { ActivityLogs } from './pages/ActivityLogs';
 
 export function App() {
   useEffect(() => {
@@ -73,7 +73,13 @@ export function App() {
           {/* Sidebar items without backend yet */}
           <Route path="validation" element={<ComingSoon title="Validation" />} />
           <Route path="reports" element={<ComingSoon title="Reports" />} />
+          
+          
           <Route path="settings" element={<Settings />} />
+          <Route
+            path="/activity-logs"
+            element={<ActivityLogs />}
+          />
 
 
           <Route path="*" element={<ComingSoon title="Not found" />} />

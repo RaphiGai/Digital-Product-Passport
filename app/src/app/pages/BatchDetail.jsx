@@ -155,6 +155,11 @@ export function BatchDetail() {
         <Card>
           <CardTitle>Batch details</CardTitle>
           <div className="mt-2">
+            <InfoRow
+              label="Batch ID"
+              value={<span className="font-mono">{b.ID}</span>}
+              visibility="internal"
+            />
             <InfoRow label="Batch number" value={b.batch_number} visibility="internal" />
             <InfoRow label="Production date" value={b.production_date} visibility="internal" />
             <InfoRow label="Country of origin" value={b.country_of_origin} visibility="public" />
@@ -181,6 +186,17 @@ export function BatchDetail() {
         <Card>
           <CardTitle>Variant &amp; Product</CardTitle>
           <div className="mt-2">
+            <InfoRow
+              label="Product ID"
+              value={<span className="font-mono">{p?.ID}</span>}
+              visibility="internal"
+            />
+
+            <InfoRow
+              label="Variant ID"
+              value={<span className="font-mono">{v?.ID}</span>}
+              visibility="internal"
+            />
             <InfoRow label="Colour" value={v?.color} visibility="public" />
             <InfoRow label="Size" value={v?.size} visibility="public" />
             <InfoRow label="SKU" value={v?.sku} visibility="internal" />
@@ -238,10 +254,13 @@ export function BatchDetail() {
                 >
                   <div>
                     <span className="font-mono text-xs text-ink">
-                      {item.upi || item.serial_number || item.ID}
+                      {item.ID}
                     </span>
-                    {item.serial_number && item.upi && (
-                      <span className="ml-2 text-xs text-ink-muted">· {item.serial_number}</span>
+
+                    {(item.upi || item.serial_number) && (
+                      <span className="ml-2 text-xs text-ink-muted">
+                        · {[item.upi, item.serial_number].filter(Boolean).join(' · ')}
+                      </span>
                     )}
                   </div>
                   <StatusBadge status={item.status} />

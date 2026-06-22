@@ -145,6 +145,17 @@ export function VariantEdit() {
           title="Variant details"
           description="Identifies a concrete colour/size of the product."
         >
+            <FieldRow label="Variant ID" visibility="internal">
+            <span className="font-mono text-sm text-ink">
+              {variantQ.data.ID}
+            </span>
+          </FieldRow>
+
+          <FieldRow label="Product ID" visibility="internal">
+            <span className="font-mono text-sm text-ink">
+              {productQ.data?.ID ?? pid}
+            </span>
+          </FieldRow>
           <FieldRow
             label="SKU"
             visibility="internal"

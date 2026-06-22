@@ -432,6 +432,10 @@ export function DppDetail() {
           <Card>
             <CardTitle>Product</CardTitle>
             <div className="mt-2">
+              <Row
+                label="Product ID"
+                value={<span className="font-mono text-xs">{product?.ID}</span>}
+              />
               <Row label="Name" value={product?.name} />
               <Row label="Brand" value={product?.brand} />
               <Row label="Category" value={product?.category} />
@@ -462,6 +466,10 @@ export function DppDetail() {
                 />
               )}
               <div className="mt-2">
+                <Row
+                  label="Variant ID"
+                  value={<span className="font-mono text-xs">{variant?.ID}</span>}
+                />
                 <Row label="Colour" value={variant.color} />
                 <Row label="Size" value={variant.size} />
                 <Row label="SKU" value={variant.sku} />
@@ -476,6 +484,10 @@ export function DppDetail() {
             <Card>
               <CardTitle>Batch &amp; production</CardTitle>
               <div className="mt-2">
+                <Row
+                  label="Batch ID"
+                  value={<span className="font-mono text-xs">{batch?.ID}</span>}
+                />
                 <Row label="Batch number" value={batch.batch_number} />
                 <Row label="Production date" value={fmtDate(batch.production_date)} />
                 <Row label="Production stage" value={batch.production_stage} />
@@ -496,6 +508,10 @@ export function DppDetail() {
             <Card>
               <CardTitle>Item</CardTitle>
               <div className="mt-2">
+                <Row
+                  label="Item ID"
+                  value={<span className="font-mono text-xs">{item?.ID}</span>}
+                />
                 <Row label="Serial number" value={<span className="font-mono text-xs">{item.serial_number}</span>} />
                 <Row label="UPI" value={<span className="font-mono text-xs">{item.upi}</span>} />
                 <Row label="Manufacturing date" value={fmtDate(item.manufacturing_date)} />

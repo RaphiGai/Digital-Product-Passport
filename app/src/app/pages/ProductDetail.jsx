@@ -35,9 +35,11 @@ function ItemRow({ item, dpp }) {
   return (
     <div className="grid grid-cols-[2fr_1fr_1fr_auto] items-center gap-4 border-b border-black/5 px-4 py-2.5 last:border-0 bg-white/40">
       <div>
-        <span className="text-xs font-mono text-ink">{item.upi || item.serial_number || item.ID}</span>
-        {item.serial_number && item.upi && (
-          <span className="ml-2 text-xs text-ink-muted">· {item.serial_number}</span>
+        <span className="text-xs font-mono text-ink">{item.ID}</span>
+        {(item.upi || item.serial_number) && (
+          <span className="ml-2 text-xs text-ink-muted">
+            · {[item.upi, item.serial_number].filter(Boolean).join(' · ')}
+          </span>
         )}
       </div>
       <StatusBadge status={item.status} />
@@ -123,7 +125,13 @@ function BatchRow({ batch, pid, vid }) {
             {batch.batch_number ?? batch.ID}
           </span>
           <div className="text-xs text-ink-muted">
-            {[batch.production_date, batch.factory?.name].filter(Boolean).join(' · ')}
+            <span className="font-mono">{batch.ID}</span>
+            {[batch.production_date, batch.factory?.name].filter(Boolean).length > 0 && (
+              <span>
+                {' · '}
+                {[batch.production_date, batch.factory?.name].filter(Boolean).join(' · ')}
+              </span>
+            )}
           </div>
         </Link>
 
@@ -234,7 +242,10 @@ function VariantRow({ variant, pid }) {
 
         <Link to={`/products/${pid}/variants/${variant.ID}/view`} className="min-w-0 hover:text-brand-700">
           <span className="font-medium text-ink hover:text-brand-700">{label}</span>
-          <div className="text-xs text-ink-muted">{variant.sku}</div>
+          <div className="text-xs text-ink-muted">
+            <span className="font-mono">{variant.ID}</span>
+            {variant.sku && <span> · {variant.sku}</span>}
+          </div>
         </Link>
 
         <StatusBadge status={variant.status} />
@@ -357,6 +368,7 @@ export function ProductDetail() {
         <Card>
           <CardTitle>Basic information</CardTitle>
           <div className="mt-2">
+            <Row label="Product ID" value={p.ID} visibility="internal" />
             <Row label="Type" value={p.product_type} visibility="internal" />
             <Row label="Brand" value={p.brand} visibility="public" />
             <Row label="Category" value={p.category} visibility="public" />

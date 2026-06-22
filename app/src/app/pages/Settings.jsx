@@ -38,7 +38,7 @@ export function Settings() {
   if (me && me.role !== 'company_advanced') {
     return (
       <div className="mx-auto max-w-xl">
-        <PageHeader title="Administrator Settings" />
+        <PageHeader title="Administrative Settings" />
         <Card className="mt-6">
           <CardTitle>Restricted</CardTitle>
           <CardDescription className="mt-1">
@@ -158,7 +158,7 @@ export function Settings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Administrator Settings" subtitle="User management" />
+      <PageHeader title="Administrative Settings" subtitle="User management" />
 
       {error && <Banner kind="error">{error}</Banner>}
       {notice && (

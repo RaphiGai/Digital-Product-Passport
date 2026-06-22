@@ -93,6 +93,11 @@ export function VariantView() {
             />
           )}
           <div className="mt-2">
+            <InfoRow
+              label="Variant ID"
+              value={<span className="font-mono">{v.ID}</span>}
+              visibility="internal"
+            />
             <InfoRow label="Colour" value={v.color} visibility="public" />
             <InfoRow label="Size" value={v.size} visibility="public" />
             <InfoRow label="SKU" value={v.sku} visibility="internal" />
@@ -110,6 +115,11 @@ export function VariantView() {
         <Card>
           <CardTitle>Product information</CardTitle>
           <div className="mt-2">
+            <InfoRow
+              label="Product ID"
+              value={<span className="font-mono">{p?.ID}</span>}
+              visibility="internal"
+            />
             <InfoRow label="Brand" value={p?.brand} visibility="public" />
             <InfoRow label="Category" value={p?.category} visibility="public" />
             <InfoRow label="Description" value={p?.description} visibility="public" />

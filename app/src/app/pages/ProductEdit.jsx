@@ -207,6 +207,11 @@ export function ProductEdit() {
           title="Basic information"
           description="Name, Brand and Category appear publicly on the consumer DPP."
         >
+          <FieldRow label="Product ID" visibility="internal">
+            <span className="font-mono text-sm text-ink">
+              {productQ.data.ID}
+            </span>
+          </FieldRow>
           <FieldRow label="Product name" required visibility="public" htmlFor="name">
             <Input id="name" value={form.name} onChange={set('name')} maxLength={LIMITS.name} />
           </FieldRow>
