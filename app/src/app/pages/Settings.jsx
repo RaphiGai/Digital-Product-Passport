@@ -17,6 +17,21 @@ const USERS_KEY = [['Users']];
 const EMPTY = { username: '', email: '', displayName: '', role: 'company_user' };
 const roleLabel = (r) => USER_ROLES.find((o) => o.value === r)?.label ?? r;
 
+function SortButton({ label, column, sort, onSort }) {
+  const active = sort.column === column;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(column)}
+      className="flex items-center gap-1 text-left font-semibold uppercase"
+    >
+      {label}
+      {active ? (sort.direction === 'asc' ? '↑' : '↓') : ''}
+    </button>
+  );
+}
+
 export function Settings() {
   const { data: me } = useMe();
 
@@ -29,6 +44,17 @@ export function Settings() {
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState(/** @type {{title:string, temp:string} | null} */ (null));
+
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState({ column: 'USERNAME', direction: 'asc' });
+
+  const onSort = (column) => {
+    setSort((s) =>
+      s.column === column
+        ? { column, direction: s.direction === 'asc' ? 'desc' : 'asc' }
+        : { column, direction: 'asc' }
+    );
+  };
 
   const createUser = useUnboundAction({ invalidate: USERS_KEY });
   const resetPwd = useUnboundAction({ invalidate: USERS_KEY });
@@ -129,26 +155,75 @@ export function Settings() {
     );
   };
 
+  const getSortValue = (u, column) => {
+  if (column === 'ID') return u.ID ?? '';
+  if (column === 'USERNAME') return u.username ?? '';
+  if (column === 'DISPLAY_NAME') return u.display_name ?? '';
+  if (column === 'EMAIL') return u.email ?? '';
+  if (column === 'ROLE') return roleLabel(u.role);
+  if (column === 'ACTIVE') return u.active ? 'active' : 'inactive';
+  return '';
+};
+
+const visibleUsers = [...(users ?? [])]
+  .filter((u) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+
+    return [
+      u.ID,
+      u.username,
+      u.display_name,
+      u.email,
+      u.organization_ID,
+      u.role,
+      roleLabel(u.role),
+      u.external_user_id,
+      u.active ? 'active' : 'inactive'
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(q));
+  })
+  .sort((a, b) => {
+    const av = String(getSortValue(a, sort.column)).toLowerCase();
+    const bv = String(getSortValue(b, sort.column)).toLowerCase();
+
+    const result = av.localeCompare(bv, undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    });
+
+    return sort.direction === 'asc' ? result : -result;
+  });
+
   const columns = [
-    { header: 'Username', cell: (u) => <span className="font-medium text-ink">{u.username}</span> },
-    { header: 'Name', cell: (u) => u.display_name || '—' },
-    { header: 'Email', cell: (u) => u.email },
-    { header: 'Role', cell: (u) => roleLabel(u.role) },
-    { header: 'Status', cell: (u) => <StatusBadge status={u.active ? 'active' : 'inactive'} /> },
+
+  {
+    header: <SortButton label="ID" column="ID" sort={sort} onSort={onSort} />,
+    cell: (u) => <span className="font-mono text-xs">{u.ID}</span>
+  },
+  {
+    header: <SortButton label="USERNAME" column="USERNAME" sort={sort} onSort={onSort} />,
+    cell: (u) => <span className="font-medium text-ink">{u.username}</span>
+  },
+    { header: <SortButton label="NAME" column="DISPLAY_NAME" sort={sort} onSort={onSort} />, cell: (u) => u.display_name || '—' },
+    { header: <SortButton label="EMAIL" column="EMAIL" sort={sort} onSort={onSort} />, cell: (u) => u.email },
+    { header: <SortButton label="ROLE" column="ROLE" sort={sort} onSort={onSort} />, cell: (u) => roleLabel(u.role) },
+    { header: <SortButton label="STATUS" column="ACTIVE" sort={sort} onSort={onSort} />, cell: (u) => <StatusBadge status={u.active ? 'active' : 'inactive'} /> },
     {
       header: 'Actions',
       cell: (u) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button variant="outline" size="sm" onClick={() => onReset(u)} disabled={resetPwd.isPending}>
-            <KeyRound className="h-3.5 w-3.5" /> Reset password
+            Reset password
           </Button>
           {u.username === me?.id ? null : u.active ? (
             <Button variant="danger" size="sm" onClick={() => onToggleActive(u)} disabled={setActive.isPending}>
-              <UserX className="h-3.5 w-3.5" /> Deactivate
+              Deactivate
             </Button>
           ) : (
             <Button variant="outline" size="sm" onClick={() => onToggleActive(u)} disabled={setActive.isPending}>
-              <UserCheck className="h-3.5 w-3.5" /> Reactivate
+               Reactivate
             </Button>
           )}
         </div>
@@ -206,7 +281,15 @@ export function Settings() {
         </form>
       </Card>
 
-      <DataTable columns={columns} rows={users ?? []} loading={isLoading} empty="No users found." />
+            <Card className="p-4">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search users by ID, username, name, email, role, organization..."
+        />
+      </Card>
+
+      <DataTable columns={columns} rows={visibleUsers} loading={isLoading} empty="No users found." />
     </div>
   );
 }
