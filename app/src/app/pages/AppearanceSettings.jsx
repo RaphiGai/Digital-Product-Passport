@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useMe } from '@/auth/useMe';
+import { useUnboundAction } from '@/api/hooks';
+import { ApiError } from '@/api/client';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
@@ -25,22 +28,46 @@ const themes = [
 ];
 
 export function AppearanceSettings() {
+  const { data: me } = useMe();
+  // Self-service theme update; invalidating ['me'] re-applies it app-wide (AppShell).
+  const updateProfile = useUnboundAction({ invalidate: [['me']] });
+
+  // Instant value from the localStorage cache; the server value (me) is the source
+  // of truth and is adopted once it resolves.
   const [selectedTheme, setSelectedTheme] = useState(
     localStorage.getItem('appearanceTheme') || 'green'
   );
   const [msg, setMsg] = useState(null);
 
   useEffect(() => {
+    if (me?.appearanceTheme) setSelectedTheme(me.appearanceTheme);
+  }, [me?.appearanceTheme]);
+
+  // Live preview: apply the current selection app-wide while choosing.
+  useEffect(() => {
     document.documentElement.setAttribute('data-theme', selectedTheme);
   }, [selectedTheme]);
 
   const saveAppearance = () => {
-    localStorage.setItem('appearanceTheme', selectedTheme);
-
-    setMsg({
-      kind: 'success',
-      text: 'Appearance settings saved successfully.'
-    });
+    setMsg(null);
+    updateProfile.mutate(
+      { action: 'updateProfile', payload: { appearanceTheme: selectedTheme } },
+      {
+        onSuccess: () => {
+          try {
+            localStorage.setItem('appearanceTheme', selectedTheme);
+          } catch {
+            /* ignore storage errors */
+          }
+          setMsg({ kind: 'success', text: 'Appearance settings saved successfully.' });
+        },
+        onError: (err) =>
+          setMsg({
+            kind: 'error',
+            text: err instanceof ApiError ? err.message : 'Could not save appearance settings.'
+          })
+      }
+    );
   };
 
   return (
@@ -97,8 +124,8 @@ export function AppearanceSettings() {
         </div>
 
         <div className="mt-6 flex justify-end border-t border-black/5 pt-5">
-          <Button type="button" onClick={saveAppearance}>
-            Save
+          <Button type="button" onClick={saveAppearance} disabled={updateProfile.isPending}>
+            {updateProfile.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
       </Card>
