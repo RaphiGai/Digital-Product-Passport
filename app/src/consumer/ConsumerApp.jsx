@@ -17,7 +17,10 @@ import {
   Gauge,
   Fingerprint,
   FileCheck,
-  Download
+  Download,
+  Share2,
+  Copy,
+  Printer
 } from 'lucide-react';
 
 /**
@@ -152,12 +155,81 @@ function NotFound() {
   );
 }
 
+function ShareActions({ token }) {
+  const [copied, setCopied] = useState('');
+
+  const publicUrl = `${window.location.origin}/consumer.html?token=${encodeURIComponent(token)}`;
+
+  const copy = async (text, label) => {
+    await navigator.clipboard.writeText(text);
+    setCopied(label);
+    setTimeout(() => setCopied(''), 1800);
+  };
+
+  const share = async () => {
+    if (navigator.share) {
+      await navigator.share({
+        title: 'Digital Product Passport',
+        text: 'Open this Digital Product Passport',
+        url: publicUrl
+      });
+    } else {
+      await copy(publicUrl, 'Link copied');
+    }
+  };
+
+  return (
+    <section className="mt-4 rounded-2xl border border-black/5 bg-card p-4 shadow-sm print:hidden">
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
+        >
+          <Printer className="h-4 w-4" />
+          Download PDF
+        </button>
+
+        <button
+          type="button"
+          onClick={share}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-ink hover:bg-gray-50"
+        >
+          <Share2 className="h-4 w-4" />
+          Share link
+        </button>
+
+        <button
+          type="button"
+          onClick={() => copy(publicUrl, 'Link copied')}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-ink hover:bg-gray-50"
+        >
+          <Copy className="h-4 w-4" />
+          Copy link
+        </button>
+
+        <button
+          type="button"
+          onClick={() => copy(token, 'Token copied')}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm font-medium text-ink hover:bg-gray-50"
+        >
+          <Copy className="h-4 w-4" />
+          Copy token
+        </button>
+      </div>
+
+      {copied && <p className="mt-2 text-center text-xs text-brand-700">{copied}</p>}
+    </section>
+  );
+}
+
 function Passport({ dpp }) {
   const p = dpp.product ?? {};
   const v = dpp.variant ?? {};
   const b = dpp.batch ?? {};
   const agg = dpp.aggregated?.values ?? {};
   const origin = p.country_of_origin || b.country_of_origin;
+  const token = tokenFromPath();
 
   // Prefer the rolled-up BOM aggregate (batch's own value + mass-weighted component
   // contributions) over the batch's own component-excluding value. Fall back to the
@@ -237,6 +309,7 @@ function Passport({ dpp }) {
               ))}
             </ul>
           </Section>
+          
         )}
 
         {dpp.marketing?.length > 0 && (
@@ -264,11 +337,17 @@ function Passport({ dpp }) {
         <Authenticity dpp={dpp} />
       </div>
 
+      <ShareActions token={token} />
+
       <footer className="mt-8 text-center text-xs text-ink-muted">
         EU Digital Product Passport · ESPR
         <div className="mt-1">Powered by DPP Studio</div>
       </footer>
+    
+
+    
     </>
+
   );
 }
 
