@@ -205,9 +205,7 @@ export function VariantView() {
       {/* BOM section header + read-only BOM */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-ink">BOM for {label}</h2>
-        <Link to={`/products/${pid}/variants/${vid}`}>
-          <Button variant="outline" size="sm">Edit BOM</Button>
-        </Link>
+
       </div>
       <BomEditor productId={pid} variantId={vid} readOnly />
     </div>
