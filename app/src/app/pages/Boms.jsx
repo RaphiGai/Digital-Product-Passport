@@ -30,12 +30,22 @@ function groupByVariant(lines) {
   return [...map.values()];
 }
 
+// The raw ProductBOMs line IDs of a variant's BOM (shown as a tooltip / used in search).
 function bomIds(g) {
   return g.lines.map((l) => l.ID).filter(Boolean).join(', ');
 }
 
+// A BOM is the set of lines of exactly one variant → derive a single, convention-
+// consistent identifier from the variant ID (prod-… / var-… → bom-…). The real
+// ProductBOMs line IDs (also bom-…) stay available as a tooltip and in search.
+const bomKey = (g) => {
+  const vid = g.variant?.ID || '';
+  if (!vid) return '';
+  return /^var-/.test(vid) ? vid.replace(/^var-/, 'bom-') : `bom-${vid}`;
+};
+
 function getSortValue(g, column) {
-  if (column === 'bom_id') return bomIds(g);
+  if (column === 'bom_id') return bomKey(g);
   if (column === 'bom') return variantLabel(g.variant);
   if (column === 'product') return g.product?.name ?? '';
   if (column === 'brand') return g.product?.brand ?? '';
@@ -77,6 +87,8 @@ export function Boms() {
 
     return groups.filter((g) =>
       [
+        bomKey(g),
+        g.variant?.ID,
         bomIds(g),
         variantLabel(g.variant),
         g.product?.name,
@@ -141,8 +153,8 @@ export function Boms() {
               key={g.variant?.ID ?? bomIds(g)}
               className="grid grid-cols-[1.5fr_2fr_1.5fr_1fr_1fr_1fr] items-center gap-4 border-b border-black/5 px-5 py-3 text-sm last:border-0"
             >
-              <span className="font-mono text-xs text-ink-muted">
-                {bomIds(g) || '—'}
+              <span className="font-mono text-xs text-ink-muted" title={bomIds(g) || undefined}>
+                {bomKey(g) || '—'}
               </span>
 
               <span>
