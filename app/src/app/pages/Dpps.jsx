@@ -9,36 +9,45 @@ import { PageHeader } from './ComingSoon';
 const variantLabel = (v) =>
   v ? [v.color, v.size].filter(Boolean).join(' / ') || v.sku || v.ID : null;
 
+const itemLabel = (d) =>
+  d.item?.serial_number || d.item?.upi || d.item_ID || null;
+
 const fmtDate = (v) => {
   if (!v) return '—';
   const [y, m, d] = String(v).slice(0, 10).split('-');
   return d && m && y ? `${d}.${m}.${y}` : String(v).slice(0, 10);
 };
 
-function getSortValue(d, column) {
-  switch (column) {
-    case 'product':
-      return d.product?.name ?? '';
-    case 'variant':
-      return variantLabel(d.variant || d.batch?.variant) ?? '';
-    case 'batch':
-      return d.batch?.batch_number ?? '';
-    default:
-      return d[column] ?? '';
+  function getSortValue(d, column) {
+    switch (column) {
+      case 'product':
+        return d.product?.name ?? d.product_ID ?? '';
+      case 'variant':
+        return variantLabel(d.variant || d.batch?.variant) ?? d.variant_ID ?? '';
+      case 'batch':
+        return d.batch?.batch_number ?? d.batch_ID ?? '';
+      case 'item':
+        return itemLabel(d) ?? '';
+      case 'created':
+        return d.createdAt ?? d.published_at ?? d.valid_from ?? '';
+      default:
+        return d[column] ?? '';
+    }
   }
-}
 
 export function Dpps() {
   const [search, setSearch] = useState('');
-  const [sortConfig, setSortConfig] = useState({ column: 'createdAt', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState({
+  column: 'created',
+  direction: 'desc'
+});
 
   const { data, isLoading } = useQuery({
     queryKey: ['DPPs', 'list'],
     queryFn: () =>
       odataList('DPPs', {
         expand: ['product', 'variant', 'batch($expand=variant)', 'item'],
-        orderby: 'createdAt desc',
-        top: 100
+        orderby: 'valid_from desc'
       })
   });
 
@@ -61,9 +70,11 @@ export function Dpps() {
         d.product?.name,
         d.product_ID,
         variantLabel(d.variant || d.batch?.variant),
+        d.variant_ID,
         d.batch?.batch_number,
-        d.item?.serial_number,
-        d.item?.upi,
+        d.batch_ID,
+        itemLabel(d),
+        d.item_ID,
         d.dpp_type,
         d.visibility,
         d.status
@@ -121,8 +132,12 @@ export function Dpps() {
         cell: (d) => d.batch?.batch_number ?? '—'
       },
       {
-        header: <SortHeader label="Created" column="createdAt" sortConfig={sortConfig} onSort={handleSort} />,
-        cell: (d) => fmtDate(d.createdAt)
+        header: <SortHeader label="Item" column="item" sortConfig={sortConfig} onSort={handleSort} />,
+        cell: (d) => itemLabel(d) ?? '—'
+      },
+      {
+        header: <SortHeader label="Created" column="created" sortConfig={sortConfig} onSort={handleSort} />,
+        cell: (d) => fmtDate(d.createdAt ?? d.published_at ?? d.valid_from)
       },
       {
         header: <SortHeader label="Type" column="dpp_type" sortConfig={sortConfig} onSort={handleSort} />,
