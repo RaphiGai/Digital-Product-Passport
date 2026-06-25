@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { odataGet } from '@/api/client';
+import { mergeVisibility, VARIANT_CATALOGUE, PRODUCT_CATALOGUE } from '@/lib/fieldCatalogue';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
@@ -44,6 +45,9 @@ export function VariantView() {
   if (!v) return <p className="text-ink-muted">Variant not found.</p>;
 
   const label = [v.color, v.size].filter(Boolean).join(' / ') || v.sku || v.ID;
+  // Effective per-field visibility (saved overrides → catalogue defaults; locked → public).
+  const variantVis = mergeVisibility(VARIANT_CATALOGUE, v.field_visibility);
+  const productVis = mergeVisibility(PRODUCT_CATALOGUE, p?.field_visibility);
 
   return (
     <div className="space-y-6">
@@ -98,10 +102,10 @@ export function VariantView() {
               value={<span className="font-mono">{v.ID}</span>}
               visibility="internal"
             />
-            <InfoRow label="Colour" value={v.color} visibility="public" />
-            <InfoRow label="Size" value={v.size} visibility="public" />
-            <InfoRow label="SKU" value={v.sku} visibility="internal" />
-            <InfoRow label="GTIN" value={v.gtin} visibility="internal" />
+            <InfoRow label="Colour" value={v.color} visibility={variantVis.color} />
+            <InfoRow label="Size" value={v.size} visibility={variantVis.size} />
+            <InfoRow label="SKU" value={v.sku} visibility={variantVis.sku} />
+            <InfoRow label="GTIN" value={v.gtin} visibility={variantVis.gtin} />
             <InfoRow
               label="Weight"
               value={v.weight_g != null ? `${v.weight_g} g` : null}
@@ -120,13 +124,13 @@ export function VariantView() {
               value={<span className="font-mono">{p?.ID}</span>}
               visibility="internal"
             />
-            <InfoRow label="Brand" value={p?.brand} visibility="public" />
-            <InfoRow label="Category" value={p?.category} visibility="public" />
-            <InfoRow label="Description" value={p?.description} visibility="public" />
-            <InfoRow label="Fibre composition" value={p?.fibre_composition} visibility="public" />
-            <InfoRow label="Country of origin" value={p?.country_of_origin} visibility="public" />
+            <InfoRow label="Brand" value={p?.brand} visibility={productVis.brand} />
+            <InfoRow label="Category" value={p?.category} visibility={productVis.category} />
+            <InfoRow label="Description" value={p?.description} visibility={productVis.description} />
+            <InfoRow label="Fibre composition" value={p?.fibre_composition} visibility={productVis.fibre_composition} />
+            <InfoRow label="Country of origin" value={p?.country_of_origin} visibility={productVis.country_of_origin} />
 
-            <InfoRow label="Care & washing instructions" value={p?.care_instructions} visibility="public" />
+            <InfoRow label="Care & washing instructions" value={p?.care_instructions} visibility={productVis.care_instructions} />
             <InfoRow
               label="Care video"
               value={
@@ -136,10 +140,10 @@ export function VariantView() {
                   </a>
                 ) : null
               }
-              visibility="public"
+              visibility={productVis.care_video_url}
             />
 
-            <InfoRow label="Repair instructions" value={p?.repair_instructions} visibility="public" />
+            <InfoRow label="Repair instructions" value={p?.repair_instructions} visibility={productVis.repair_instructions} />
             <InfoRow
               label="Repair video"
               value={
@@ -149,10 +153,10 @@ export function VariantView() {
                   </a>
                 ) : null
               }
-              visibility="public"
+              visibility={productVis.repair_video_url}
             />
 
-            <InfoRow label="Reuse instructions" value={p?.reuse_instructions} visibility="public" />
+            <InfoRow label="Reuse instructions" value={p?.reuse_instructions} visibility={productVis.reuse_instructions} />
             <InfoRow
               label="Reuse video"
               value={
@@ -162,10 +166,10 @@ export function VariantView() {
                   </a>
                 ) : null
               }
-              visibility="public"
+              visibility={productVis.reuse_video_url}
             />
 
-            <InfoRow label="Disposal instructions" value={p?.disposal_instructions} visibility="public" />
+            <InfoRow label="Disposal instructions" value={p?.disposal_instructions} visibility={productVis.disposal_instructions} />
             <InfoRow
               label="Disposal video"
               value={
@@ -180,23 +184,23 @@ export function VariantView() {
                   </a>
                 ) : null
               }
-              visibility="public"
+              visibility={productVis.disposal_video_url}
             />
 
             <InfoRow
               label="Durability score"
               value={p?.durability_score != null ? `${p.durability_score} / 10` : null}
-              visibility="public"
+              visibility={productVis.durability_score}
             />
             <InfoRow
               label="Repairability score"
               value={p?.repairability_score != null ? `${p.repairability_score} / 10` : null}
-              visibility="public"
+              visibility={productVis.repairability_score}
             />
             <InfoRow
               label="ESPR compliance"
               value={p ? <StatusBadge status={p.espr_compliance} /> : null}
-              visibility="public"
+              visibility={productVis.espr_compliance}
             />
           </div>
         </Card>

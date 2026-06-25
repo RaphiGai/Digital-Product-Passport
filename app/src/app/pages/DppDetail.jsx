@@ -7,7 +7,7 @@ import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
-import { Textarea } from '@/ui/Form';
+import { Textarea, Select } from '@/ui/Form';
 import { RequireRole } from '@/auth/RequireRole';
 import { DocumentManager } from '@/ui/DocumentManager';
 import { MarketingLinksManager } from '@/ui/MarketingLinksManager';
@@ -128,6 +128,68 @@ const fmtDate = (v) => {
   return d && m && y ? `${d}.${m}.${y}` : String(v).slice(0, 10);
 };
 
+/** Read-only marketing-link list rendered from a frozen version snapshot. */
+function SnapshotMarketingList({ links }) {
+  return (
+    <Card>
+      <CardTitle>Marketing links</CardTitle>
+      {links?.length ? (
+        <div className="mt-2 divide-y divide-black/5">
+          {links.map((l, i) => (
+            <div key={i} className="py-3">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-sm font-medium text-ink">{l.title}</span>
+                <Badge tone="gray" className="font-normal">{l.link_type}</Badge>
+                {l.is_active === false && <Badge tone="amber" className="font-normal">Inactive</Badge>}
+              </div>
+              <div className="truncate text-xs text-ink-muted">
+                {[
+                  l.url,
+                  l.valid_from || l.valid_to ? `valid ${fmtDate(l.valid_from) ?? '…'} – ${fmtDate(l.valid_to) ?? '…'}` : null
+                ].filter(Boolean).join(' · ')}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-ink-muted">No marketing links in this version.</p>
+      )}
+    </Card>
+  );
+}
+
+/** Read-only document/certificate list rendered from a frozen version snapshot. */
+function SnapshotDocumentList({ docs }) {
+  return (
+    <Card>
+      <CardTitle>Documents &amp; certificates</CardTitle>
+      {docs?.length ? (
+        <div className="mt-2 divide-y divide-black/5">
+          {docs.map((d, i) => (
+            <div key={i} className="py-3">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-sm font-medium text-ink">{d.title || d.file_name}</span>
+                {d.doc_type && <Badge tone="gray" className="font-normal">{d.doc_type}</Badge>}
+                {d.visibility && <Badge tone="gray" className="font-normal">{d.visibility}</Badge>}
+              </div>
+              <div className="truncate text-xs text-ink-muted">
+                {[
+                  d.issuer,
+                  d.file_name,
+                  d.issue_date ? `issued ${fmtDate(d.issue_date)}` : null,
+                  d.valid_until ? `valid until ${fmtDate(d.valid_until)}` : null
+                ].filter(Boolean).join(' · ')}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-ink-muted">No documents in this version.</p>
+      )}
+    </Card>
+  );
+}
+
 export function DppDetail() {
   const { id } = useParams();
   const [showPublish, setShowPublish] = useState(false);
@@ -135,6 +197,10 @@ export function DppDetail() {
   const [msg, setMsg] = useState(/** @type {{kind:'error'|'success',text:string}|null} */ (null));
   const [co2Open, setCo2Open] = useState(false);
   const [recOpen, setRecOpen] = useState(false);
+  // Version picker: '' = live (current) state; otherwise a DPPVersions.ID to view read-only.
+  const [selectedVersionId, setSelectedVersionId] = useState('');
+  const [showVersionDialog, setShowVersionDialog] = useState(false);
+  const [versionReason, setVersionReason] = useState('');
 
   const { data: dpp, isLoading } = useQuery({
     queryKey: ['DPPs', id],
@@ -181,7 +247,19 @@ export function DppDetail() {
     enabled: !!dpp?.product?.owning_organization_ID
   });
 
-  const invalidate = [['DPPs', id], ['DPPs']];
+  // Saved versions for the picker (shares its cache key with VersionHistoryCard).
+  const versionsQ = useQuery({
+    queryKey: ['DPPVersions', id],
+    queryFn: () =>
+      odataList('DPPVersions', {
+        filter: `dpp_ID eq '${id}'`,
+        orderby: 'version_number desc',
+        expand: ['changed_by($select=ID,display_name)']
+      }),
+    enabled: !!id
+  });
+
+  const invalidate = [['DPPs', id], ['DPPs'], ['DPPVersions', id]];
   const act = useAction('DPPs', { invalidate });
   const update = useUpdate('DPPs', { invalidate });
 
@@ -221,6 +299,19 @@ export function DppDetail() {
     );
   };
 
+  const createVersion = () =>
+    act.mutate(
+      { key: id, action: 'createDPPVersion', payload: { change_reason: versionReason } },
+      {
+        onSuccess: () => {
+          setMsg({ kind: 'success', text: 'Version created.' });
+          setShowVersionDialog(false);
+          setVersionReason('');
+        },
+        onError: (err) => setMsg({ kind: 'error', text: err.message })
+      }
+    );
+
   const s = dpp.status;
   const busy = act.isPending || update.isPending;
 
@@ -232,20 +323,53 @@ export function DppDetail() {
     ? `/consumer.html?token=${encodeURIComponent(dpp.qr_token)}`
     : null;
 
-  const product = dpp.product;
-  const variant = variantQ.data;
-  const batch = batchQ.data;
-  const item = itemQ.data;
-  const agg = aggQ.data;
-  let missing = [];
-  if (agg?.missing) {
-    try { missing = JSON.parse(agg.missing); } catch { missing = []; }
+  // ── Version view: live (current) state, or a frozen snapshot when one is picked ──
+  const versions = versionsQ.data ?? [];
+  const selectedVersion = versions.find((v) => v.ID === selectedVersionId) || null;
+  let snap = null;
+  if (selectedVersion?.snapshot_data) {
+    try { snap = JSON.parse(selectedVersion.snapshot_data); } catch { snap = null; }
   }
+  const isSnapshot = !!snap;
+
+  // Panel data is driven by `view` — the snapshot in version mode, live queries otherwise.
+  const product = isSnapshot ? snap.product : dpp.product;
+  const variant = isSnapshot ? snap.variant : variantQ.data;
+  const batch = isSnapshot ? snap.batch : batchQ.data;
+  const item = isSnapshot ? snap.item : itemQ.data;
+
+  // Footprint: snapshot stores parsed objects; the live aggregatedFootprint action
+  // serialises `missing`/`breakdown` as JSON strings → parse only in the live case.
+  const agg = isSnapshot ? snap.aggregated : aggQ.data;
+  let missing = [];
   let breakdown = null;
-  if (agg?.breakdown) {
-    try { breakdown = JSON.parse(agg.breakdown); } catch { breakdown = null; }
+  if (isSnapshot) {
+    missing = snap.aggregated?.missing ?? [];
+    breakdown = snap.aggregated?.breakdown ?? null;
+  } else {
+    if (agg?.missing) {
+      try { missing = JSON.parse(agg.missing); } catch { missing = []; }
+    }
+    if (agg?.breakdown) {
+      try { breakdown = JSON.parse(agg.breakdown); } catch { breakdown = null; }
+    }
   }
   const recycledParts = (breakdown?.components ?? []).filter((c) => c.mass_kg != null && c.recycled_pct != null);
+
+  // DPP-level fields for the header badges and passport-details card (snapshot-aware).
+  const viewType = isSnapshot ? (snap.dpp?.dpp_type ?? dpp.dpp_type) : dpp.dpp_type;
+  const viewStatus = isSnapshot ? (snap.dpp?.status ?? dpp.status) : dpp.status;
+  const viewVisibility = isSnapshot ? (snap.dpp?.visibility ?? dpp.visibility) : dpp.visibility;
+  const viewVersion = isSnapshot ? snap.dpp?.version : dpp.current_version;
+
+  // Options for the version picker: live first, then each saved version (newest first).
+  const versionOptions = [
+    { value: '', label: 'Live (current)' },
+    ...versions.map((v) => ({
+      value: v.ID,
+      label: `v${v.version_number} · ${fmtDate(v.snapshot_date)}${v.changed_by?.display_name ? ` · ${v.changed_by.display_name}` : ''}`
+    }))
+  ];
 
   return (
     <div className="space-y-6">
@@ -259,61 +383,100 @@ export function DppDetail() {
 
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-ink">{dpp.product?.name ?? 'Digital product passport'}</h1>
+          <h1 className="text-2xl font-semibold text-ink">{product?.name ?? 'Digital product passport'}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <StatusBadge status={s} />
-            <StatusBadge status={dpp.visibility} />
-            <Badge tone="gray">{dpp.dpp_type}</Badge>
-            <span className="text-sm text-ink-muted">v{dpp.current_version ?? 1}</span>
+            <StatusBadge status={viewStatus} />
+            <StatusBadge status={viewVisibility} />
+            <Badge tone="gray">{viewType}</Badge>
+            <span className="text-sm text-ink-muted">v{viewVersion ?? 1}</span>
           </div>
         </div>
 
-        <RequireRole role="company_advanced">
-          <div className="flex flex-wrap justify-end gap-2">
-            {(s === 'draft' || s === 'in_review') && (
-              <Button disabled={busy} onClick={() => run('approveDPP', undefined, 'Passport approved.')}>
-                Approve
-              </Button>
-            )}
-            {s === 'approved' && (
-              <Button disabled={busy} onClick={() => setShowPublish((v) => !v)}>
-                Publish
-              </Button>
-            )}
-            {s === 'published' && (
-              <Button variant="outline" disabled={busy} onClick={toggleVisibility}>
-                {dpp.visibility === 'public' ? 'Make internal' : 'Make public'}
-              </Button>
-            )}
-            {s === 'published' && (
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => run('regenerateQRToken', undefined, 'QR token regenerated.')}
-              >
-                Regenerate QR token
-              </Button>
-            )}
-            {s !== 'archived' && (
-              <Button
-                variant="danger"
-                disabled={busy}
-                onClick={() => run('archiveDPP', undefined, 'Passport archived.')}
-              >
-                Archive
-              </Button>
-            )}
-          </div>
-        </RequireRole>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* Version picker — view any saved snapshot read-only. Available to all roles. */}
+          <Select
+            aria-label="View version"
+            value={selectedVersionId}
+            onChange={(e) => setSelectedVersionId(e.target.value)}
+            options={versionOptions}
+            className="w-60"
+          />
+
+          {/* Lifecycle + versioning actions — hidden while viewing a past snapshot. */}
+          {!isSnapshot && (
+            <RequireRole role="company_advanced">
+              {(s === 'draft' || s === 'in_review') && (
+                <Button disabled={busy} onClick={() => run('approveDPP', undefined, 'Passport approved.')}>
+                  Approve
+                </Button>
+              )}
+              {s === 'approved' && (
+                <Button disabled={busy} onClick={() => setShowPublish((v) => !v)}>
+                  Publish
+                </Button>
+              )}
+              {s === 'published' && (
+                <Button variant="outline" disabled={busy} onClick={toggleVisibility}>
+                  {dpp.visibility === 'public' ? 'Make internal' : 'Make public'}
+                </Button>
+              )}
+              {s === 'published' && (
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => run('regenerateQRToken', undefined, 'QR token regenerated.')}
+                >
+                  Regenerate QR token
+                </Button>
+              )}
+              {s !== 'archived' && (
+                <Button variant="outline" disabled={busy} onClick={() => setShowVersionDialog((v) => !v)}>
+                  Create version
+                </Button>
+              )}
+              {s !== 'archived' && (
+                <Button
+                  variant="danger"
+                  disabled={busy}
+                  onClick={() => run('archiveDPP', undefined, 'Passport archived.')}
+                >
+                  Archive
+                </Button>
+              )}
+              {s === 'archived' && (
+                <Button
+                  disabled={busy}
+                  onClick={() => run('unarchiveDPP', undefined, 'Passport unarchived.')}
+                >
+                  Unarchive
+                </Button>
+              )}
+            </RequireRole>
+          )}
+        </div>
       </div>
 
       {msg && <Banner kind={msg.kind}>{msg.text}</Banner>}
 
-      {(s === 'draft' || s === 'in_review' || s === 'approved') && (
+      {isSnapshot && (
+        <Banner kind="warning">
+          You are viewing version v{snap.dpp?.version} from {fmtDate(snap.captured_at)} (read-only).
+          Switch back to <span className="font-medium">Live (current)</span> to make changes.
+        </Banner>
+      )}
+
+      {!isSnapshot && (s === 'draft' || s === 'in_review' || s === 'approved') && (
         <Banner kind="info">Review all data assigned to this passport below before publishing.</Banner>
       )}
 
-      {showPublish && (
+      {!isSnapshot && s === 'archived' && (
+        <Banner kind="warning">
+          This passport is archived. It stays visible to consumers via its QR code and link, but
+          cannot be edited or published. Unarchive it to make changes.
+        </Banner>
+      )}
+
+      {!isSnapshot && showPublish && (
         <Card className="space-y-3 border-brand-200">
           <CardTitle>Publish passport</CardTitle>
           <Textarea
@@ -334,10 +497,35 @@ export function DppDetail() {
         </Card>
       )}
 
-      {/* ── Aggregated footprint (live preview of what the public will see) ── */}
+      {!isSnapshot && showVersionDialog && (
+        <Card className="space-y-3 border-brand-200">
+          <CardTitle>Create version</CardTitle>
+          <p className="text-sm text-ink-muted">
+            Saves a snapshot of the current passport state. It stays retrievable read-only from the
+            version picker and advances the version number.
+          </p>
+          <Textarea
+            rows={2}
+            value={versionReason}
+            onChange={(e) => setVersionReason(e.target.value)}
+            placeholder="Reason / note (optional, max 500 chars)"
+            maxLength={500}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowVersionDialog(false)}>
+              Cancel
+            </Button>
+            <Button disabled={busy} onClick={createVersion}>
+              {busy ? 'Saving…' : 'Save version'}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Aggregated footprint — live preview, or the frozen figures of a snapshot ── */}
       <Card>
-        <CardTitle>Aggregated footprint (live preview)</CardTitle>
-        {aggQ.isLoading ? (
+        <CardTitle>Aggregated footprint {isSnapshot ? '(snapshot)' : '(live preview)'}</CardTitle>
+        {!isSnapshot && aggQ.isLoading ? (
           <p className="mt-3 text-sm text-ink-muted">Computing…</p>
         ) : (
           <>
@@ -520,16 +708,26 @@ export function DppDetail() {
             </Card>
           )}
 
-          {/* ── Certificates & documents (read-only; managed on the product/batch pages) ── */}
-          {product && (
-            <DocumentManager scope="product" ownerId={product.ID} readOnly title="Product documents & certificates" />
-          )}
-          {batch && (
-            <DocumentManager scope="batch" ownerId={batch.ID} readOnly title="Batch documents & certificates" />
+          {/* ── Certificates & documents — live managers, or the snapshot's frozen list ── */}
+          {isSnapshot ? (
+            <SnapshotDocumentList docs={snap.documents} />
+          ) : (
+            <>
+              {product && (
+                <DocumentManager scope="product" ownerId={product.ID} readOnly title="Product documents & certificates" />
+              )}
+              {batch && (
+                <DocumentManager scope="batch" ownerId={batch.ID} readOnly title="Batch documents & certificates" />
+              )}
+            </>
           )}
 
-          {/* ── Marketing links (US5.8) ── */}
-          <MarketingLinksManager dppId={id} />
+          {/* ── Marketing links (US5.8) — live manager, or the snapshot's frozen list ── */}
+          {isSnapshot ? (
+            <SnapshotMarketingList links={snap.marketing_links} />
+          ) : (
+            <MarketingLinksManager dppId={id} />
+          )}
 
           {/* ── Version history (US5.9) ── */}
           <VersionHistoryCard dppId={id} />
@@ -540,31 +738,44 @@ export function DppDetail() {
             <CardTitle>Passport details</CardTitle>
             <div className="mt-2">
               <Row label="Passport ID" value={<span className="font-mono text-xs">{dpp.ID}</span>} />
-              <Row label="Type" value={dpp.dpp_type} />
-              <Row label="Status" value={<StatusBadge status={s} />} />
-              <Row label="Visibility" value={<StatusBadge status={dpp.visibility} />} />
-              <Row label="Version" value={dpp.current_version} />
-              <Row label="Created" value={fmtDate(dpp.createdAt)} />
-              <Row label="Last updated" value={fmtDate(dpp.last_updated || dpp.lastChange)} />
-              <Row label="QR token" value={dpp.qr_token ? <span className="break-all font-mono text-xs">{dpp.qr_token}</span> : null} />
-              <Row
-                label="Public URL"
-                value={
-                  consumerUrl ? (
-                    <a
-                      href={consumerUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-medium text-brand-700 hover:underline"
-                    >
-                      Open DPP
-                    </a>
-                  ) : null
-                }
-              />
+              <Row label="Type" value={viewType} />
+              <Row label="Status" value={<StatusBadge status={viewStatus} />} />
+              <Row label="Visibility" value={<StatusBadge status={viewVisibility} />} />
+              <Row label="Version" value={viewVersion} />
+              {isSnapshot ? (
+                <>
+                  <Row label="Snapshot captured" value={fmtDate(snap.captured_at)} />
+                  {selectedVersion?.change_reason && <Row label="Reason" value={selectedVersion.change_reason} />}
+                  {selectedVersion?.changed_by?.display_name && (
+                    <Row label="Saved by" value={selectedVersion.changed_by.display_name} />
+                  )}
+                </>
+              ) : (
+                <>
+                  <Row label="Created" value={fmtDate(dpp.createdAt)} />
+                  <Row label="Last updated" value={fmtDate(dpp.last_updated || dpp.lastChange)} />
+                  <Row label="QR token" value={dpp.qr_token ? <span className="break-all font-mono text-xs">{dpp.qr_token}</span> : null} />
+                  <Row
+                    label="Public URL"
+                    value={
+                      consumerUrl ? (
+                        <a
+                          href={consumerUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-brand-700 hover:underline"
+                        >
+                          Open DPP
+                        </a>
+                      ) : null
+                    }
+                  />
+                </>
+              )}
             </div>
           </Card>
 
+          {!isSnapshot && (
           <Card>
             <CardTitle>QR code</CardTitle>
             {qrQ.data?.png ? (
@@ -607,6 +818,7 @@ export function DppDetail() {
               </p>
             )}
           </Card>
+          )}
         </div>
       </div>
     </div>

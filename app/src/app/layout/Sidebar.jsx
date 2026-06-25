@@ -34,7 +34,7 @@ const NAV = [
     heading: 'Compliance',
     items: [
       { to: '/validation', label: 'Validation', icon: ShieldCheck },
-      { to: '/reports', label: 'Reports', icon: FileBarChart }
+      { to: '/reports', label: 'Reports', icon: FileBarChart, adminOnly: true }
     ]
   },
   {

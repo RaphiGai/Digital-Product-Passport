@@ -22,10 +22,14 @@ import { ComingSoon } from './pages/ComingSoon';
 import { BatchEdit } from './pages/BatchEdit';
 import { PartnerEdit } from './pages/PartnerEdit';
 import { Login } from './pages/Login';
+import { PasswordReset } from './pages/PasswordReset';
 import { Settings } from './pages/Settings';
 import { ProfileSettings } from './pages/ProfileSettings';
 import { AppearanceSettings } from './pages/AppearanceSettings';
 import { ActivityLogs } from './pages/ActivityLogs';
+import { ReportsLanding } from './pages/ReportsLanding';
+import { SustainabilityAnalytics } from './pages/SustainabilityAnalytics';
+import { ComplianceAnalytics } from './pages/ComplianceAnalytics';
 
 export function App() {
   useEffect(() => {
@@ -36,8 +40,9 @@ export function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public login route — rendered OUTSIDE AppShell (no me() / no auth gate). */}
+        {/* Public routes — rendered OUTSIDE AppShell (no me() / no auth gate). */}
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<PasswordReset />} />
 
         <Route element={<AppShell />}>
           <Route index element={<Dashboard />} />
@@ -70,9 +75,12 @@ export function App() {
           <Route path="/profile" element={<ProfileSettings />} />
           <Route path="/appearance" element={<AppearanceSettings />} />
 
+          <Route path="reports" element={<ReportsLanding />} />
+          <Route path="reports/sustainability" element={<SustainabilityAnalytics />} />
+          <Route path="reports/compliance" element={<ComplianceAnalytics />} />
+
           {/* Sidebar items without backend yet */}
           <Route path="validation" element={<ComingSoon title="Validation" />} />
-          <Route path="reports" element={<ComingSoon title="Reports" />} />
           
           
           <Route path="settings" element={<Settings />} />

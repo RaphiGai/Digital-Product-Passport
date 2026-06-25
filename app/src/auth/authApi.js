@@ -55,3 +55,28 @@ export async function logout() {
     /* ignore — we navigate to /login regardless */
   }
 }
+
+/**
+ * Request a self-service password reset. If username + email match an active account,
+ * the backend emails a time-limited reset link. A non-match returns a concrete error.
+ * @param {string} username
+ * @param {string} email
+ * @returns {Promise<{ ok: true } | { ok: false, error: string }>}
+ */
+export async function requestPasswordReset(username, email) {
+  const { status, data } = await postAuth('/auth/request-password-reset', { username, email });
+  if (status === 200 && data.ok) return { ok: true };
+  return { ok: false, error: data.error || 'Could not request a password reset. Please try again.' };
+}
+
+/**
+ * Complete a password reset using the single-use token from the emailed link.
+ * @param {string} token
+ * @param {string} newPassword
+ * @returns {Promise<{ ok: true } | { ok: false, error: string }>}
+ */
+export async function resetPasswordWithToken(token, newPassword) {
+  const { status, data } = await postAuth('/auth/reset-password', { token, newPassword });
+  if (status === 200 && data.ok) return { ok: true };
+  return { ok: false, error: data.error || 'Could not reset the password. The link may have expired.' };
+}

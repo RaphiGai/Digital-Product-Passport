@@ -4,6 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import { Printer } from 'lucide-react';
 import { odataGet, odataList } from '@/api/client';
 import { printLabels } from '@/lib/printLabels';
+import { mergeVisibility, BATCH_CATALOGUE, VARIANT_CATALOGUE, PRODUCT_CATALOGUE } from '@/lib/fieldCatalogue';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
@@ -109,6 +110,11 @@ export function BatchDetail() {
   const variantLabel = v ? [v.color, v.size].filter(Boolean).join(' / ') || v.sku : 'Variant';
   const batchLabel = b.batch_number ?? b.ID;
 
+  // Effective per-field visibility (saved overrides → catalogue defaults; locked → public).
+  const batchVis = mergeVisibility(BATCH_CATALOGUE, b.field_visibility);
+  const variantVis = mergeVisibility(VARIANT_CATALOGUE, v?.field_visibility);
+  const productVis = mergeVisibility(PRODUCT_CATALOGUE, p?.field_visibility);
+
   return (
     <div className="space-y-6">
       <Breadcrumb
@@ -160,22 +166,22 @@ export function BatchDetail() {
               value={<span className="font-mono">{b.ID}</span>}
               visibility="internal"
             />
-            <InfoRow label="Batch number" value={b.batch_number} visibility="internal" />
-            <InfoRow label="Production date" value={b.production_date} visibility="internal" />
-            <InfoRow label="Country of origin" value={b.country_of_origin} visibility="public" />
+            <InfoRow label="Batch number" value={b.batch_number} visibility={batchVis.batch_number} />
+            <InfoRow label="Production date" value={b.production_date} visibility={batchVis.production_date} />
+            <InfoRow label="Country of origin" value={b.country_of_origin} visibility={batchVis.country_of_origin} />
             <InfoRow label="Production stage" value={b.production_stage} visibility="internal" />
             <InfoRow label="Factory" value={b.factory?.name} visibility="internal" />
             <InfoRow label="Supplier" value={b.supplier?.name} visibility="internal" />
             <InfoRow
               label="CO₂ footprint"
               value={b.co2_footprint_kg != null ? `${b.co2_footprint_kg} kg CO₂/kg` : null}
-              visibility="public"
+              visibility={batchVis.co2_footprint_kg}
             />
             {p?.product_type !== 'finished' && (
               <InfoRow
                 label="Recycled content"
                 value={b.recycled_content_pct != null ? `${b.recycled_content_pct}%` : null}
-                visibility="public"
+                visibility={batchVis.recycled_content_pct}
               />
             )}
             <InfoRow label="Status" value={<StatusBadge status={b.status} />} visibility="internal" />
@@ -197,19 +203,19 @@ export function BatchDetail() {
               value={<span className="font-mono">{v?.ID}</span>}
               visibility="internal"
             />
-            <InfoRow label="Colour" value={v?.color} visibility="public" />
-            <InfoRow label="Size" value={v?.size} visibility="public" />
-            <InfoRow label="SKU" value={v?.sku} visibility="internal" />
-            <InfoRow label="GTIN" value={v?.gtin} visibility="internal" />
+            <InfoRow label="Colour" value={v?.color} visibility={variantVis.color} />
+            <InfoRow label="Size" value={v?.size} visibility={variantVis.size} />
+            <InfoRow label="SKU" value={v?.sku} visibility={variantVis.sku} />
+            <InfoRow label="GTIN" value={v?.gtin} visibility={variantVis.gtin} />
             <InfoRow
               label="Weight"
               value={v?.weight_g != null ? `${v.weight_g} g` : null}
               visibility="internal"
             />
-            <InfoRow label="Brand" value={p?.brand} visibility="public" />
-            <InfoRow label="Category" value={p?.category} visibility="public" />
-            <InfoRow label="Care instructions" value={p?.care_instructions} visibility="public" />
-            <InfoRow label="Country of origin (product)" value={p?.country_of_origin} visibility="public" />
+            <InfoRow label="Brand" value={p?.brand} visibility={productVis.brand} />
+            <InfoRow label="Category" value={p?.category} visibility={productVis.category} />
+            <InfoRow label="Care instructions" value={p?.care_instructions} visibility={productVis.care_instructions} />
+            <InfoRow label="Country of origin (product)" value={p?.country_of_origin} visibility={productVis.country_of_origin} />
           </div>
         </Card>
       </div>

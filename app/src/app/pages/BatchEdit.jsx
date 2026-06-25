@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { odataGet, odataList, ApiError } from '@/api/client';
 import { useUpdate } from '@/api/hooks';
+import { useHasRole } from '@/auth/useMe';
+import { BATCH_CATALOGUE, catalogueByKey, mergeVisibility } from '@/lib/fieldCatalogue';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
@@ -13,7 +15,17 @@ export function BatchEdit() {
   const { pid, vid, bid } = useParams();
   const navigate = useNavigate();
   const [form, setForm] = useState(null);
+  const [fieldVis, setFieldVis] = useState(null);
   const [msg, setMsg] = useState(null);
+  const isAdvanced = useHasRole('company_advanced');
+  const BATCH_VIS = useMemo(() => catalogueByKey(BATCH_CATALOGUE), []);
+
+  const visCtl = (key) => ({
+    value: fieldVis?.[key] ?? 'public',
+    onChange: (v) => setFieldVis((m) => ({ ...(m ?? {}), [key]: v })),
+    locked: !!BATCH_VIS[key]?.locked,
+    canEdit: isAdvanced
+  });
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -84,6 +96,7 @@ export function BatchEdit() {
         recycled_content_pct: b.recycled_content_pct ?? '',
         status:             b.status ?? 'draft'
       });
+      setFieldVis(mergeVisibility(BATCH_CATALOGUE, b.field_visibility));
     }
   }, [batchQ.data, form]);
 
@@ -146,7 +159,8 @@ export function BatchEdit() {
           supplier_ID:          form.supplier_ID || null,
           co2_footprint_kg:     form.co2_footprint_kg !== '' ? co2ToNumber(form.co2_footprint_kg) : null,
           recycled_content_pct: showRecycled && form.recycled_content_pct !== '' ? Number(form.recycled_content_pct) : null,
-          status:               form.status
+          status:               form.status,
+          field_visibility:     JSON.stringify(fieldVis ?? {})
         }
       },
       {
@@ -197,14 +211,14 @@ export function BatchEdit() {
         >
           <FieldRow
             label="Batch number"
-            visibility="internal"
+            visibilityControl={visCtl('batch_number')}
             htmlFor="Batch number"
           >
             <div className="rounded-md border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700">
               {form.batch_number}
             </div>
           </FieldRow>
-          <FieldRow label="Production date" visibility="internal" htmlFor="pd">
+          <FieldRow label="Production date" visibilityControl={visCtl('production_date')} htmlFor="pd">
             <Input
               id="pd"
               type="date"
@@ -213,7 +227,7 @@ export function BatchEdit() {
               onChange={set('production_date')}
             />
           </FieldRow>
-          <FieldRow label="Country of origin" visibility="public" htmlFor="coo">
+          <FieldRow label="Country of origin" visibilityControl={visCtl('country_of_origin')} htmlFor="coo">
             <CountrySelect id="coo" value={form.country_of_origin} onChange={set('country_of_origin')} />
           </FieldRow>
           <FieldRow label="Production stage" visibility="internal" htmlFor="ps" hint="e.g. Cut & Sew">
@@ -231,7 +245,7 @@ export function BatchEdit() {
           <FieldRow label="Supplier" visibility="internal" htmlFor="supplier">
             <Select id="supplier" value={form.supplier_ID} onChange={set('supplier_ID')} options={partnerOptions} />
           </FieldRow>
-          <FieldRow label="CO₂ footprint (own production)" visibility="public" htmlFor="co2"
+          <FieldRow label="CO₂ footprint (own production)" visibilityControl={visCtl('co2_footprint_kg')} htmlFor="co2"
             hint="This product's OWN production, per its consumption unit: per finished piece for assembled/finished goods (added on top of components), per kg for a material sold by weight.">
             <Input
               id="co2"
@@ -244,7 +258,7 @@ export function BatchEdit() {
             />
           </FieldRow>
           {showRecycled && (
-            <FieldRow label="Recycled content (%)" visibility="public" htmlFor="rc"
+            <FieldRow label="Recycled content (%)" visibilityControl={visCtl('recycled_content_pct')} htmlFor="rc"
               hint="Only for materials/components — a finished product's recycled content is computed from its BOM.">
               <Input id="rc" type="number" step="0.01" value={form.recycled_content_pct} onChange={set('recycled_content_pct')} />
             </FieldRow>

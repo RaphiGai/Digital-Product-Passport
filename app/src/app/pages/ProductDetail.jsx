@@ -4,6 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { odataGet, odataList } from '@/api/client';
 import { useAction } from '@/api/hooks';
+import { mergeVisibility, PRODUCT_CATALOGUE } from '@/lib/fieldCatalogue';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
@@ -324,6 +325,8 @@ export function ProductDetail() {
   if (!p) return <p className="text-ink-muted">Product not found.</p>;
 
   const variants = p.variants ?? [];
+  // Effective per-field visibility (saved overrides → catalogue defaults; locked → public).
+  const vis = mergeVisibility(PRODUCT_CATALOGUE, p.field_visibility);
 
   return (
     <div className="space-y-6">
@@ -370,23 +373,23 @@ export function ProductDetail() {
           <div className="mt-2">
             <Row label="Product ID" value={p.ID} visibility="internal" />
             <Row label="Type" value={p.product_type} visibility="internal" />
-            <Row label="Brand" value={p.brand} visibility="public" />
-            <Row label="Category" value={p.category} visibility="public" />
-            <Row label="GTIN" value={p.gtin} visibility="internal" />
-            <Row label="Description" value={p.description} visibility="public" />
+            <Row label="Brand" value={p.brand} visibility={vis.brand} />
+            <Row label="Category" value={p.category} visibility={vis.category} />
+            <Row label="GTIN" value={p.gtin} visibility={vis.gtin} />
+            <Row label="Description" value={p.description} visibility={vis.description} />
           </div>
         </Card>
 
         <Card>
           <CardTitle>Material, care &amp; compliance</CardTitle>
           <div className="mt-2">
-            <Row label="Fibre composition" value={p.fibre_composition} visibility="public" />
-            <Row label="Substances of concern" value={p.substances_of_concern} visibility="public" />
-            <Row label="Country of origin" value={p.country_of_origin} visibility="public" />
+            <Row label="Fibre composition" value={p.fibre_composition} visibility={vis.fibre_composition} />
+            <Row label="Substances of concern" value={p.substances_of_concern} visibility={vis.substances_of_concern} />
+            <Row label="Country of origin" value={p.country_of_origin} visibility={vis.country_of_origin} />
             <Row
               label="Care & washing instructions"
               value={p.care_instructions}
-              visibility="public"
+              visibility={vis.care_instructions}
             />
             <Row
               label="Care video"
@@ -402,13 +405,13 @@ export function ProductDetail() {
                   </a>
                 ) : null
               }
-              visibility="public"
+              visibility={vis.care_video_url}
             />
 
             <Row
               label="Repair instructions"
               value={p.repair_instructions}
-              visibility="public"
+              visibility={vis.repair_instructions}
             />
             <Row
               label="Repair video"
@@ -424,13 +427,13 @@ export function ProductDetail() {
                   </a>
                 ) : null
               }
-              visibility="public"
+              visibility={vis.repair_video_url}
             />
 
             <Row
               label="Reuse instructions"
               value={p.reuse_instructions}
-              visibility="public"
+              visibility={vis.reuse_instructions}
             />
             <Row
               label="Reuse video"
@@ -446,9 +449,9 @@ export function ProductDetail() {
                   </a>
                 ) : null
               }
-              visibility="public"
+              visibility={vis.reuse_video_url}
             />
-            <Row label="Disposal instructions" value={p.disposal_instructions} visibility="public" />
+            <Row label="Disposal instructions" value={p.disposal_instructions} visibility={vis.disposal_instructions} />
             <Row
               label="Disposal video"
               value={
@@ -463,11 +466,11 @@ export function ProductDetail() {
                   </a>
                 ) : null
               }
-              visibility="public"
+              visibility={vis.disposal_video_url}
             />
-            <Row label="Durability score" value={p.durability_score != null ? `${p.durability_score} / 10` : null} visibility="public" />
-            <Row label="Repairability score" value={p.repairability_score != null ? `${p.repairability_score} / 10` : null} visibility="public" />
-            <Row label="ESPR compliance" value={<StatusBadge status={p.espr_compliance} />} visibility="public" />
+            <Row label="Durability score" value={p.durability_score != null ? `${p.durability_score} / 10` : null} visibility={vis.durability_score} />
+            <Row label="Repairability score" value={p.repairability_score != null ? `${p.repairability_score} / 10` : null} visibility={vis.repairability_score} />
+            <Row label="ESPR compliance" value={<StatusBadge status={p.espr_compliance} />} visibility={vis.espr_compliance} />
           </div>
         </Card>
       </div>

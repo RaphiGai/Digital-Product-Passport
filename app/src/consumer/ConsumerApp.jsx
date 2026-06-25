@@ -77,7 +77,7 @@ export function ConsumerApp() {
   useEffect(() => {
     if (!token) return undefined; // no token → the entry form is shown
     setState({ status: 'loading' });
-    fetch(`/public/dpp/${token}`, { headers: { Accept: 'application/json' } })
+    fetch(`/public/dpp/${token}`, { headers: { Accept: 'application/json' }, cache: 'no-store' })
       .then((r) => {
         if (!r.ok) throw new Error('not found');
         return r.json();
