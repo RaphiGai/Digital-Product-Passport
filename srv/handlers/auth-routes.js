@@ -186,6 +186,49 @@ function register(app) {
     if (wantsJson(req)) return res.json({ ok: true });
     return res.redirect(302, '/login');
   });
+
+  app.patch('/auth/me', parse, async (req, res) => {
+    const token = readCookie(req, COOKIE_NAME);
+    const payload = token ? session.verify(token) : null;
+    if (!payload || !payload.uid || payload.scope !== 'full') {
+      return res.status(401).json({ ok: false, error: 'Your session has expired. Please sign in again.' });
+    }
+
+    const displayName = typeof req.body?.displayName === 'string' ? req.body.displayName.trim() : '';
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+    const currentPassword = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : '';
+    const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
+
+    if (!displayName) return res.status(400).json({ ok: false, error: 'Name is required.' });
+    if (!email) return res.status(400).json({ ok: false, error: 'Email is required.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ ok: false, error: 'Please enter a valid email address.' });
+    }
+    if ((currentPassword && !newPassword) || (!currentPassword && newPassword)) {
+      return res
+        .status(400)
+        .json({ ok: false, error: 'Current password and new password must be provided together.' });
+    }
+
+    const { Users } = cds.entities('dpp');
+    await UPDATE(Users).set({ display_name: displayName, email }).where({ ID: payload.uid });
+
+    if (newPassword) {
+      try {
+        await credentials.changePassword(payload.uid, currentPassword, newPassword);
+      } catch (e) {
+        return res.status(e.status || 400).json({ ok: false, error: e.message });
+      }
+    }
+
+    const user = await credentials.sessionUser(payload.uid);
+    if (!user) {
+      clearSessionCookie(res);
+      return res.status(404).json({ ok: false, error: 'User not found.' });
+    }
+    setSessionCookie(res, fullSessionToken(user), session.FULL_TTL_SECONDS);
+    return res.json({ ok: true });
+  });
 }
 
 module.exports = { register };
