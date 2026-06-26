@@ -30,6 +30,7 @@ import { ActivityLogs } from './pages/ActivityLogs';
 import { ReportsLanding } from './pages/ReportsLanding';
 import { SustainabilityAnalytics } from './pages/SustainabilityAnalytics';
 import { ComplianceAnalytics } from './pages/ComplianceAnalytics';
+import { BatchCreate } from './pages/BatchCreate';
 
 export function App() {
   useEffect(() => {
@@ -70,7 +71,10 @@ export function App() {
           <Route path="dpps/:id" element={<DppDetail />} />
           <Route path="marketing" element={<Marketing />} />
           <Route path="boms" element={<Boms />} />
-
+          <Route
+            path="/products/:pid/variants/:vid/batches/new"
+            element={<BatchCreate />}
+          />
 
           <Route path="/profile" element={<ProfileSettings />} />
           <Route path="/appearance" element={<AppearanceSettings />} />
