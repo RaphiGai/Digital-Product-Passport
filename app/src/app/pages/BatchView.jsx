@@ -1,250 +1,111 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import {
-  odataGet,
-  odataList,
-  odataCreate,
-  odataUpdate,
-  odataDelete,
-  newId,
-  ApiError
-} from '@/api/client';
+import { odataGet, odataList, odataUpdate, ApiError } from '@/api/client';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { StatusBadge } from '@/ui/Badge';
-import { FieldRow, Input, CheckboxCard } from '@/ui/Form';
 import { RequireRole } from '@/auth/RequireRole';
 
-async function bulkAction(dppIds, action) {
-  const results = await Promise.allSettled(
-    dppIds.map((id) =>
-      fetch(`/odata/v4/dpp/DPPs('${id}')/DPPService.${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({})
-      })
-    )
-  );
+const ITEM_STATUSES = ['active', 'sold', 'repaired', 'archived'];
 
-  const failed = results.filter((r) => r.status === 'rejected').length;
-  return { total: dppIds.length, failed };
-}
+const DPP_STATUSES = [
+  'draft',
+  'in_review',
+  'approved',
+  'published',
+  'archived'
+];
 
 const isExternalLine = (b) => !!b.external_dpp_url || !b.component_ID;
 
-function useVariantSourcing(vid) {
+function statusLabel(value) {
+  return String(value || '')
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function variantLabel(v) {
+  if (!v) return '';
+  return [v.color, v.size].filter(Boolean).join(' / ') || v.sku || v.ID;
+}
+
+function SelectStatus({ value, options, disabled, onChange, label }) {
+  return (
+    <label className="flex items-center gap-2 text-xs text-ink-muted">
+      <span className="sr-only">{label}</span>
+      <select
+        value={value || ''}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 rounded-md border border-black/15 bg-white px-2 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <option value="">Change status…</option>
+        {options.map((s) => (
+          <option key={s} value={s}>
+            {statusLabel(s)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function useVariantComponents(vid) {
   const bomsQ = useQuery({
     queryKey: ['ProductBOMs', 'variant', vid],
     queryFn: () =>
       odataList('ProductBOMs', {
         filter: `parent_ID eq '${vid}'`,
-        top: 200
+        top: 500
       }),
     enabled: !!vid
   });
 
   const productsQ = useQuery({
-    queryKey: ['Products', 'sourcing-names'],
+    queryKey: ['Products', 'component-names'],
     queryFn: () =>
       odataList('Products', {
         select: ['ID', 'name'],
-        orderby: 'name',
         top: 500
       })
   });
 
   const boms = bomsQ.data ?? [];
-  const componentIds = [...new Set(boms.map((b) => b.component_ID).filter(Boolean))];
-
-  const compBatchesQ = useQuery({
-    queryKey: ['Batches', 'component-candidates', componentIds.join(',')],
-    queryFn: () =>
-      odataList('Batches', {
-        filter: componentIds.map((id) => `variant/product_ID eq '${id}'`).join(' or '),
-        expand: ['variant'],
-        orderby: 'batch_number',
-        top: 500
-      }),
-    enabled: componentIds.length > 0
-  });
-
-  const componentBatches = compBatchesQ.data ?? [];
 
   return {
     boms,
-    nameOf: (id) => productsQ.data?.find((p) => p.ID === id)?.name ?? id,
-    batchesFor: (componentId) =>
-      componentBatches.filter((b) => b.variant?.product_ID === componentId),
     loading: bomsQ.isLoading,
-    loadingBatches: compBatchesQ.isLoading
+    nameOf: (id) => productsQ.data?.find((p) => p.ID === id)?.name ?? id
   };
 }
 
-function BatchSourcingPicker({
-  boms,
-  batchesFor,
-  nameOf,
-  loadingBatches,
-  selectionFor,
-  onToggleBatch,
-  onSetExtNo,
-  disabled
-}) {
-  return (
-    <div className="space-y-4">
-      {boms.map((b) => {
-        const external = isExternalLine(b);
-        const sel = selectionFor(b.ID);
-        const label = (b.component_ID ? nameOf(b.component_ID) : b.component_name) || '—';
-        const candidates = batchesFor(b.component_ID);
+function BatchComponentsReadOnly({ batch, vid }) {
+  const { boms, loading, nameOf } = useVariantComponents(vid);
 
-        return (
-          <div key={b.ID} className="rounded-lg border border-black/5 bg-white p-3">
-            <div className="mb-2 flex items-center gap-2 text-sm font-medium text-ink">
-              <span>{label}</span>
-
-              {b.component_role && (
-                <span className="text-xs font-normal text-ink-muted">
-                  {b.component_role}
-                </span>
-              )}
-
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-normal text-ink-muted">
-                {external ? 'External' : 'Internal'}
-              </span>
-            </div>
-
-            {external ? (
-              <FieldRow
-                label="Supplier batch number"
-                htmlFor={`extbn-${b.ID}`}
-                hint="Traceability info only — footprint values come from the BOM line."
-              >
-                <Input
-                  id={`extbn-${b.ID}`}
-                  key={`extbn-${b.ID}-${sel.extNo}`}
-                  defaultValue={sel.extNo}
-                  maxLength={40}
-                  placeholder="e.g. ELA-2026-04"
-                  disabled={disabled}
-                  onBlur={(e) => onSetExtNo(b.ID, e.target.value.trim())}
-                />
-              </FieldRow>
-            ) : loadingBatches ? (
-              <p className="text-xs text-ink-muted">Loading batches…</p>
-            ) : candidates.length ? (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {candidates.map((cb) => (
-                  <CheckboxCard
-                    key={cb.ID}
-                    checked={sel.batchIds.has(cb.ID)}
-                    onChange={(on) => onToggleBatch(b.ID, cb.ID, on)}
-                    title={cb.batch_number || cb.ID}
-                    hint={cb.status}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-amber-600">
-                No production batches for this component yet.
-              </p>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function BatchComponentsEditor({ batch, vid, onMsg }) {
-  const qc = useQueryClient();
-  const { boms, nameOf, batchesFor, loading, loadingBatches } = useVariantSourcing(vid);
-
-  const bcQ = useQuery({
+  const batchComponentsQ = useQuery({
     queryKey: ['BatchComponents', batch.ID],
     queryFn: () =>
       odataList('BatchComponents', {
         filter: `batch_ID eq '${batch.ID}'`,
-        top: 200
-      })
+        expand: ['component_batch'],
+        top: 500
+      }),
+    enabled: !!batch.ID
   });
 
-  const bcByBom = {};
-  for (const bc of bcQ.data ?? []) {
-    (bcByBom[bc.bom_ID] ??= []).push(bc);
-  }
+  const byBom = useMemo(() => {
+    const map = {};
+    for (const row of batchComponentsQ.data ?? []) {
+      (map[row.bom_ID] ??= []).push(row);
+    }
+    return map;
+  }, [batchComponentsQ.data]);
 
-  const selectionFor = (bomId) => {
-    const rows = bcByBom[bomId] ?? [];
-
-    return {
-      batchIds: new Set(rows.map((r) => r.component_batch_ID).filter(Boolean)),
-      extNo: rows.find((r) => r.external_batch_number)?.external_batch_number ?? ''
-    };
-  };
-
-  const invalidate = () =>
-    qc.invalidateQueries({ queryKey: ['BatchComponents', batch.ID] });
-
-  const onErr = (err) =>
-    onMsg({
-      kind: 'error',
-      text: err instanceof ApiError ? err.message : 'Could not save sourcing.'
-    });
-
-  const toggleBatch = useMutation({
-    mutationFn: ({ bomId, batchId, on }) => {
-      if (on) {
-        return odataCreate('BatchComponents', {
-          ID: newId(),
-          batch_ID: batch.ID,
-          bom_ID: bomId,
-          component_batch_ID: batchId
-        });
-      }
-
-      const existing = (bcByBom[bomId] ?? []).find(
-        (bc) => bc.component_batch_ID === batchId
-      );
-
-      return existing ? odataDelete('BatchComponents', existing.ID) : Promise.resolve();
-    },
-    onSuccess: () => {
-      invalidate();
-      onMsg({ kind: 'success', text: 'Component sourcing updated.' });
-    },
-    onError: onErr
-  });
-
-  const saveExtBatchNo = useMutation({
-    mutationFn: ({ bomId, value }) => {
-      const existing = (bcByBom[bomId] ?? [])[0];
-
-      if (existing) {
-        return odataUpdate('BatchComponents', existing.ID, {
-          external_batch_number: value || null
-        });
-      }
-
-      return odataCreate('BatchComponents', {
-        ID: newId(),
-        batch_ID: batch.ID,
-        bom_ID: bomId,
-        external_batch_number: value || null
-      });
-    },
-    onSuccess: () => {
-      invalidate();
-      onMsg({ kind: 'success', text: 'Batch number saved.' });
-    },
-    onError: onErr
-  });
-
-  if (loading || bcQ.isLoading) {
+  if (loading || batchComponentsQ.isLoading) {
     return (
-      <p className="px-5 py-4 text-sm text-ink-muted">
+      <p className="border-t border-black/5 bg-gray-50/60 px-5 py-4 text-sm text-ink-muted">
         Loading components…
       </p>
     );
@@ -252,7 +113,7 @@ function BatchComponentsEditor({ batch, vid, onMsg }) {
 
   if (!boms.length) {
     return (
-      <p className="px-5 py-4 text-sm text-ink-muted">
+      <p className="border-t border-black/5 bg-gray-50/60 px-5 py-4 text-sm text-ink-muted">
         This variant has no bill of materials.
       </p>
     );
@@ -261,33 +122,69 @@ function BatchComponentsEditor({ batch, vid, onMsg }) {
   return (
     <div className="border-t border-black/5 bg-gray-50/60 px-5 py-4">
       <p className="mb-3 text-xs text-ink-muted">
-        Record which component batches were consumed in this run. Internal components:
-        tick the batches used. External components: enter the supplier batch number.
+        Components are shown in view-only mode. Editing is done in the BOM/variant
+        area, not in the batch view.
       </p>
 
-      <BatchSourcingPicker
-        boms={boms}
-        batchesFor={batchesFor}
-        nameOf={nameOf}
-        loadingBatches={loadingBatches}
-        selectionFor={selectionFor}
-        onToggleBatch={(bomId, batchId, on) =>
-          toggleBatch.mutate({ bomId, batchId, on })
-        }
-        onSetExtNo={(bomId, value) =>
-          saveExtBatchNo.mutate({ bomId, value })
-        }
-        disabled={toggleBatch.isPending || saveExtBatchNo.isPending}
-      />
+      <div className="overflow-hidden rounded-lg border border-black/5 bg-white">
+        <div className="grid grid-cols-[1.2fr_1fr_0.7fr_0.7fr_1.2fr] gap-4 border-b border-black/5 px-4 py-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
+          <span>Component</span>
+          <span>Role</span>
+          <span>Quantity</span>
+          <span>Source</span>
+          <span>Consumed batch / supplier batch</span>
+        </div>
+
+        {boms.map((b) => {
+          const external = isExternalLine(b);
+          const rows = byBom[b.ID] ?? [];
+          const label =
+            (b.component_ID ? nameOf(b.component_ID) : b.component_name) || '—';
+
+          const consumed =
+            rows
+              .map((r) =>
+                r.component_batch?.batch_number ||
+                r.component_batch_ID ||
+                r.external_batch_number
+              )
+              .filter(Boolean)
+              .join(', ') || '—';
+
+          return (
+            <div
+              key={b.ID}
+              className="grid grid-cols-[1.2fr_1fr_0.7fr_0.7fr_1.2fr] gap-4 border-b border-black/5 px-4 py-2.5 text-sm last:border-0"
+            >
+              <div>
+                <p className="font-medium text-ink">{label}</p>
+                <p className="font-mono text-[11px] text-ink-muted">{b.ID}</p>
+              </div>
+
+              <span className="text-ink-muted">{b.component_role || '—'}</span>
+
+              <span className="text-ink-muted">
+                {b.quantity ?? '—'} {b.unit ?? ''}
+              </span>
+
+              <span className="text-ink-muted">
+                {external ? 'External' : 'Internal'}
+              </span>
+
+              <span className="text-ink-muted">{consumed}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 function BatchRow({ batch, pid, vid, onMsg }) {
   const qc = useQueryClient();
-  const [itemCount, setItemCount] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [compExpanded, setCompExpanded] = useState(false);
+  const [selected, setSelected] = useState([]);
 
   const itemsQ = useQuery({
     queryKey: ['ProductItems', batch.ID],
@@ -296,7 +193,8 @@ function BatchRow({ batch, pid, vid, onMsg }) {
         filter: `batch_ID eq '${batch.ID}'`,
         orderby: 'serial_number',
         top: 1000
-      })
+      }),
+    enabled: !!batch.ID
   });
 
   const items = itemsQ.data ?? [];
@@ -306,108 +204,78 @@ function BatchRow({ batch, pid, vid, onMsg }) {
     queryFn: () =>
       odataList('DPPs', {
         filter: `batch_ID eq '${batch.ID}'`,
-        select: ['ID', 'item_ID', 'status'],
+        select: ['ID', 'item_ID', 'status', 'visibility'],
         top: 1000
       }),
-    enabled: items.length > 0
+    enabled: !!batch.ID
   });
 
   const dpps = dppsQ.data ?? [];
-  const dppByItem = Object.fromEntries(dpps.map((d) => [d.item_ID, d]));
-
-  const itemDpps = dpps.filter((d) => d.item_ID);
-  const dppCount = itemDpps.length;
-
-  const draftDpps = itemDpps.filter(
-    (d) => d.status === 'draft' || d.status === 'in_review'
+  const dppByItem = useMemo(
+    () => Object.fromEntries(dpps.map((d) => [d.item_ID, d])),
+    [dpps]
   );
-  const approvedDpps = itemDpps.filter((d) => d.status === 'approved');
-  const publishedCount = itemDpps.filter((d) => d.status === 'published').length;
+
+  const selectedItems = items.filter((i) => selected.includes(i.ID));
+  const selectedDpps = selectedItems.map((i) => dppByItem[i.ID]).filter(Boolean);
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['ProductItems', batch.ID] });
     qc.invalidateQueries({ queryKey: ['DPPs', 'batch', batch.ID] });
   };
 
-  const createItems = useMutation({
-    mutationFn: async (count) => {
-      const startIndex = items.length + 1;
-
-      for (let i = 0; i < count; i++) {
-        const serial = `${batch.batch_number ?? batch.ID}-${String(
-          startIndex + i
-        ).padStart(4, '0')}`;
-
-        await odataCreate('ProductItems', {
-          ID: newId(),
-          batch_ID: batch.ID,
-          serial_number: serial,
-          status: 'active'
-        });
-      }
+  const updateItemStatus = useMutation({
+    mutationFn: async ({ itemIds, status }) => {
+      await Promise.all(itemIds.map((id) => odataUpdate('ProductItems', id, { status })));
     },
     onSuccess: () => {
-      setItemCount('');
       invalidateAll();
-      onMsg({ kind: 'success', text: 'Items created.' });
+      setSelected([]);
+      onMsg({ kind: 'success', text: 'Item status updated.' });
     },
     onError: (err) =>
       onMsg({
         kind: 'error',
-        text: err instanceof ApiError ? err.message : 'Could not create items.'
+        text: err instanceof ApiError ? err.message : 'Could not update item status.'
       })
   });
 
-  const approveAll = useMutation({
-    mutationFn: () => bulkAction(draftDpps.map((d) => d.ID), 'approveDPP'),
-    onSuccess: (r) => {
-      invalidateAll();
-      onMsg({
-        kind: r.failed ? 'error' : 'success',
-        text: r.failed
-          ? `Approved ${r.total - r.failed} of ${r.total}; ${r.failed} failed.`
-          : `All ${r.total} DPPs approved.`
-      });
-    },
-    onError: () =>
-      onMsg({
-        kind: 'error',
-        text: 'Approve all failed.'
-      })
-  });
-
-  const publishAll = useMutation({
-    mutationFn: async () => {
-      await Promise.allSettled(
-        approvedDpps.map((d) =>
-          fetch(`/odata/v4/dpp/DPPs('${d.ID}')`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            body: JSON.stringify({ visibility: 'public' })
+  const updateDppStatus = useMutation({
+    mutationFn: async ({ dppIds, status }) => {
+      await Promise.all(
+        dppIds.map((id) =>
+          odataUpdate('DPPs', id, {
+            status,
+            ...(status === 'published' ? { visibility: 'public' } : {})
           })
         )
       );
-
-      return bulkAction(approvedDpps.map((d) => d.ID), 'publishDPP');
     },
-    onSuccess: (r) => {
+    onSuccess: () => {
       invalidateAll();
-      onMsg({
-        kind: r.failed ? 'error' : 'success',
-        text: r.failed
-          ? `Published ${r.total - r.failed} of ${r.total}; ${r.failed} failed.`
-          : `All ${r.total} DPPs published.`
-      });
+      setSelected([]);
+      onMsg({ kind: 'success', text: 'DPP status updated.' });
     },
-    onError: () =>
+    onError: (err) =>
       onMsg({
         kind: 'error',
-        text: 'Publish all failed.'
+        text: err instanceof ApiError ? err.message : 'Could not update DPP status.'
       })
   });
 
-  const busy = createItems.isPending || approveAll.isPending || publishAll.isPending;
-  const parsedCount = parseInt(itemCount, 10);
+  const busy = updateItemStatus.isPending || updateDppStatus.isPending;
+
+  const allSelected = items.length > 0 && selected.length === items.length;
+
+  const toggleAll = (on) => {
+    setSelected(on ? items.map((i) => i.ID) : []);
+  };
+
+  const toggleOne = (id, on) => {
+    setSelected((old) =>
+      on ? [...new Set([...old, id])] : old.filter((x) => x !== id)
+    );
+  };
 
   return (
     <div className="border-b border-black/5 last:border-0">
@@ -431,14 +299,6 @@ function BatchRow({ batch, pid, vid, onMsg }) {
           </div>
         </div>
 
-        <RequireRole role="company_advanced">
-          <Link to={`/products/${pid}/variants/${vid}/batches/${batch.ID}/edit`}>
-            <Button variant="ghost" size="sm">
-              Edit batch
-            </Button>
-          </Link>
-        </RequireRole>
-
         <div className="flex items-center gap-4 text-sm">
           <span className="text-ink-muted">
             <span className="font-medium text-ink">
@@ -447,72 +307,16 @@ function BatchRow({ batch, pid, vid, onMsg }) {
             items
           </span>
 
-          {dppCount > 0 && (
-            <span className="text-ink-muted">
-              <span className="font-medium text-ink">{dppCount}</span> DPPs
-            </span>
-          )}
+          <span className="text-ink-muted">
+            <span className="font-medium text-ink">
+              {dppsQ.isLoading ? '…' : dpps.length}
+            </span>{' '}
+            DPPs
+          </span>
         </div>
 
-        <RequireRole role="company_advanced">
-          <div className="flex items-center gap-1.5">
-            <input
-              type="number"
-              min="1"
-              max="100000"
-              value={itemCount}
-              onChange={(e) => setItemCount(e.target.value)}
-              placeholder="qty"
-              className="h-8 w-20 rounded-md border border-black/15 px-2 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!parsedCount || parsedCount < 1 || busy}
-              onClick={() => createItems.mutate(parsedCount)}
-            >
-              {createItems.isPending ? 'Adding…' : 'Add items'}
-            </Button>
-          </div>
-
-          {draftDpps.length > 0 && (
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={busy}
-              onClick={() => approveAll.mutate()}
-            >
-              {approveAll.isPending ? 'Approving…' : `Approve ${draftDpps.length}`}
-            </Button>
-          )}
-
-          {approvedDpps.length > 0 && (
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={busy}
-              onClick={() => publishAll.mutate()}
-            >
-              {publishAll.isPending ? 'Publishing…' : `Publish ${approvedDpps.length}`}
-            </Button>
-          )}
-        </RequireRole>
-
-        {publishedCount > 0 && (
-          <span className="text-xs font-medium text-green-700">
-            {publishedCount === dppCount
-              ? `✓ All ${dppCount} published`
-              : `${publishedCount}/${dppCount} published`}
-          </span>
-        )}
-
         {items.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setExpanded((o) => !o)}
-          >
+          <Button variant="ghost" size="sm" onClick={() => setExpanded((o) => !o)}>
             {expanded ? 'Hide items' : 'View items'}
           </Button>
         )}
@@ -528,9 +332,62 @@ function BatchRow({ batch, pid, vid, onMsg }) {
 
       {expanded && items.length > 0 && (
         <div className="border-t border-black/5 bg-gray-50/60">
-          <div className="grid grid-cols-[2fr_1fr_1fr_auto] gap-4 px-5 py-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
-            <span>Serial number</span>
-            <span>Status</span>
+          <RequireRole role="company_advanced">
+            <div className="flex flex-wrap items-center gap-3 border-b border-black/5 px-5 py-3">
+              <span className="text-xs font-medium text-ink-muted">
+                {selected.length} selected
+              </span>
+
+              <SelectStatus
+                label="Bulk item status"
+                value=""
+                options={ITEM_STATUSES}
+                disabled={busy || selected.length === 0}
+                onChange={(status) =>
+                  updateItemStatus.mutate({
+                    itemIds: selected,
+                    status
+                  })
+                }
+              />
+
+              <SelectStatus
+                label="Bulk DPP status"
+                value=""
+                options={DPP_STATUSES}
+                disabled={busy || selectedDpps.length === 0}
+                onChange={(status) =>
+                  updateDppStatus.mutate({
+                    dppIds: selectedDpps.map((d) => d.ID),
+                    status
+                  })
+                }
+              />
+
+              {selected.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => setSelected([])}
+                >
+                  Clear selection
+                </Button>
+              )}
+            </div>
+          </RequireRole>
+
+          <div className="grid grid-cols-[auto_1.5fr_1fr_1fr_1.2fr_auto] gap-4 px-5 py-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
+            <RequireRole role="company_advanced">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={(e) => toggleAll(e.target.checked)}
+                aria-label="Select all items"
+              />
+            </RequireRole>
+            <span>Item</span>
+            <span>Item status</span>
             <span>DPP status</span>
             <span />
           </div>
@@ -541,17 +398,29 @@ function BatchRow({ batch, pid, vid, onMsg }) {
             return (
               <div
                 key={item.ID}
-                className="grid grid-cols-[2fr_1fr_1fr_auto] items-center gap-4 border-t border-black/5 px-5 py-2.5"
+                className="grid grid-cols-[auto_1.5fr_1fr_1fr_1.2fr_auto] items-center gap-4 border-t border-black/5 px-5 py-2.5"
               >
-                <span className="font-mono text-xs text-ink">
-                  {item.serial_number || item.ID}
-                </span>
+                <RequireRole role="company_advanced">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(item.ID)}
+                    onChange={(e) => toggleOne(item.ID, e.target.checked)}
+                    aria-label={`Select ${item.serial_number || item.ID}`}
+                  />
+                </RequireRole>
+
+                <div>
+                  <p className="font-mono text-xs text-ink">
+                    {item.serial_number || item.ID}
+                  </p>
+                  <p className="font-mono text-[11px] text-ink-muted">{item.ID}</p>
+                </div>
 
                 <StatusBadge status={item.status} />
 
-                <span className="text-xs text-ink-muted">
-                  {dpp ? <StatusBadge status={dpp.status} /> : '—'}
-                </span>
+                <span>{dpp ? <StatusBadge status={dpp.status} /> : '—'}</span>
+
+                
 
                 <div>
                   {dpp ? (
@@ -570,9 +439,7 @@ function BatchRow({ batch, pid, vid, onMsg }) {
         </div>
       )}
 
-      {compExpanded && (
-        <BatchComponentsEditor batch={batch} vid={vid} onMsg={onMsg} />
-      )}
+      {compExpanded && <BatchComponentsReadOnly batch={batch} vid={vid} />}
     </div>
   );
 }
@@ -608,10 +475,7 @@ export function BatchView() {
     enabled: !!vid
   });
 
-  const label = variantQ.data
-    ? [variantQ.data.color, variantQ.data.size].filter(Boolean).join(' / ') ||
-      variantQ.data.sku
-    : '';
+  const label = variantLabel(variantQ.data);
 
   return (
     <div className="space-y-6">
@@ -634,7 +498,8 @@ export function BatchView() {
       <div>
         <h1 className="text-2xl font-semibold text-ink">Batches — {label}</h1>
         <p className="mt-1 text-sm text-ink-muted">
-          Add items to a batch, then approve and publish DPPs for all items at once.
+          View batch components and manage item/DPP statuses. Components are
+          read-only here.
         </p>
       </div>
 
@@ -645,7 +510,8 @@ export function BatchView() {
           <div>
             <CardTitle>Production batches</CardTitle>
             <p className="mt-0.5 text-xs text-ink-muted">
-              Per batch: add items → approve all → publish all.
+              Batch View is for operational status control. Validation and
+              publication readiness belong to the Validation page.
             </p>
           </div>
 
@@ -664,7 +530,7 @@ export function BatchView() {
 
         {!batchesQ.isLoading && (batchesQ.data ?? []).length === 0 && (
           <p className="px-5 py-8 text-center text-sm text-ink-muted">
-            No batches yet — add one with the button above.
+            No batches yet.
           </p>
         )}
 
