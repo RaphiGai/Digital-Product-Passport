@@ -55,12 +55,78 @@ function InfoRow({ label, value, visibility }) {
     </div>
   );
 }
+const SORT_COLUMNS = [
+  { key: 'id', label: 'Item ID' },
+  { key: 'upi', label: 'UPI' },
+  { key: 'serial', label: 'Serial' },
+  { key: 'itemStatus', label: 'Item status' },
+  { key: 'dppStatus', label: 'DPP status' },
+  { key: 'dppId', label: 'DPP ID' }
+];
+
+function SortButton({ column, sort, onSort, children }) {
+  const active = sort.column === column;
+  const icon = active ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : '';
+
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        onSort((old) =>
+          old.column === column
+            ? { column, dir: old.dir === 'asc' ? 'desc' : 'asc' }
+            : { column, dir: 'asc' }
+        )
+      }
+      className="text-left text-xs font-medium uppercase tracking-wide text-ink-muted hover:text-ink"
+    >
+      {children}{icon}
+    </button>
+  );
+}
+
+function itemSearchText(item, dpp) {
+  return [
+    item.ID,
+    item.upi,
+    item.serial_number,
+    item.status,
+    dpp?.ID,
+    dpp?.status,
+    dpp?.current_version,
+    dpp?.qr_token
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+function getItemSortValue(item, dpp, column) {
+  switch (column) {
+    case 'id':
+      return item.ID ?? '';
+    case 'upi':
+      return item.upi ?? '';
+    case 'serial':
+      return item.serial_number ?? '';
+    case 'itemStatus':
+      return item.status ?? '';
+    case 'dppStatus':
+      return dpp?.status ?? '';
+    case 'dppId':
+      return dpp?.ID ?? '';
+    default:
+      return '';
+  }
+}
 
 export function BatchDetail() {
   const qc = useQueryClient();
   const [selected, setSelected] = useState([]);
   const { pid, vid, bid } = useParams();
   const [msg, setMsg] = useState(null);
+  const [itemSearch, setItemSearch] = useState('');
+  const [itemSort, setItemSort] = useState({ column: 'serial', dir: 'asc' });
 
   const batchQ = useQuery({
     queryKey: ['Batches', 'one', bid],
@@ -104,10 +170,31 @@ export function BatchDetail() {
   const dppByItem = Object.fromEntries(dpps.map((d) => [d.item_ID, d]));
   const publishedCount = dpps.filter((d) => d.status === 'published').length;
 
-  const selectedItems = items.filter((i) => selected.includes(i.ID));
-const selectedDpps = selectedItems.map((i) => dppByItem[i.ID]).filter(Boolean);
+  const visibleItems = useMemo(() => {
+    const q = itemSearch.trim().toLowerCase();
 
-const invalidateAll = () => {
+    return [...items]
+      .filter((item) => {
+        if (!q) return true;
+        return itemSearchText(item, dppByItem[item.ID]).includes(q);
+      })
+      .sort((a, b) => {
+        const av = getItemSortValue(a, dppByItem[a.ID], itemSort.column);
+        const bv = getItemSortValue(b, dppByItem[b.ID], itemSort.column);
+
+        const result = String(av).localeCompare(String(bv), undefined, {
+          numeric: true,
+          sensitivity: 'base'
+        });
+
+        return itemSort.dir === 'asc' ? result : -result;
+      });
+  }, [items, dppByItem, itemSearch, itemSort]);
+
+  const selectedItems = items.filter((i) => selected.includes(i.ID));
+  const selectedDpps = selectedItems.map((i) => dppByItem[i.ID]).filter(Boolean);
+
+  const invalidateAll = () => {
   qc.invalidateQueries({ queryKey: ['ProductItems', bid] });
   qc.invalidateQueries({ queryKey: ['DPPs', 'batch', bid] });
 };
@@ -164,9 +251,18 @@ const updateDppStatus = useMutation({
 });
 
 const busy = updateItemStatus.isPending || updateDppStatus.isPending;
-const allSelected = items.length > 0 && selected.length === items.length;
 
-const toggleAll = (on) => setSelected(on ? items.map((i) => i.ID) : []);
+const allSelected =
+  visibleItems.length > 0 && visibleItems.every((i) => selected.includes(i.ID));
+
+const toggleAll = (on) =>
+  setSelected((old) => {
+    const visibleIds = visibleItems.map((i) => i.ID);
+    return on
+      ? [...new Set([...old, ...visibleIds])]
+      : old.filter((id) => !visibleIds.includes(id));
+  });
+
 const toggleOne = (id, on) =>
   setSelected((old) => (on ? [...new Set([...old, id])] : old.filter((x) => x !== id)));
 
@@ -305,6 +401,15 @@ return (
       <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
         <div>
           <CardTitle>Items</CardTitle>
+
+          <div className="px-5 pb-3">
+            <input
+              value={itemSearch}
+              onChange={(e) => setItemSearch(e.target.value)}
+              placeholder="Search items by ID, UPI, serial, status, DPP…"
+              className="h-9 w-full rounded-md border border-black/15 bg-white px-3 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
           <p className="mt-0.5 text-xs text-ink-muted">
             {itemsQ.isLoading ? '…' : `${items.length} item${items.length !== 1 ? 's' : ''}`}
             {dpps.length > 0 &&
@@ -320,7 +425,7 @@ return (
       </div>
 
       <RequireRole role="company_advanced">
-        {items.length > 0 && (
+        {visibleItems.length > 0 && (
           <div className="flex flex-wrap items-center gap-3 border-t border-b border-black/5 px-5 py-3">
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -377,13 +482,13 @@ return (
             <RequireRole role="company_advanced">
               <span />
             </RequireRole>
-            <span>UPI / Serial</span>
-            <span>Status</span>
-            <span>DPP</span>
+            <SortButton column="id" sort={itemSort} onSort={setItemSort}>Item</SortButton>
+            <SortButton column="itemStatus" sort={itemSort} onSort={setItemSort}>Status</SortButton>
+            <SortButton column="dppStatus" sort={itemSort} onSort={setItemSort}>DPP</SortButton>
             <span />
           </div>
 
-          {items.map((item) => {
+          {visibleItems.map((item) => {
             const dpp = dppByItem[item.ID];
 
             return (
@@ -428,6 +533,12 @@ return (
             );
           })}
         </>
+      )}
+
+      {!itemsQ.isLoading && items.length > 0 && visibleItems.length === 0 && (
+        <div className="px-5 py-8 text-center">
+          <p className="text-sm text-ink-muted">No items match your search.</p>
+        </div>
       )}
 
       {!itemsQ.isLoading && items.length === 0 && (

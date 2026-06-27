@@ -11,6 +11,9 @@ import {
   validateDppContext,
   groupChecksBySection
 } from '@/lib/ValidationRules';
+import { RequireRole } from '@/auth/RequireRole';
+
+
 
 const FILTERS = [
   { value: 'all', label: 'All' },
@@ -35,6 +38,79 @@ function text(v) {
 function ValidationReport({ row }) {
   const grouped = groupChecksBySection(row.validation.checks);
 
+  const productId = row.product?.ID || row.dpp.product_ID;
+  const variantId = row.variant?.ID || row.dpp.variant_ID;
+  const batchId = row.batch?.ID || row.dpp.batch_ID;
+  const itemId = row.item?.ID || row.dpp.item_ID;
+
+  const linkClass = 'font-mono text-xs text-brand hover:underline break-all';
+
+  const sectionDescription = {
+    Product: (
+      <div className="mb-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-ink-muted">
+        Product:{' '}
+        {productId ? (
+          <Link to={`/products/${productId}`} className={linkClass}>
+            {productId}
+          </Link>
+        ) : (
+          '—'
+        )}
+        {row.product?.name && <span> · {row.product.name}</span>}
+      </div>
+    ),
+    Variant: (
+      <div className="mb-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-ink-muted">
+        Variant:{' '}
+        {productId && variantId ? (
+          <Link
+            to={`/products/${productId}/variants/${variantId}/view`}
+            className={linkClass}
+          >
+            {variantId}
+          </Link>
+        ) : (
+          '—'
+        )}
+        <span> · {labelVariant(row.variant)}</span>
+      </div>
+    ),
+    Batch: (
+      <div className="mb-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-ink-muted">
+        Batch:{' '}
+        {productId && variantId && batchId ? (
+          <Link
+            to={`/products/${productId}/variants/${variantId}/batches/${batchId}`}
+            className={linkClass}
+          >
+            {batchId}
+          </Link>
+        ) : (
+          '—'
+        )}
+        {row.batch?.batch_number && <span> · {row.batch.batch_number}</span>}
+      </div>
+    ),
+    Item: (
+      <div className="mb-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-ink-muted">
+        Item:{' '}
+        {productId && variantId && batchId && itemId ? (
+          <Link
+            to={`/products/${productId}/variants/${variantId}/batches/${batchId}`}
+            className={linkClass}
+          >
+            {itemId}
+          </Link>
+        ) : (
+          '—'
+        )}
+        {(row.item?.serial_number || row.item?.upi) && (
+          <span> · {[row.item?.serial_number, row.item?.upi].filter(Boolean).join(' · ')}</span>
+        )}
+      </div>
+    )
+  };
+
   return (
     <div className="border-t border-black/5 bg-gray-50/70 px-5 py-4">
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -58,7 +134,9 @@ function ValidationReport({ row }) {
       <div className="grid gap-4 md:grid-cols-2">
         {Object.entries(grouped).map(([section, checks]) => (
           <div key={section} className="rounded-lg border border-black/5 bg-white p-4">
-            <h3 className="mb-3 text-sm font-semibold text-ink">{section}</h3>
+            <h3 className="mb-2 text-sm font-semibold text-ink">{section}</h3>
+
+            {sectionDescription[section]}
 
             <div className="space-y-2">
               {checks.map((c) => (
@@ -130,6 +208,8 @@ export function Validation() {
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [openReport, setOpenReport] = useState(null);
+  const [selected, setSelected] = useState([]);
+
 
   const dppsQ = useQuery({
     queryKey: ['Validation', 'DPPs'],
@@ -231,6 +311,18 @@ export function Validation() {
     });
   }, [rows, filter, query]);
 
+  const selectedRows = filteredRows.filter((r) => selected.includes(r.dpp.ID));
+
+  const toggleOne = (id) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleAll = (on) => {
+    setSelected(on ? filteredRows.map((r) => r.dpp.ID) : []);
+  }; 
+
   const updateDppStatus = useMutation({
     mutationFn: async ({ row, status }) => {
       if (status === 'published' && !row.validation.readyToPublish) {
@@ -257,6 +349,43 @@ export function Validation() {
             : 'Could not update DPP status.'
       })
   });
+
+  const bulkUpdateDppStatus = useMutation({
+  mutationFn: async (status) => {
+    const rowsToUpdate = selectedRows;
+
+    if (status === 'published') {
+      const blocked = rowsToUpdate.filter((r) => !r.validation.readyToPublish);
+      if (blocked.length > 0) {
+        throw new Error(`${blocked.length} selected DPP(s) cannot be published because mandatory checks failed.`);
+      }
+    }
+
+    await Promise.all(
+      rowsToUpdate.map((row) =>
+        odataUpdate('DPPs', row.dpp.ID, {
+          status,
+          ...(status === 'published' ? { visibility: 'public' } : {})
+        })
+      )
+    );
+
+    return { count: rowsToUpdate.length, status };
+  },
+  onSuccess: ({ count, status }) => {
+    qc.invalidateQueries({ queryKey: ['Validation', 'DPPs'] });
+    setSelected([]);
+    setMsg({
+      kind: 'success',
+      text: `${count} DPP(s) ${status === 'published' ? 'published' : 'approved'}.`
+    });
+  },
+  onError: (err) =>
+    setMsg({
+      kind: 'error',
+      text: err instanceof Error ? err.message : 'Could not update selected DPPs.'
+    })
+});
 
   const loading =
     dppsQ.isLoading || bomsQ.isLoading || batchComponentsQ.isLoading;
@@ -342,139 +471,200 @@ export function Validation() {
           </p>
         )}
 
-        {!loading && filteredRows.length > 0 && (
-          <div className="overflow-x-auto">
-            <div className="min-w-[1150px]">
-              <div className="grid grid-cols-[1.4fr_1.4fr_1.2fr_1.2fr_1.2fr_1fr_1.2fr_1.7fr] gap-4 border-t border-black/5 bg-gray-50 px-5 py-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
-                <span>DPP</span>
-                <span>Product</span>
-                <span>Variant</span>
-                <span>Batch</span>
-                <span>Item</span>
-                <span>Status</span>
-                <span>Validation</span>
-                <span className="text-right">Actions</span>
-              </div>
+        <RequireRole role="company_advanced">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/5 bg-gray-50 px-5 py-3">
+          <p className="text-sm text-ink-muted">
+            Selected: <span className="font-medium text-ink">{selected.length}</span>
+          </p>
 
-              {filteredRows.map((row) => {
-                const isOpen = openReport === row.dpp.ID;
+          <div className="flex gap-2">
+            <Button
+              disabled={selected.length === 0 || bulkUpdateDppStatus.isPending}
+              onClick={() => bulkUpdateDppStatus.mutate('approved')}
+            >
+              Approve selected
+            </Button>
 
-                return (
-                  <div key={row.dpp.ID} className="border-t border-black/5">
-                    <div className="grid grid-cols-[1.4fr_1.4fr_1.2fr_1.2fr_1.2fr_1fr_1.2fr_1.7fr] items-center gap-4 px-5 py-3 text-sm">
-                      <div className="min-w-0">
-                        <Link
-                          to={`/dpps/${row.dpp.ID}`}
-                          className="font-mono text-xs font-medium text-brand hover:underline"
-                        >
-                          {row.dpp.ID}
-                        </Link>
-                        <p className="text-xs text-ink-muted">
-                          v{row.dpp.version ?? '—'} · {row.dpp.type ?? '—'}
-                        </p>
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-ink">
-                          {row.product?.name || '—'}
-                        </p>
-                        <p className="truncate font-mono text-xs text-ink-muted">
-                          {row.product?.ID || row.dpp.product_ID || '—'}
-                        </p>
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="truncate text-ink">{labelVariant(row.variant)}</p>
-                        <p className="truncate font-mono text-xs text-ink-muted">
-                          {row.variant?.ID || row.dpp.variant_ID || '—'}
-                        </p>
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="truncate text-ink">
-                          {row.batch?.batch_number || '—'}
-                        </p>
-                        <p className="truncate font-mono text-xs text-ink-muted">
-                          {row.batch?.ID || row.dpp.batch_ID || '—'}
-                        </p>
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="truncate text-ink">
-                          {row.item?.serial_number || row.item?.upi || '—'}
-                        </p>
-                        <p className="truncate font-mono text-xs text-ink-muted">
-                          {row.item?.ID || row.dpp.item_ID || '—'}
-                        </p>
-                      </div>
-
-                      <StatusBadge status={row.dpp.status} />
-
-                      <div>
-                        {row.validation.readyToPublish ? (
-                          <span className="text-xs font-medium text-green-700">
-                            Ready · {row.validation.score}
-                          </span>
-                        ) : (
-                          <span className="text-xs font-medium text-red-700">
-                            {row.validation.mandatoryFailed.length} issue(s) ·{' '}
-                            {row.validation.score}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setOpenReport(isOpen ? null : row.dpp.ID)}
-                        >
-                          {isOpen ? 'Hide report' : 'Report'}
-                        </Button>
-
-                        {row.dpp.status !== 'published' && (
-                          <Button
-                            size="sm"
-                            disabled={
-                              updateDppStatus.isPending ||
-                              !row.validation.readyToPublish
-                            }
-                            onClick={() =>
-                              updateDppStatus.mutate({
-                                row,
-                                status: 'published'
-                              })
-                            }
-                          >
-                            Publish
-                          </Button>
-                        )}
-
-                        {row.dpp.status !== 'approved' &&
-                          row.dpp.status !== 'published' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={updateDppStatus.isPending}
-                              onClick={() =>
-                                updateDppStatus.mutate({
-                                  row,
-                                  status: 'approved'
-                                })
-                              }
-                            >
-                              Approve
-                            </Button>
-                          )}
-                      </div>
-                    </div>
-
-                    {isOpen && <ValidationReport row={row} />}
-                  </div>
-                );
-              })}
-            </div>
+            <Button
+              disabled={selected.length === 0 || bulkUpdateDppStatus.isPending}
+              onClick={() => bulkUpdateDppStatus.mutate('published')}
+            >
+              Publish selected
+            </Button>
           </div>
+        </div>
+      </RequireRole>
+
+        {!loading && filteredRows.length > 0 && (
+          
+      <div className="overflow-x-auto">
+        <div className="min-w-[1580px]">
+          <div className="grid grid-cols-[48px_180px_220px_220px_220px_220px_140px_160px_220px]">
+            <RequireRole role="company_advanced">
+              <input
+                type="checkbox"
+                checked={filteredRows.length > 0 && selected.length === filteredRows.length}
+                onChange={(e) => toggleAll(e.target.checked)}
+              />
+            </RequireRole>
+            <span>DPP</span>
+            <span>Product</span>
+            <span>Variant</span>
+            <span>Batch</span>
+            <span>Item</span>
+            <span>Status</span>
+            <span>Validation</span>
+            <span className="text-right">Actions</span>
+          </div>
+
+          {filteredRows.map((row) => {
+            const isOpen = openReport === row.dpp.ID;
+
+            const productId = row.product?.ID || row.dpp.product_ID;
+            const variantId = row.variant?.ID || row.dpp.variant_ID;
+            const batchId = row.batch?.ID || row.dpp.batch_ID;
+            const itemId = row.item?.ID || row.dpp.item_ID;
+
+            return (
+              <div key={row.dpp.ID} className="border-t border-black/5">
+                <div className="grid grid-cols-[48px_180px_220px_220px_220px_220px_140px_160px_220px] items-center gap-4 px-5 py-3 text-sm">
+                    <RequireRole role="company_advanced">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(row.dpp.ID)}
+                        onChange={() => toggleOne(row.dpp.ID)}
+                        className="h-4 w-4"
+                      />
+                    </RequireRole>
+                  <div className="min-w-0">
+                    <Link
+                      to={`/dpps/${row.dpp.ID}`}
+                      className="block truncate font-mono text-xs font-medium text-brand hover:underline"
+                      title={row.dpp.ID}
+                    >
+                      {row.dpp.ID}
+                    </Link>
+                    <p className="text-xs text-ink-muted">
+                      v{row.dpp.version ?? '—'} · {row.dpp.type ?? '—'}
+                    </p>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-ink">{row.product?.name || '—'}</p>
+                    {productId ? (
+                      <Link
+                        to={`/products/${productId}`}
+                        className="block truncate font-mono text-xs text-brand hover:underline"
+                        title={productId}
+                      >
+                        {productId}
+                      </Link>
+                    ) : (
+                      <p className="text-xs text-ink-muted">—</p>
+                    )}
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-ink">{labelVariant(row.variant)}</p>
+                    {productId && variantId ? (
+                      <Link
+                        to={`/products/${productId}/variants/${variantId}/view`}
+                        className="block truncate font-mono text-xs text-brand hover:underline"
+                        title={variantId}
+                      >
+                        {variantId}
+                      </Link>
+                    ) : (
+                      <p className="text-xs text-ink-muted">—</p>
+                    )}
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-ink">{row.batch?.batch_number || '—'}</p>
+                    {productId && variantId && batchId ? (
+                      <Link
+                        to={`/products/${productId}/variants/${variantId}/batches/${batchId}`}
+                        className="block truncate font-mono text-xs text-brand hover:underline"
+                        title={batchId}
+                      >
+                        {batchId}
+                      </Link>
+                    ) : (
+                      <p className="text-xs text-ink-muted">—</p>
+                    )}
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-ink">
+                      {row.item?.serial_number || row.item?.upi || '—'}
+                    </p>
+                    {productId && variantId && batchId && itemId ? (
+                      <Link
+                        to={`/products/${productId}/variants/${variantId}/batches/${batchId}`}
+                        className="block truncate font-mono text-xs text-brand hover:underline"
+                        title={itemId}
+                      >
+                        {itemId}
+                      </Link>
+                    ) : (
+                      <p className="text-xs text-ink-muted">—</p>
+                    )}
+                  </div>
+
+                  <StatusBadge status={row.dpp.status} />
+
+                  <div>
+                    {row.validation.readyToPublish ? (
+                      <span className="text-xs font-medium text-green-700">
+                        Ready · {row.validation.score}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium text-red-700">
+                        {row.validation.mandatoryFailed.length} issue(s) · {row.validation.score}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setOpenReport(isOpen ? null : row.dpp.ID)}
+                    >
+                      {isOpen ? 'Hide report' : 'Report'}
+                    </Button>
+
+                    <RequireRole role="company_advanced">
+                      {row.dpp.status !== 'published' && (
+                        <Button
+                          size="sm"
+                          disabled={updateDppStatus.isPending || !row.validation.readyToPublish}
+                          onClick={() => updateDppStatus.mutate({ row, status: 'published' })}
+                        >
+                          Publish
+                        </Button>
+                      )}
+
+                      {row.dpp.status !== 'approved' && row.dpp.status !== 'published' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={updateDppStatus.isPending}
+                          onClick={() => updateDppStatus.mutate({ row, status: 'approved' })}
+                        >
+                          Approve
+                        </Button>
+                      )}
+                    </RequireRole>
+                  </div>
+                </div>
+
+                {isOpen && <ValidationReport row={row} />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
         )}
       </Card>
     </div>

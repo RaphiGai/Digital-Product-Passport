@@ -180,11 +180,66 @@ function BatchComponentsReadOnly({ batch, vid }) {
   );
 }
 
+function SortButton({ column, sort, setSort, children }) {
+  const active = sort.column === column;
+
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        setSort((old) =>
+          old.column === column
+            ? { column, dir: old.dir === 'asc' ? 'desc' : 'asc' }
+            : { column, dir: 'asc' }
+        )
+      }
+      className="text-left text-xs font-medium uppercase tracking-wide text-ink-muted hover:text-ink"
+    >
+      {children}
+      {active ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+    </button>
+  );
+}
+
+function getItemSortValue(item, dpp, column) {
+  switch (column) {
+    case 'item':
+      return item.serial_number || item.ID || '';
+    case 'itemId':
+      return item.ID || '';
+    case 'itemStatus':
+      return item.status || '';
+    case 'dppStatus':
+      return dpp?.status || '';
+    case 'dppId':
+      return dpp?.ID || '';
+    default:
+      return '';
+  }
+}
+
+function getItemSearchText(item, dpp) {
+  return [
+    item.ID,
+    item.serial_number,
+    item.upi,
+    item.status,
+    dpp?.ID,
+    dpp?.status,
+    dpp?.visibility
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
 function BatchRow({ batch, pid, vid, onMsg }) {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [compExpanded, setCompExpanded] = useState(false);
   const [selected, setSelected] = useState([]);
+  const [itemSearch, setItemSearch] = useState('');
+  const [itemSort, setItemSort] = useState({ column: 'item', dir: 'asc' });
 
   const itemsQ = useQuery({
     queryKey: ['ProductItems', batch.ID],
@@ -215,6 +270,27 @@ function BatchRow({ batch, pid, vid, onMsg }) {
     () => Object.fromEntries(dpps.map((d) => [d.item_ID, d])),
     [dpps]
   );
+
+  const visibleItems = useMemo(() => {
+  const q = itemSearch.trim().toLowerCase();
+
+  return [...items]
+    .filter((item) => {
+      if (!q) return true;
+      return getItemSearchText(item, dppByItem[item.ID]).includes(q);
+    })
+    .sort((a, b) => {
+      const av = getItemSortValue(a, dppByItem[a.ID], itemSort.column);
+      const bv = getItemSortValue(b, dppByItem[b.ID], itemSort.column);
+
+      const result = String(av).localeCompare(String(bv), undefined, {
+        numeric: true,
+        sensitivity: 'base'
+      });
+
+      return itemSort.dir === 'asc' ? result : -result;
+    });
+}, [items, dppByItem, itemSearch, itemSort]);
 
   const selectedItems = items.filter((i) => selected.includes(i.ID));
   const selectedDpps = selectedItems.map((i) => dppByItem[i.ID]).filter(Boolean);
@@ -265,10 +341,17 @@ function BatchRow({ batch, pid, vid, onMsg }) {
 
   const busy = updateItemStatus.isPending || updateDppStatus.isPending;
 
-  const allSelected = items.length > 0 && selected.length === items.length;
+  const allSelected =
+    visibleItems.length > 0 && visibleItems.every((i) => selected.includes(i.ID));
 
   const toggleAll = (on) => {
-    setSelected(on ? items.map((i) => i.ID) : []);
+    const visibleIds = visibleItems.map((i) => i.ID);
+
+    setSelected((old) =>
+      on
+        ? [...new Set([...old, ...visibleIds])]
+        : old.filter((id) => !visibleIds.includes(id))
+    );
   };
 
   const toggleOne = (id, on) => {
@@ -331,7 +414,10 @@ function BatchRow({ batch, pid, vid, onMsg }) {
       </div>
 
       {expanded && items.length > 0 && (
+
+        
         <div className="border-t border-black/5 bg-gray-50/60">
+
           <RequireRole role="company_advanced">
             <div className="flex flex-wrap items-center gap-3 border-b border-black/5 px-5 py-3">
               <span className="text-xs font-medium text-ink-muted">
@@ -377,22 +463,51 @@ function BatchRow({ batch, pid, vid, onMsg }) {
             </div>
           </RequireRole>
 
+              <div className="border-b border-black/5 px-5 py-3">
+                <input
+                  value={itemSearch}
+                  onChange={(e) => setItemSearch(e.target.value)}
+                  placeholder="Search items by ID, serial, UPI, status or DPP..."
+                  className="h-9 w-full rounded-md border border-black/15 bg-white px-3 text-sm"
+                />
+              </div>
+
           <div className="grid grid-cols-[auto_1.5fr_1fr_1fr_1.2fr_auto] gap-4 px-5 py-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
             <RequireRole role="company_advanced">
               <input
                 type="checkbox"
                 checked={allSelected}
                 onChange={(e) => toggleAll(e.target.checked)}
-                aria-label="Select all items"
+                aria-label="Select all visible items"
               />
             </RequireRole>
-            <span>Item</span>
-            <span>Item status</span>
-            <span>DPP status</span>
+
+            <SortButton column="item" sort={itemSort} setSort={setItemSort}>
+              Item
+            </SortButton>
+
+            <SortButton column="itemStatus" sort={itemSort} setSort={setItemSort}>
+              Item status
+            </SortButton>
+
+            <SortButton column="dppStatus" sort={itemSort} setSort={setItemSort}>
+              DPP status
+            </SortButton>
+
+            <SortButton column="dppId" sort={itemSort} setSort={setItemSort}>
+              DPP ID
+            </SortButton>
+
             <span />
           </div>
 
-          {items.map((item) => {
+          {visibleItems.length === 0 && (
+            <p className="px-5 py-6 text-center text-sm text-ink-muted">
+              No items match your search.
+            </p>
+          )}
+
+          {visibleItems.map((item) => {
             const dpp = dppByItem[item.ID];
 
             return (
