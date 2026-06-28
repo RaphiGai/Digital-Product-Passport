@@ -15,8 +15,21 @@ using {
 } from './common';
 using { dpp.Organizations, dpp.BusinessPartners, dpp.audited } from './org';
 using { dpp.DPPs } from './dpp';
+using { sap.common.CodeList } from '@sap/cds/common';
 
 namespace dpp;
+
+// ----- Product category (code list / master data) -----
+// Top-level product category, aligned with the ESPR product-group concept (textiles
+// first; furniture, electronics, … to follow). Modelled as a CODE LIST rather than a
+// CDS enum so categories are curated as master data: new categories are added as rows
+// (seed CSV today, an admin UI later) WITHOUT a model change or redeploy, and they
+// carry a human-readable, translatable name. Seeded with 'textiles' only — the product
+// forms therefore currently offer Textiles as the sole selectable category.
+// See db/data/dpp-ProductCategories.csv.
+entity ProductCategories : CodeList {
+  key code : String(20);
+}
 
 // ----- Product master data (catalogue Sheet 2 R6) -----
 // Generic product entity: finished product, material, component or packaging.
@@ -25,7 +38,7 @@ entity Products : identified, audited {
   product_type          : ProductType  not null default 'finished';
   name                  : String(120)  not null;
   brand                 : String(120);
-  category              : String(60);
+  category              : Association to ProductCategories;   // top-level category (ESPR product group); code list — currently only 'textiles'
   model                 : String(120);
   description           : String(500);
   gtin                  : GTIN;

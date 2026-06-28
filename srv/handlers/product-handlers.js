@@ -2,11 +2,39 @@
 
 const cds = require('@sap/cds');
 const { getUserOrg, requireOwningOrg } = require('./auth-helpers');
+const dppHandlers = require('./dpp-handlers'); // for reevaluateDrift (one-way require)
 
 function rejectCrossOrgWrite(req, fieldValue, callerOrgId) {
   if (fieldValue !== undefined && fieldValue !== callerOrgId) {
     req.reject(403, 'Cannot assign records to a different organization.');
   }
+}
+
+const keyOf = (req) => {
+  const last = req.params && req.params[req.params.length - 1];
+  return last && typeof last === 'object' ? last.ID : last;
+};
+
+// Resolve the DPPs affected by an edit to shared master data (DB-level reads bypass the
+// READ tenant filter; the affected DPPs belong to the editing user's org anyway).
+async function dppIdsForProduct(productId) {
+  const { DPPs } = cds.entities('dpp');
+  return (await SELECT.from(DPPs).columns('ID').where({ product_ID: productId })).map((r) => r.ID);
+}
+async function dppIdsForBatch(batchId) {
+  const { DPPs } = cds.entities('dpp');
+  return (await SELECT.from(DPPs).columns('ID').where({ batch_ID: batchId })).map((r) => r.ID);
+}
+async function dppIdsForVariant(variantId) {
+  const { DPPs, Batches } = cds.entities('dpp');
+  const ids = new Set();
+  (await SELECT.from(DPPs).columns('ID').where({ variant_ID: variantId })).forEach((r) => ids.add(r.ID));
+  const batches = await SELECT.from(Batches).columns('ID').where({ variant_ID: variantId });
+  if (batches.length) {
+    (await SELECT.from(DPPs).columns('ID').where({ batch_ID: { in: batches.map((b) => b.ID) } }))
+      .forEach((r) => ids.add(r.ID));
+  }
+  return [...ids];
 }
 
 /**
@@ -39,7 +67,7 @@ async function descendantsReach(startProductId, targetProductId, { ProductVarian
 module.exports = (srv) => {
   const {
     Products, ProductVariants,
-    ProductBOMs, BusinessPartners, Batches
+    ProductBOMs, BusinessPartners, Batches, BatchComponents
   } = srv.entities;
 
   // ----- Tenant defaulting on CREATE + tenant guard on UPDATE -----
@@ -157,6 +185,56 @@ module.exports = (srv) => {
       .where({ ID: id });
 
     return SELECT.one.from(Products).where({ ID: id });
+  });
+
+  // ----- Drift: editing shared master data reverts dependent approved/published DPPs
+  // to draft (re-approve + re-publish needed). See dpp-handlers#reevaluateDrift. The
+  // lifecycle `status` of these rows is excluded from the drift hash (snapshot-hash.js),
+  // so archiving/publishing a product does NOT revert its DPPs. -----
+  srv.after('UPDATE', Products, async (_d, req) => {
+    const id = keyOf(req);
+    if (id) await dppHandlers.reevaluateDrift(await dppIdsForProduct(id));
+  });
+  srv.after('UPDATE', ProductVariants, async (_d, req) => {
+    const id = keyOf(req);
+    if (id) await dppHandlers.reevaluateDrift(await dppIdsForVariant(id));
+  });
+  srv.after('UPDATE', Batches, async (_d, req) => {
+    const id = keyOf(req);
+    if (id) await dppHandlers.reevaluateDrift(await dppIdsForBatch(id));
+  });
+
+  // BOM / per-batch sourcing: CREATE/UPDATE/DELETE all change the rolled-up snapshot.
+  // Capture the affected parent variant / batch in `before` (the row still exists on
+  // DELETE), then re-evaluate in `after`.
+  srv.before(['CREATE', 'UPDATE', 'DELETE'], ProductBOMs, async (req) => {
+    let parentId = req.data && req.data.parent_ID;
+    if (!parentId) {
+      const id = keyOf(req);
+      if (id) {
+        const row = await SELECT.one.from(cds.entities('dpp').ProductBOMs).columns('parent_ID').where({ ID: id });
+        parentId = row && row.parent_ID;
+      }
+    }
+    req._driftVariantId = parentId || null;
+  });
+  srv.after(['CREATE', 'UPDATE', 'DELETE'], ProductBOMs, async (_d, req) => {
+    if (req._driftVariantId) await dppHandlers.reevaluateDrift(await dppIdsForVariant(req._driftVariantId));
+  });
+
+  srv.before(['CREATE', 'UPDATE', 'DELETE'], BatchComponents, async (req) => {
+    let batchId = req.data && req.data.batch_ID;
+    if (!batchId) {
+      const id = keyOf(req);
+      if (id) {
+        const row = await SELECT.one.from(cds.entities('dpp').BatchComponents).columns('batch_ID').where({ ID: id });
+        batchId = row && row.batch_ID;
+      }
+    }
+    req._driftBatchId = batchId || null;
+  });
+  srv.after(['CREATE', 'UPDATE', 'DELETE'], BatchComponents, async (_d, req) => {
+    if (req._driftBatchId) await dppHandlers.reevaluateDrift(await dppIdsForBatch(req._driftBatchId));
   });
 };
 

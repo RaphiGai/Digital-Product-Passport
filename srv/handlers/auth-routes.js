@@ -11,10 +11,12 @@ const email = require('../lib/email');
  * auth gate, like /public/* and /healthz. They issue/clear the signed
  * `dpp_session` cookie that srv/auth/session-auth.js consumes.
  *
- *   GET  /login                 → login mask (or change-password mask on ?reset=1)
- *   POST /auth/login            → verify credentials → session cookie (or pwreset)
- *   POST /auth/change-password  → forced first-login change / voluntary change
- *   POST /auth/logout           → clear cookie, back to /login
+ *   GET  /login                       → login mask (or change-password mask on ?reset=1)
+ *   POST /auth/login                  → verify credentials → session cookie (or pwreset)
+ *   POST /auth/change-password        → forced first-login change / voluntary change
+ *   POST /auth/request-password-reset → self-service: username+email → emailed reset link
+ *   POST /auth/reset-password         → self-service: token + new password → password set
+ *   POST /auth/logout                 → clear cookie, back to /login
  */
 
 const COOKIE_NAME = 'dpp_session';
@@ -180,6 +182,49 @@ function register(app) {
     setSessionCookie(res, fullSessionToken(user), session.FULL_TTL_SECONDS);
     if (wantsJson(req)) return res.json({ ok: true });
     return res.redirect(302, POST_LOGIN_REDIRECT);
+  });
+
+  // Self-service password reset, step 1: a matching username + registered email pair
+  // mints a single-use token and emails the reset link. A mismatch is reported back
+  // (the team's chosen contract — see test); the token never appears in the response.
+  // Consumed by the SPA (auth/authApi.js#requestPasswordReset) and the integration test.
+  app.post('/auth/request-password-reset', parse, async (req, res) => {
+    // NB: destructure the body's email under a different name — `email` (module-scope) is
+    // the mailer used below; shadowing it here would break email.sendPasswordResetEmail.
+    const { username, email: emailInput } = req.body || {};
+    let user;
+    try {
+      user = await credentials.findActiveByUsernameAndEmail(String(username || ''), String(emailInput || ''));
+    } catch (e) {
+      console.error('[auth] request-password-reset error:', e.message);
+      return res.status(500).json({ ok: false, error: 'Password reset is currently unavailable. Please try again later.' });
+    }
+    if (!user) {
+      return res.status(400).json({ ok: false, error: 'The username and email do not match an active account.' });
+    }
+    try {
+      const token = await credentials.createPasswordResetToken(user.ID);
+      const base = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+      const link = `${base}/reset-password?token=${encodeURIComponent(token)}`;
+      await email.sendPasswordResetEmail(user.email, { link, displayName: user.display_name });
+    } catch (e) {
+      console.error('[auth] request-password-reset issue error:', e.message);
+      return res.status(500).json({ ok: false, error: 'Password reset is currently unavailable. Please try again later.' });
+    }
+    return res.json({ ok: true });
+  });
+
+  // Self-service password reset, step 2: exchange a valid, unexpired token for a new
+  // password. Strength + single-use + expiry are enforced in credentials.consumePasswordResetToken,
+  // which throws fail(4xx) with a user-facing message on any failure.
+  app.post('/auth/reset-password', parse, async (req, res) => {
+    const { token, newPassword } = req.body || {};
+    try {
+      await credentials.consumePasswordResetToken(String(token || ''), String(newPassword || ''));
+    } catch (e) {
+      return res.status(e.status || 400).json({ ok: false, error: e.message });
+    }
+    return res.json({ ok: true });
   });
 
   app.post('/auth/logout', parse, (req, res) => {

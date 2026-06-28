@@ -2,6 +2,7 @@
 
 const cds = require('@sap/cds');
 const { requireActiveUser, requireRole } = require('./auth-helpers');
+const { missingMandatory } = require('../lib/mandatory-fields');
 
 /**
  * Compliance analytics (US9.x). One unbound action `complianceAnalytics` returning an
@@ -60,7 +61,9 @@ function emptyPayload(dateFrom, dateTo, today) {
       docs_complete_pct: null, avg_docs_score: null,
       products_no_docs: 0, products_expired_only: 0,
       docs_expiring_soon: 0, docs_expired: 0, declared_not_evidenced: 0,
-      doc_coverage_certs_pct: null, doc_coverage_test_pct: null, doc_coverage_doc_pct: null
+      doc_coverage_certs_pct: null, doc_coverage_test_pct: null, doc_coverage_doc_pct: null,
+      mandatory_complete_pct: null, approval_blocking_products: 0, mandatory_fields_missing: 0,
+      products_pending_changes: 0
     },
     espr_distribution: { compliant: 0, in_review: 0, non_compliant: 0, draft: 0 },
     evidence_distribution: { complete: 0, partial: 0, expired_only: 0, none: 0 },
@@ -194,6 +197,12 @@ module.exports = (srv) => {
       const expiredOnlyType = (t) => !hasType(t) && effectiveDocs.some((d) => d.doc_type === t);
 
       const published = prodDpps.some((d) => d.status === 'published');
+      // Mandatory-field readiness (the approve gate, product-level fields). Batch-level
+      // country_of_origin is surfaced per-batch (country_of_origin_set) below.
+      const miss = missingMandatory(p, null);
+      // Pending changes: a DPP that was published (published_at set) but is now back to
+      // 'draft' was reverted by drift detection → its live consumer version is stale.
+      const pendingChanges = prodDpps.some((d) => d.published_at != null && d.status === 'draft');
       const declared_not_evidenced = p.espr_compliance === 'compliant' && ev.score < 1;
       const risk_flag = declared_not_evidenced
         ? 'Declared, not evidenced'
@@ -225,6 +234,11 @@ module.exports = (srv) => {
         evidence_complete: ev.complete,
         evidence_class: ev.cls,
         published,
+        published_dpp_count: prodDpps.filter((d) => d.status === 'published').length,
+        missing_mandatory_count: miss.length,
+        missing_mandatory: miss.map((m) => m.label),
+        approval_blocking: miss.length > 0,
+        pending_changes: pendingChanges,
         declared_not_evidenced,
         risk_flag
       });
@@ -309,7 +323,11 @@ module.exports = (srv) => {
       declared_not_evidenced: by_product.filter((r) => r.declared_not_evidenced).length,
       doc_coverage_certs_pct: pct(by_product.filter((r) => r.has_certificate).length, total, 1),
       doc_coverage_test_pct: pct(by_product.filter((r) => r.has_test_report).length, total, 1),
-      doc_coverage_doc_pct: pct(by_product.filter((r) => r.has_doc).length, total, 1)
+      doc_coverage_doc_pct: pct(by_product.filter((r) => r.has_doc).length, total, 1),
+      mandatory_complete_pct: pct(by_product.filter((r) => r.missing_mandatory_count === 0).length, total, 1),
+      approval_blocking_products: by_product.filter((r) => r.approval_blocking).length,
+      mandatory_fields_missing: by_product.reduce((s, r) => s + r.missing_mandatory_count, 0),
+      products_pending_changes: by_product.filter((r) => r.pending_changes).length
     };
 
     // ---- Monthly time series over the product census ----

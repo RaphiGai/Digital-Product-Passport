@@ -1,47 +1,36 @@
 'use strict';
 
 const cds = require('@sap/cds');
-const { randomUUID, createHash } = require('crypto');
+const { randomUUID } = require('crypto');
 const tokens = require('../lib/token');
 const { requireOwningOrg } = require('./auth-helpers');
 const { aggregate } = require('../lib/aggregator');
+const { missingMandatory } = require('../lib/mandatory-fields');
+const { contentHash, diffNormalized } = require('../lib/snapshot-hash');
 
 const DPP_OWNER_PATH = 'product.owning_organization_ID';
 
 /**
  * Mandatory-field check used by approveDPP/publishDPP. Returns an array of
- * human-readable error strings — empty means OK to proceed. Replaces the old
- * ValidationWarnings persistence: errors are reported inline via req.reject.
+ * human-readable error strings — empty means OK to proceed. The mandatory set is
+ * the full field catalogue (srv/lib/mandatory-fields.js), kept in sync with the
+ * frontend dpp_frontend/app/src/lib/fieldCatalogue.js. Errors are reported inline
+ * via req.reject (no ValidationWarnings persistence).
  */
-// Friendly labels for the mandatory product fields (no internal column names in user text).
-const PRODUCT_FIELD_LABELS = {
-  name: 'Name',
-  brand: 'Brand',
-  category: 'Category',
-  fibre_composition: 'Fibre composition'
-};
-
 async function checkDPPReady(dpp) {
   const { Products, Batches } = cds.entities('dpp');
-  const errors = [];
 
-  if (!dpp.product_ID) {
-    errors.push('The DPP must reference a product.');
-  } else {
-    const product = await SELECT.one.from(Products).where({ ID: dpp.product_ID });
-    if (!product) {
-      errors.push('The referenced product does not exist.');
-    } else {
-      for (const f of ['name', 'brand', 'category', 'fibre_composition']) {
-        if (!product[f]) errors.push(`Product field "${PRODUCT_FIELD_LABELS[f]}" is required.`);
-      }
-    }
-  }
+  if (!dpp.product_ID) return ['The DPP must reference a product.'];
+  const product = await SELECT.one.from(Products).where({ ID: dpp.product_ID });
+  if (!product) return ['The referenced product does not exist.'];
+
+  let batch = null;
   if (dpp.batch_ID) {
-    const batch = await SELECT.one.from(Batches).where({ ID: dpp.batch_ID });
-    if (!batch) errors.push('The referenced batch does not exist.');
+    batch = await SELECT.one.from(Batches).where({ ID: dpp.batch_ID });
+    if (!batch) return ['The referenced batch does not exist.'];
   }
-  return errors;
+
+  return missingMandatory(product, batch).map((m) => `${m.label} is required.`);
 }
 
 /**
@@ -136,13 +125,26 @@ async function snapshotAggregated(dppId) {
  * manual versions). The read-only version view in the UI is reconstructed from this.
  */
 async function buildSnapshot(dpp) {
-  const { Products, ProductVariants, Batches, ProductItems, ProductBOMs } = cds.entities('dpp');
+  const { Products, ProductVariants, Batches, ProductItems, ProductBOMs, ProductCategories } = cds.entities('dpp');
 
   const [product, batch, item] = await Promise.all([
     SELECT.one.from(Products).where({ ID: dpp.product_ID }),
     dpp.batch_ID ? SELECT.one.from(Batches).where({ ID: dpp.batch_ID }) : null,
     dpp.item_ID ? SELECT.one.from(ProductItems).where({ ID: dpp.item_ID }) : null
   ]);
+
+  // Flatten the category association to its display name so the read-only version view
+  // and PDF render "Textiles" (not a raw code), and the drift diff reads cleanly. The
+  // raw `category_code` FK is dropped to keep a single, stable category field in the hash.
+  if (product) {
+    if (product.category_code) {
+      const cat = await SELECT.one.from(ProductCategories).columns('name').where({ code: product.category_code });
+      product.category = cat?.name ?? product.category_code;
+    } else {
+      product.category = null;
+    }
+    delete product.category_code;
+  }
 
   // Variant precedence: explicit dpp.variant link → via batch → none.
   let variant = null;
@@ -250,20 +252,69 @@ async function tokenContextFor(dpp) {
 }
 
 /**
- * Next version number for a DPP = max(highest existing DPPVersions.version_number,
- * floor) + 1. Shared by publishDPP (floor 0 → clean "v1 first" semantics) and the
- * manual createDPPVersion action (floor = current_version → a manual version always
- * advances the counter). One monotonic, collision-free sequence per DPP.
+ * Next version number for a DPP = highest existing DPPVersions.version_number + 1.
+ * Versions are created only on publish, so this is a clean, monotonic per-DPP
+ * sequence (first publish → 1).
  */
-async function nextVersionNumber(dppId, floor = 0) {
+async function nextVersionNumber(dppId) {
   const { DPPVersions } = cds.entities('dpp');
   const rows = await SELECT.from(DPPVersions).columns('version_number').where({ dpp_ID: dppId });
-  const max = rows.reduce((m, r) => Math.max(m, r.version_number || 0), 0);
-  return Math.max(max, floor) + 1;
+  return rows.reduce((m, r) => Math.max(m, r.version_number || 0), 0) + 1;
+}
+
+/**
+ * Drift detection: for each given DPP that is `approved` or `published`, rebuild its
+ * snapshot, hash it, and compare to the stored baseline (the hash captured at the last
+ * approve/publish). If they differ, the underlying data changed → revert status to
+ * `draft` so it must be re-approved and re-published. Writes via the DB-level entity:
+ * this bypasses the archived-edit gate, the audit stamping, AND the service after-hooks
+ * (no re-entrancy), and never touches current_version / published_at (the live consumer
+ * version stays put until re-publish). Reads via the DB-level entity too, so the READ
+ * tenant filter does not prune the cross-DPP set.
+ */
+async function reevaluateDrift(dppIds) {
+  const ids = [...new Set((dppIds || []).filter(Boolean))];
+  if (!ids.length) return;
+  const DPPdb = cds.entities('dpp').DPPs;
+  const rows = await SELECT.from(DPPdb).where({ ID: { in: ids }, status: { in: ['approved', 'published'] } });
+  for (const dpp of rows) {
+    if (!dpp.baseline_content_hash) continue;
+    const hash = contentHash(await buildSnapshot(dpp));
+    if (hash !== dpp.baseline_content_hash) {
+      await UPDATE(DPPdb).set({ status: 'draft', last_updated: new Date().toISOString() }).where({ ID: dpp.ID });
+    }
+  }
+}
+
+/**
+ * Restore the drift-baseline invariant for legacy/seed DPPs. A DPP that is `approved` or
+ * `published` but was NOT taken through approveDPP/publishDPP (e.g. CSV-seeded directly as
+ * 'published') has no `baseline_content_hash`. Without it, reevaluateDrift() skips the DPP,
+ * so editing the underlying product/variant/batch never reverts it to draft — the studio
+ * shows the new data but the user can never re-approve/re-publish it (no Approve/Publish
+ * button). Anchor a baseline from the current content ONCE, so a later source-data edit is
+ * detected as drift and reverts the DPP to draft as intended. Idempotent (only fills NULLs).
+ */
+async function anchorUnbaselinedDPPs() {
+  const DPPdb = cds.entities('dpp').DPPs;
+  const rows = await SELECT.from(DPPdb)
+    .where({ status: { in: ['approved', 'published'] }, baseline_content_hash: null });
+  for (const dpp of rows) {
+    const hash = contentHash(await buildSnapshot(dpp));
+    await UPDATE(DPPdb).set({ baseline_content_hash: hash }).where({ ID: dpp.ID });
+  }
+  if (rows.length) console.log(`[dpp] anchored drift baseline for ${rows.length} legacy/seed DPP(s)`);
 }
 
 module.exports = (srv) => {
   const { DPPs } = srv.entities;
+
+  // Once the runtime is up, anchor a drift baseline for any legacy/seed DPP that is
+  // 'published'/'approved' without one — otherwise source-data edits never revert it to
+  // draft and it can never be re-approved/re-published (see anchorUnbaselinedDPPs).
+  cds.once('served', () =>
+    anchorUnbaselinedDPPs().catch((e) => console.error('[dpp] baseline anchoring failed:', e.message))
+  );
 
   // ----- DPPVersions: immutable audit trail (US5.9) -----
   // Reject every OData write; rows are inserted server-side on publish (see publishDPP),
@@ -316,8 +367,10 @@ module.exports = (srv) => {
     const errors = await checkDPPReady(dpp);
     if (errors.length) req.reject(400, `DPP cannot be approved: ${errors.join(' | ')}`);
 
+    // Anchor the drift baseline to the approved content so a later edit reverts to draft.
+    const baselineHash = contentHash(await buildSnapshot(dpp));
     await UPDATE(DPPs)
-      .set({ status: 'approved', approved_at: new Date().toISOString() })
+      .set({ status: 'approved', approved_at: new Date().toISOString(), baseline_content_hash: baselineHash })
       .where({ ID: id });
 
     return SELECT.one.from(DPPs).where({ ID: id });
@@ -357,14 +410,23 @@ module.exports = (srv) => {
     }).where({ ID: id });
 
     const draft = await SELECT.one.from(DPPs).where({ ID: id });
-    const snapshotJson = JSON.stringify(await buildSnapshot(draft));
+    const snap = await buildSnapshot(draft);
+    const snapshotJson = JSON.stringify(snap);
+    // Normalized hash (volatile/audit/surrogate fields excluded) — the drift baseline.
+    const normalizedHash = contentHash(snap);
+    // Freeze the consumer-facing payload so the public view keeps showing THIS version
+    // until the next publish (see public-handler.js#loadDPPByToken). Lazy require avoids
+    // any module load-order cycle.
+    const { buildConsumerSnapshot } = require('./public-handler');
+    const consumerJson = JSON.stringify(await buildConsumerSnapshot(draft));
+
     await UPDATE(DPPs)
-      .set({ aggregated_snapshot: snapshotJson })
+      .set({ aggregated_snapshot: snapshotJson, baseline_content_hash: normalizedHash })
       .where({ ID: id });
 
-    // US5.9 — append an immutable version record: the frozen snapshot, the change
-    // reason and a content hash for tamper evidence. Inserted on the DB entity so it
-    // bypasses the read-only OData gate below.
+    // US5.9 — append an immutable version record: the frozen internal snapshot, the
+    // frozen consumer payload, the change reason and the normalized content hash.
+    // Inserted on the DB entity so it bypasses the read-only OData gate below.
     const { DPPVersions } = cds.entities('dpp');
     await INSERT.into(DPPVersions).entries({
       ID: randomUUID(),
@@ -374,7 +436,8 @@ module.exports = (srv) => {
       change_reason: changeReason,
       changed_by_ID: req.user._appUserId || null,
       snapshot_data: snapshotJson,
-      content_hash: createHash('sha256').update(snapshotJson).digest('hex')
+      consumer_snapshot: consumerJson,
+      content_hash: normalizedHash
     });
 
     const qrImageUrl = `${process.env.PUBLIC_BASE_URL || ''}/public/dpp/${qrToken}/qr.png`;
@@ -419,45 +482,65 @@ module.exports = (srv) => {
     return SELECT.one.from(DPPs).where({ ID: id });
   });
 
-  // ----- Action: createDPPVersion (manual snapshot, company_advanced only) -----
-  // Captures a comprehensive, frozen snapshot of the DPP's current state as a new
-  // DPPVersions row and advances current_version (a manual version counts as a new
-  // version, like publish). Retrieved read-only later via the UI version picker.
-  srv.on('createDPPVersion', DPPs, async (req) => {
+  // ----- Drift: revert approved/published DPPs to draft when their content changes -----
+  // The DPP's own editable content is storytelling + valid_from; their PATCH can drift.
+  // Lifecycle/meta updates (status, *_at, qr_*, visibility, current_version, hashes) do
+  // NOT count as content and are skipped — this also prevents re-entrancy with the
+  // approve/publish handlers, which only set those meta fields.
+  srv.after('UPDATE', DPPs, async (_data, req) => {
+    const touched = Object.keys(req.data || {});
+    if (!touched.includes('storytelling') && !touched.includes('valid_from')) return;
+    const key = req.params && req.params[req.params.length - 1];
+    const id = key && typeof key === 'object' ? key.ID : key;
+    if (id) await reevaluateDrift([id]);
+  });
+
+  // ----- Function: validationStatus (readiness + drift, for the DPP-detail panel) -----
+  // Read-only (NOT a write event) → also readable by company_user. Returns a JSON string.
+  srv.on('validationStatus', DPPs, async (req) => {
     const id = req.params[req.params.length - 1].ID;
-    const changeReason = req.data.change_reason || null;
     await requireOwningOrg(req, 'DPPs', id, DPP_OWNER_PATH);
+    const { Products, Batches, DPPVersions } = cds.entities('dpp');
     const dpp = await SELECT.one.from(DPPs).where({ ID: id });
     if (!dpp) req.reject(404, 'DPP not found.');
-    if (dpp.status === 'archived') {
-      req.reject(400, 'This DPP is archived and cannot be versioned. Unarchive it first.');
+
+    const product = dpp.product_ID ? await SELECT.one.from(Products).where({ ID: dpp.product_ID }) : null;
+    const batch = dpp.batch_ID ? await SELECT.one.from(Batches).where({ ID: dpp.batch_ID }) : null;
+    const missing = missingMandatory(product, batch);
+
+    // Latest published version = what the consumer currently sees.
+    const versions = await SELECT.from(DPPVersions)
+      .columns('version_number', 'snapshot_data')
+      .where({ dpp_ID: id })
+      .orderBy('version_number desc');
+    const latest = versions[0] || null;
+    const liveVersion = latest ? latest.version_number : null;
+
+    let changedFields = [];
+    // Without a published version snapshot there is no baseline to diff against. For a DPP
+    // still in pre-publication (draft / in_review) that legitimately means "everything is
+    // pending". But for one already marked approved/published/archived that never went
+    // through publishDPP (e.g. seed/imported data), claiming "pending changes / Publishing
+    // will create v1" is misleading — it is already published and there is no Publish button.
+    const prePublication = dpp.status === 'draft' || dpp.status === 'in_review';
+    let pendingChanges = liveVersion == null ? prePublication : false;
+    if (latest) {
+      const cur = await buildSnapshot(dpp);
+      let prev = null;
+      try { prev = JSON.parse(latest.snapshot_data); } catch { prev = null; }
+      changedFields = diffNormalized(prev, cur);
+      pendingChanges = changedFields.length > 0;
     }
 
-    const now = new Date().toISOString();
-    // floor = current_version so a manual version always advances the counter.
-    const nextVersion = await nextVersionNumber(id, dpp.current_version);
-
-    // Advance the version counter first so the snapshot records the new number.
-    await UPDATE(DPPs).set({ current_version: nextVersion, last_updated: now }).where({ ID: id });
-
-    const updated = await SELECT.one.from(DPPs).where({ ID: id });
-    const snapshotJson = JSON.stringify(await buildSnapshot(updated));
-
-    // Append the immutable version row via the DB-level entity (bypasses the
-    // read-only OData gate), mirroring publishDPP.
-    const { DPPVersions } = cds.entities('dpp');
-    await INSERT.into(DPPVersions).entries({
-      ID: randomUUID(),
-      dpp_ID: id,
-      version_number: nextVersion,
-      snapshot_date: now,
-      change_reason: changeReason,
-      changed_by_ID: req.user._appUserId || null,
-      snapshot_data: snapshotJson,
-      content_hash: createHash('sha256').update(snapshotJson).digest('hex')
+    return JSON.stringify({
+      status: dpp.status,
+      live_version: liveVersion,
+      next_version: (liveVersion || 0) + 1,
+      can_approve: missing.length === 0,
+      missing_mandatory: missing,
+      pending_changes: pendingChanges,
+      changed_fields: changedFields
     });
-
-    return SELECT.one.from(DPPs).where({ ID: id });
   });
 
   // ----- Action: regenerateQRToken (US6.14) -----
@@ -544,3 +627,5 @@ module.exports = (srv) => {
 
 module.exports.buildSnapshot = buildSnapshot;
 module.exports.rotateActiveQRCode = rotateActiveQRCode;
+module.exports.reevaluateDrift = reevaluateDrift;
+module.exports.anchorUnbaselinedDPPs = anchorUnbaselinedDPPs;

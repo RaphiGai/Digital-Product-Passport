@@ -2,6 +2,16 @@
 
 const cds = require('@sap/cds');
 const { requireOwningOrg } = require('./auth-helpers');
+const dppHandlers = require('./dpp-handlers'); // for reevaluateDrift (one-way require)
+
+/** DPPs whose snapshot embeds these documents (product- or batch-anchored). */
+async function dppIdsForDoc(productId, batchId) {
+  const { DPPs } = cds.entities('dpp');
+  const ids = new Set();
+  if (productId) (await SELECT.from(DPPs).columns('ID').where({ product_ID: productId })).forEach((r) => ids.add(r.ID));
+  if (batchId) (await SELECT.from(DPPs).columns('ID').where({ batch_ID: batchId })).forEach((r) => ids.add(r.ID));
+  return [...ids];
+}
 
 // Mirrors the frontend allowlist + limit (DocumentManager). Fixed per the
 // approved plan: PDF, PNG, JPEG, max 20 MB.
@@ -122,5 +132,28 @@ module.exports = (srv) => {
   srv.before('DELETE', Documents, async (req) => {
     const id = keyFromReq(req);
     if (id) await guardExistingOwner(req, id);
+  });
+
+  // Drift: a document add/edit/remove changes the DPP snapshot's document list →
+  // re-evaluate dependent approved/published DPPs (see dpp-handlers#reevaluateDrift).
+  // Capture the doc's product/batch anchor in `before` (the row still exists on DELETE).
+  srv.before(['CREATE', 'UPDATE', 'DELETE'], Documents, async (req) => {
+    let productId = req.data && req.data.product_ID;
+    let batchId = req.data && req.data.batch_ID;
+    if (!productId && !batchId) {
+      const id = keyFromReq(req);
+      if (id) {
+        const row = await SELECT.one.from(Documents).columns('product_ID', 'batch_ID').where({ ID: id });
+        productId = row && row.product_ID;
+        batchId = row && row.batch_ID;
+      }
+    }
+    req._driftDoc = { productId: productId || null, batchId: batchId || null };
+  });
+  srv.after(['CREATE', 'UPDATE', 'DELETE'], Documents, async (_d, req) => {
+    const d = req._driftDoc;
+    if (d && (d.productId || d.batchId)) {
+      await dppHandlers.reevaluateDrift(await dppIdsForDoc(d.productId, d.batchId));
+    }
   });
 };

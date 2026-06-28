@@ -4,7 +4,7 @@ const cds = require('@sap/cds');
 const { randomUUID } = require('crypto');
 const tokens = require('../lib/token');
 const { requireOwningOrg } = require('./auth-helpers');
-const { rotateActiveQRCode } = require('./dpp-handlers');
+const { rotateActiveQRCode, reevaluateDrift } = require('./dpp-handlers');
 
 const BATCH_OWNER_PATH = 'variant.product.owning_organization_ID';
 
@@ -94,5 +94,16 @@ module.exports = (srv) => {
     // requires the DPP to be published). Keeps the "always a unique DPP + QR"
     // guarantee for every serialized item.
     await rotateActiveQRCode(dppId, payloadUrl, qrImageUrl);
+  });
+
+  // Drift: editing/removing a serialized item re-evaluates its item-level DPP
+  // (CREATE is excluded — it just created a fresh draft DPP above).
+  srv.after(['UPDATE', 'DELETE'], ProductItems, async (_d, req) => {
+    const last = req.params && req.params[req.params.length - 1];
+    const itemId = last && typeof last === 'object' ? last.ID : last;
+    if (!itemId) return;
+    const { DPPs } = cds.entities('dpp');
+    const rows = await SELECT.from(DPPs).columns('ID').where({ item_ID: itemId });
+    await reevaluateDrift(rows.map((r) => r.ID));
   });
 };

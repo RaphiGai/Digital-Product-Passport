@@ -35,6 +35,10 @@ entity DPPs : identified, audited {
   last_updated        : Timestamp;
   aggregated_snapshot : LargeString;  // optional cache of last aggregation; default path computes live
   storytelling        : LargeString;  // optional JSON array of {title, body, media_url, media_type}
+  // Normalized content hash of the last APPROVED/PUBLISHED state (drift anchor). When
+  // the current data hashes differently, the DPP has unapproved changes and is reverted
+  // to 'draft'. Set on approve AND publish; see srv/lib/snapshot-hash.js + dpp-handlers.js.
+  baseline_content_hash : String(64);
 
   qr_codes        : Composition of many QRCodes           on qr_codes.dpp        = $self;
   marketing_links : Association  to many DPPMarketingLinks on marketing_links.dpp = $self;
@@ -83,6 +87,7 @@ entity DPPVersions : identified {
   snapshot_date  : Timestamp;
   change_reason  : String(500);
   changed_by     : Association to Users;
-  snapshot_data  : LargeString;   // fully-resolved state (buildSnapshot JSON)
-  content_hash   : String(64);    // sha256(snapshot_data)
+  snapshot_data  : LargeString;   // fully-resolved internal state (buildSnapshot JSON) — version viewer
+  consumer_snapshot : LargeString; // frozen consumer DTO served to the public until the next publish
+  content_hash   : String(64);    // normalized content hash (volatile/audit fields excluded) — drift anchor
 }

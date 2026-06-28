@@ -67,6 +67,12 @@ service DPPService @(
     action archiveProduct() returns Products;
   };
 
+  // Product category code list (master data). Read-only over OData: categories are
+  // curated as seed/master data, not edited through the app. Drives the category
+  // dropdown in the product forms; consumer/public views resolve the label server-side.
+  @readonly
+  entity ProductCategories     as projection on db.ProductCategories;
+
   entity ProductVariants       as projection on db.ProductVariants;
   entity Batches               as projection on db.Batches;
   entity ProductItems          as projection on db.ProductItems;
@@ -91,9 +97,6 @@ service DPPService @(
     @Common.SideEffects: { TargetProperties: ['status', 'archived_at'] }
     action   unarchiveDPP()                          returns DPPs;
 
-    @Common.SideEffects: { TargetProperties: ['current_version', 'last_updated'] }
-    action   createDPPVersion(change_reason : String(500)) returns DPPs;
-
     @Common.SideEffects: { TargetProperties: ['qr_token', 'qr_payload_url'] }
     action   regenerateQRToken()                     returns DPPs;
 
@@ -101,6 +104,10 @@ service DPPService @(
 
     // Live aggregation across the BOM tree for review before publishing.
     function aggregatedFootprint()                   returns AggregatedFootprint;
+
+    // Readiness + drift for the DPP-detail validation panel (JSON string):
+    // { status, live_version, next_version, can_approve, missing_mandatory[], pending_changes, changed_fields[] }
+    function validationStatus()                      returns LargeString;
   };
 
   entity QRCodes               as projection on db.QRCodes;
