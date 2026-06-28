@@ -44,13 +44,13 @@ async function getFirstVariantId(productId) {
   return variants?.[0]?.ID ?? null;
 }
 
-async function loadBomTree(rootVariantId, depth = 0, parentBomId = null, visited = new Set()) {
-  if (!rootVariantId || visited.has(rootVariantId)) return [];
+async function loadBomTree(parentId, depth = 0, parentBomId = null, visited = new Set()) {
+  if (!parentId || visited.has(parentId)) return [];
 
-  visited.add(rootVariantId);
+  visited.add(parentId);
 
   const rows = await odataList('ProductBOMs', {
-    filter: `parent_ID eq '${rootVariantId}'`,
+    filter: `parent_ID eq '${parentId}'`,
     top: 200
   });
 
@@ -65,17 +65,24 @@ async function loadBomTree(rootVariantId, depth = 0, parentBomId = null, visited
 
     result.push(current);
 
-    if (r.component_ID && !r.external_dpp_url) {
+    // 1) Load children saved directly under this BOM row
+    const directChildren = await loadBomTree(r.ID, depth + 1, r.ID, visited);
+    result.push(...directChildren);
+
+    // 2) Also load children from the component product's first variant
+    if (r.component_ID) {
       const childVariantId = await getFirstVariantId(r.component_ID);
 
       if (childVariantId) {
-        const children = await loadBomTree(childVariantId, depth + 1, r.ID, visited);
-        result.push(...children);
+        const variantChildren = await loadBomTree(childVariantId, depth + 1, r.ID, visited);
+        result.push(...variantChildren);
       }
     }
   }
 
-  return result;
+  return result.filter(
+    (row, index, arr) => arr.findIndex((x) => x.ID === row.ID) === index
+  );
 }
 
 function removeTechnicalFields(row) {
@@ -145,31 +152,31 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
   };
 
   const startAddChild = async (parentRow) => {
-    if (!parentRow.component_ID || parentRow.external_dpp_url) {
-      setMsg({ kind: 'error', text: 'Only internal components can have sub-components.' });
-      return;
-    }
+    let parentId = parentRow.ID;
 
-    const childVariantId = await getFirstVariantId(parentRow.component_ID);
-
-    if (!childVariantId) {
-      setMsg({ kind: 'error', text: 'This component has no variant. Create a variant first.' });
-      return;
+    // If the parent is an internal component with its own variant,
+    // save the child under that variant.
+    if (parentRow.component_ID) {
+      const childVariantId = await getFirstVariantId(parentRow.component_ID);
+      if (childVariantId) parentId = childVariantId;
     }
 
     setEditingId(null);
     setChildParent({
       parentBomId: parentRow.ID,
-      parentVariantId: childVariantId,
-      parentName: productName(parentRow.component_ID),
+      parentId,
+      parentName: parentRow.component_ID
+        ? productName(parentRow.component_ID)
+        : parentRow.component_name || parentRow.ID,
       depth: parentRow.__depth + 1
     });
-    // Expand the parent so the new sub-component is visible once added.
+
     setCollapsed((prev) => {
       const next = new Set(prev);
       next.delete(parentRow.ID);
       return next;
     });
+
     setRow(EMPTY_ROW);
     setMsg(null);
   };
@@ -286,20 +293,20 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
 
     const parentIdForDuplicate = editingId
       ? draftRows.find((r) => r.ID === editingId)?.parent_ID
-      : childParent?.parentVariantId ?? variantId;
+      : childParent?.parentId ?? variantId;
 
-    if (!isExternal) {
-      const duplicate = draftRows.some(
-        (r) =>
-          r.parent_ID === parentIdForDuplicate &&
-          r.component_ID === row.component_ID &&
-          r.ID !== editingId
-      );
+      if (!isExternal) {
+        const duplicate = draftRows.some(
+          (r) =>
+            r.parent_ID === parentIdForDuplicate &&
+            r.component_ID === row.component_ID &&
+            r.ID !== editingId
+        );
 
-      if (duplicate) {
-        setMsg({ kind: 'error', text: 'This component already exists on this level.' });
-        return;
-      }
+        if (duplicate) {
+          setMsg({ kind: 'error', text: 'This component already exists on this level.' });
+          return;
+        }
     }
 
     const payload = {
@@ -550,7 +557,7 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
                   <div className="flex items-center justify-end gap-2 px-3 py-3">
                     {!readOnly && (
                       <>
-                        {r.component_ID && !r.external_dpp_url && (
+                        {!readOnly && (
                           <button
                             type="button"
                             onClick={() => startAddChild(r)}

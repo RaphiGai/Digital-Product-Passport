@@ -45,7 +45,6 @@ export function BatchEdit() {
   const [itemCount, setItemCount] = useState('');
   const [showItems, setShowItems] = useState(false);
   const [itemSearch, setItemSearch] = useState('');
-  const [itemSort, setItemSort] = useState({ column: 'serial_number', dir: 'asc' });
   const [draftItems, setDraftItems] = useState([]);
   const [originalItems, setOriginalItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState(new Set());
@@ -54,6 +53,8 @@ export function BatchEdit() {
   const isAdvanced = useHasRole('company_advanced');
   const BATCH_VIS = useMemo(() => catalogueByKey(BATCH_CATALOGUE), []);
   const today = new Date().toISOString().slice(0, 10);
+  const [itemSort, setItemSort] = useState({ column: 'upi', dir: 'asc' });
+
 
   const batchQ = useQuery({
     queryKey: ['Batches', 'one', bid],
@@ -149,10 +150,21 @@ export function BatchEdit() {
 
       const toCreate = draftItems.filter((i) => !originalIds.has(i.ID));
 
+      const toUpdate = draftItems.filter((i) => {
+        const original = originalById[i.ID];
+        return original && (original.upi ?? '') !== (i.upi ?? '');
+      });
+
       const toArchive = draftItems.filter((i) => {
         const original = originalById[i.ID];
         return original && original.status !== 'archived' && i.status === 'archived';
       });
+
+      for (const item of toUpdate) {
+        await odataUpdate('ProductItems', item.ID, {
+          upi: item.upi?.trim() || null
+        });
+      }
 
       for (const item of toArchive) {
         const relatedDpp = dpps.find((d) => d.item_ID === item.ID);
@@ -172,6 +184,7 @@ export function BatchEdit() {
         await odataCreate('ProductItems', {
           ID: item.ID,
           batch_ID: bid,
+          upi: item.upi?.trim() || null,
           serial_number: item.serial_number,
           status: item.status || 'active'
         });
@@ -298,6 +311,7 @@ export function BatchEdit() {
       return {
         ID: newId(),
         batch_ID: bid,
+        upi: '',
         serial_number: serial,
         status: 'active',
         __new: true
@@ -307,6 +321,13 @@ export function BatchEdit() {
     setDraftItems((old) => [...old, ...created]);
     setItemCount('');
     setShowItems(true);
+    setItemsDirty(true);
+  };
+
+  const updateDraftItem = (id, key, value) => {
+    setDraftItems((old) =>
+      old.map((item) => (item.ID === id ? { ...item, [key]: value } : item))
+    );
     setItemsDirty(true);
   };
 
@@ -364,7 +385,7 @@ export function BatchEdit() {
       .filter((item) => {
         if (!q) return true;
 
-        return [item.ID, item.serial_number, item.status]
+        return [item.ID, item.upi, item.serial_number, item.status]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(q));
       })
@@ -597,6 +618,9 @@ export function BatchEdit() {
                       <SortButton label="Item ID" column="ID" sort={itemSort} onSort={handleSort} />
                     </th>
                     <th className="px-4 py-3">
+                      <SortButton label="UPI" column="upi" sort={itemSort} onSort={handleSort} />
+                    </th>
+                    <th className="px-4 py-3">
                       <SortButton
                         label="Serial number"
                         column="serial_number"
@@ -614,7 +638,7 @@ export function BatchEdit() {
                 <tbody>
                   {itemsQ.isLoading && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-6 text-center text-ink-muted">
+                      <td colSpan={6} className="px-4 py-6 text-center text-ink-muted">
                         Loading items…
                       </td>
                     </tr>
@@ -622,7 +646,7 @@ export function BatchEdit() {
 
                   {!itemsQ.isLoading && filteredItems.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-6 text-center text-ink-muted">
+                      <td colSpan={6} className="px-4 py-6 text-center text-ink-muted">
                         No items found.
                       </td>
                     </tr>
@@ -645,6 +669,16 @@ export function BatchEdit() {
                           </span>
                         )}
                       </td>
+                      <td className="px-4 py-3">
+                          <Input
+                              value={item.upi ?? ''}
+                              onChange={(e) => updateDraftItem(item.ID, 'upi', e.target.value)}
+                              disabled={!isAdvanced || itemsBusy || item.status === 'archived'}
+                              placeholder="UPI"
+                              className="h-9 min-w-40 font-mono text-xs"
+                              maxLength={80}
+                          />
+                      </td>
                       <td className="px-4 py-3 font-mono text-xs">{item.serial_number || '—'}</td>
                       <td className="px-4 py-3">{item.status || '—'}</td>
                       <td className="px-4 py-3 text-right">
@@ -653,7 +687,7 @@ export function BatchEdit() {
                           variant="outline"
                           size="sm"
                           disabled={itemsBusy}
-                          onClick={() => removeDraftItems([item.ID])}
+                          onClick={() => archiveDraftItems([item.ID])}
                         >
                           Archive
                         </Button>
