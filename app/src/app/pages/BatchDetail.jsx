@@ -38,7 +38,7 @@ export function BatchDetail() {
   });
   const productQ = useQuery({
     queryKey: ['Products', pid],
-    queryFn: () => odataGet('Products', pid)
+    queryFn: () => odataGet('Products', pid, { expand: ['category'] })
   });
   const variantQ = useQuery({
     queryKey: ['ProductVariants', 'one', vid],
@@ -213,7 +213,7 @@ export function BatchDetail() {
               visibility="internal"
             />
             <InfoRow label="Brand" value={p?.brand} visibility={productVis.brand} />
-            <InfoRow label="Category" value={p?.category} visibility={productVis.category} />
+            <InfoRow label="Category" value={p?.category?.name} visibility={productVis.category} />
             <InfoRow label="Care instructions" value={p?.care_instructions} visibility={productVis.care_instructions} />
             <InfoRow label="Country of origin (product)" value={p?.country_of_origin} visibility={productVis.country_of_origin} />
           </div>

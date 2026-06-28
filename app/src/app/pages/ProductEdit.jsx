@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { odataGet, ApiError } from '@/api/client';
+import { odataGet, odataList, ApiError } from '@/api/client';
 import { useUpdate } from '@/api/hooks';
 import { useHasRole } from '@/auth/useMe';
 import {
@@ -15,7 +15,7 @@ import {
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
-import { FormSection, FieldRow, Input, Textarea, RadioCards, CountrySelect } from '@/ui/Form';
+import { FormSection, FieldRow, Input, Textarea, RadioCards, CountrySelect, Select } from '@/ui/Form';
 import { DocumentManager } from '@/ui/DocumentManager';
 
 export function ProductEdit() {
@@ -38,7 +38,6 @@ export function ProductEdit() {
   const LIMITS = {
     name: 70,
     brand: 70,
-    category: 60,
     model: 70,
     gtin: 14,
     description: 500,
@@ -60,6 +59,14 @@ export function ProductEdit() {
     queryFn: () => odataGet('Products', id)
   });
 
+  // Category options come from the ProductCategories code list (single source of truth) —
+  // adding a category there makes it selectable here with no frontend change.
+  const categoriesQ = useQuery({
+    queryKey: ['ProductCategories'],
+    queryFn: () => odataList('ProductCategories', { select: ['code', 'name'], orderby: 'name' })
+  });
+  const categoryOptions = categoriesQ.data ?? [];
+
   useEffect(() => {
     if (productQ.data && !form) {
       const p = productQ.data;
@@ -76,7 +83,7 @@ export function ProductEdit() {
         product_type: p.product_type ?? 'finished',
         name: p.name ?? '',
         brand: p.brand ?? '',
-        category: p.category ?? '',
+        category_code: p.category_code ?? '',
         model: p.model ?? '',
         gtin: p.gtin ?? '',
         description: p.description ?? '',
@@ -155,7 +162,7 @@ export function ProductEdit() {
           product_type: form.product_type,
           name: form.name.trim(),
           brand: form.brand || null,
-          category: form.category || null,
+          category_code: form.category_code || null,
           model: form.model || null,
           gtin: form.gtin || null,
           description: form.description || null,
@@ -240,7 +247,15 @@ export function ProductEdit() {
             <Input id="brand" value={form.brand} onChange={set('brand')} maxLength={LIMITS.brand} />
           </FieldRow>
           <FieldRow label="Category" visibilityControl={visCtl('category')} htmlFor="category">
-            <Input id="category" value={form.category} onChange={set('category')} maxLength={LIMITS.category} />
+            <Select
+              id="category"
+              value={form.category_code}
+              onChange={set('category_code')}
+              options={[
+                { value: '', label: 'Select category…' },
+                ...categoryOptions.map((c) => ({ value: c.code, label: c.name }))
+              ]}
+            />
           </FieldRow>
           <FieldRow label="Model" visibilityControl={visCtl('model')} htmlFor="model" hint="Season or model line.">
             <Input id="model" value={form.model} onChange={set('model')} maxLength={LIMITS.model} />

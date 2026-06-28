@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { odataGet, odataList, callFunction } from '@/api/client';
 import { useAction, useUpdate } from '@/api/hooks';
 import { Card, CardTitle } from '@/ui/Card';
@@ -12,7 +12,7 @@ import { RequireRole } from '@/auth/RequireRole';
 import { DocumentManager } from '@/ui/DocumentManager';
 import { MarketingLinksManager } from '@/ui/MarketingLinksManager';
 import { printLabels } from '@/lib/printLabels';
-import { ChevronRight, Printer } from 'lucide-react';
+import { ChevronRight, Printer, AlertTriangle } from 'lucide-react';
 
 /** @param {{ label: string, value: React.ReactNode }} props */
 function Row({ label, value }) {
@@ -21,6 +21,23 @@ function Row({ label, value }) {
       <span className="text-sm text-ink-muted">{label}</span>
       <span className="min-w-0 text-right text-sm text-ink">{value ?? '—'}</span>
     </div>
+  );
+}
+
+/**
+ * A monospace record ID. Renders as a deep-link to `to` when one is provided,
+ * otherwise as plain text (e.g. while viewing a frozen snapshot, where live
+ * navigation to the editable source pages is intentionally disabled).
+ * @param {{ id?: string, to?: string|null }} props
+ */
+function IdValue({ id, to }) {
+  if (!id) return null;
+  return to ? (
+    <Link to={to} className="font-mono text-xs text-brand-700 hover:underline">
+      {id}
+    </Link>
+  ) : (
+    <span className="font-mono text-xs">{id}</span>
   );
 }
 
@@ -128,6 +145,10 @@ const fmtDate = (v) => {
   return d && m && y ? `${d}.${m}.${y}` : String(v).slice(0, 10);
 };
 
+/** True when an ISO valid-until date is in the past (date-only comparison). */
+const isExpired = (validUntil) =>
+  !!validUntil && String(validUntil).slice(0, 10) < new Date().toISOString().slice(0, 10);
+
 /** Read-only marketing-link list rendered from a frozen version snapshot. */
 function SnapshotMarketingList({ links }) {
   return (
@@ -171,20 +192,100 @@ function SnapshotDocumentList({ docs }) {
                 <span className="truncate text-sm font-medium text-ink">{d.title || d.file_name}</span>
                 {d.doc_type && <Badge tone="gray" className="font-normal">{d.doc_type}</Badge>}
                 {d.visibility && <Badge tone="gray" className="font-normal">{d.visibility}</Badge>}
+                {isExpired(d.valid_until) && (
+                  <Badge tone="red" className="gap-1 font-normal">
+                    <AlertTriangle className="h-3 w-3" />
+                    Expired
+                  </Badge>
+                )}
               </div>
               <div className="truncate text-xs text-ink-muted">
                 {[
                   d.issuer,
                   d.file_name,
-                  d.issue_date ? `issued ${fmtDate(d.issue_date)}` : null,
-                  d.valid_until ? `valid until ${fmtDate(d.valid_until)}` : null
+                  d.issue_date ? `issued ${fmtDate(d.issue_date)}` : null
                 ].filter(Boolean).join(' · ')}
+                {d.valid_until && (
+                  <span className={isExpired(d.valid_until) ? 'font-medium text-red-600' : undefined}>
+                    {` · valid until ${fmtDate(d.valid_until)}`}
+                  </span>
+                )}
               </div>
             </div>
           ))}
         </div>
       ) : (
         <p className="mt-3 text-sm text-ink-muted">No documents in this version.</p>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * Validation & readiness panel (live view): the live consumer version, whether there
+ * are unpublished changes (and which version a publish would create), the missing
+ * mandatory fields that block approval, and the field-level diff vs the live version.
+ * Driven by the backend validationStatus() function.
+ * @param {{ v: { status: string, live_version: number|null, next_version: number,
+ *   can_approve: boolean, missing_mandatory: {label:string}[], pending_changes: boolean,
+ *   changed_fields: {label:string, old:string, new:string}[] } }} props
+ */
+function ReadinessCard({ v }) {
+  const blocking = v.missing_mandatory || [];
+  const changed = v.changed_fields || [];
+  return (
+    <Card>
+      <CardTitle>Validation &amp; readiness</CardTitle>
+      <div className="mt-2">
+        <Row
+          label="Live (consumer) version"
+          value={v.live_version ? `v${v.live_version}` : 'Not yet published'}
+        />
+        <Row
+          label="Pending changes"
+          value={
+            v.pending_changes
+              ? <Badge tone="amber">Publishing will create v{v.next_version}</Badge>
+              : 'None'
+          }
+        />
+        <Row
+          label="Mandatory fields"
+          value={
+            v.can_approve
+              ? <Badge tone="green">Complete</Badge>
+              : <Badge tone="red">{blocking.length} missing</Badge>
+          }
+        />
+      </div>
+
+      {blocking.length > 0 && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-medium">Missing mandatory fields — required before approval:</p>
+          <ul className="mt-1.5 list-disc pl-5 text-xs">
+            {blocking.map((m, i) => (
+              <li key={i}>{m.label}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {changed.length > 0 && (
+        <div className="mt-3">
+          <p className="text-sm font-medium text-ink">Changes since the live version (v{v.live_version})</p>
+          <div className="mt-1 divide-y divide-black/5">
+            {changed.map((c, i) => (
+              <div key={i} className="py-2 text-xs">
+                <div className="font-medium text-ink">{c.label}</div>
+                <div className="text-ink-muted">
+                  <span className="line-through">{c.old}</span>
+                  <span className="mx-1">→</span>
+                  <span className="text-ink">{c.new}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </Card>
   );
@@ -199,12 +300,10 @@ export function DppDetail() {
   const [recOpen, setRecOpen] = useState(false);
   // Version picker: '' = live (current) state; otherwise a DPPVersions.ID to view read-only.
   const [selectedVersionId, setSelectedVersionId] = useState('');
-  const [showVersionDialog, setShowVersionDialog] = useState(false);
-  const [versionReason, setVersionReason] = useState('');
 
   const { data: dpp, isLoading } = useQuery({
     queryKey: ['DPPs', id],
-    queryFn: () => odataGet('DPPs', id, { expand: ['product'] })
+    queryFn: () => odataGet('DPPs', id, { expand: ['product($expand=category)'] })
   });
 
   // Source records assigned to this DPP — loaded individually (nested $expand is brittle).
@@ -259,7 +358,19 @@ export function DppDetail() {
     enabled: !!id
   });
 
-  const invalidate = [['DPPs', id], ['DPPs'], ['DPPVersions', id]];
+  // Readiness + drift for the validation panel (missing mandatory fields, pending
+  // changes vs the live version, and the field-level diff). Returns a JSON string.
+  const validationQ = useQuery({
+    queryKey: ['DPPs', id, 'validation'],
+    queryFn: () => callFunction(`DPPs('${id}')/DPPService.validationStatus`),
+    enabled: !!dpp,
+    select: (raw) => {
+      const j = raw?.value ?? raw;
+      return typeof j === 'string' ? JSON.parse(j) : j;
+    }
+  });
+
+  const invalidate = [['DPPs', id], ['DPPs'], ['DPPVersions', id], ['DPPs', id, 'validation']];
   const act = useAction('DPPs', { invalidate });
   const update = useUpdate('DPPs', { invalidate });
 
@@ -299,21 +410,11 @@ export function DppDetail() {
     );
   };
 
-  const createVersion = () =>
-    act.mutate(
-      { key: id, action: 'createDPPVersion', payload: { change_reason: versionReason } },
-      {
-        onSuccess: () => {
-          setMsg({ kind: 'success', text: 'Version created.' });
-          setShowVersionDialog(false);
-          setVersionReason('');
-        },
-        onError: (err) => setMsg({ kind: 'error', text: err.message })
-      }
-    );
-
   const s = dpp.status;
   const busy = act.isPending || update.isPending;
+  const validation = validationQ.data || null;
+  // Approve is blocked while mandatory fields are missing (server enforces it too).
+  const approveBlocked = !!validation && validation.can_approve === false;
 
   // Consumer passport URL — opens the public consumer view (same page a QR scan
   // lands on), via the consumer.html?token= entry point. Relative path so it
@@ -334,9 +435,27 @@ export function DppDetail() {
 
   // Panel data is driven by `view` — the snapshot in version mode, live queries otherwise.
   const product = isSnapshot ? snap.product : dpp.product;
+  // `category` differs by source: the live $expand returns the code-list object {code,name};
+  // a frozen snapshot stores the already-resolved name string. Normalize to a display label.
+  const categoryLabel = isSnapshot ? (snap.product?.category ?? null) : (dpp.product?.category?.name ?? null);
   const variant = isSnapshot ? snap.variant : variantQ.data;
   const batch = isSnapshot ? snap.batch : batchQ.data;
   const item = isSnapshot ? snap.item : itemQ.data;
+
+  // Deep-link targets for the source records — live view only. A frozen snapshot
+  // shows historical data, so navigation to the live, editable pages is disabled
+  // there. Record IDs are stable, so paths are built from the loaded records.
+  const productHref = !isSnapshot && product?.ID ? `/products/${product.ID}` : null;
+  const variantHref =
+    !isSnapshot && product?.ID && variantId
+      ? `/products/${product.ID}/variants/${variantId}/view`
+      : null;
+  const batchHref =
+    !isSnapshot && product?.ID && variantId && batch?.ID
+      ? `/products/${product.ID}/variants/${variantId}/batches/${batch.ID}`
+      : null;
+  // No dedicated item view exists — deep-link to the batch page, which lists items.
+  const itemHref = batchHref;
 
   // Footprint: snapshot stores parsed objects; the live aggregatedFootprint action
   // serialises `missing`/`breakdown` as JSON strings → parse only in the live case.
@@ -389,6 +508,9 @@ export function DppDetail() {
             <StatusBadge status={viewVisibility} />
             <Badge tone="gray">{viewType}</Badge>
             <span className="text-sm text-ink-muted">v{viewVersion ?? 1}</span>
+            {!isSnapshot && validation?.pending_changes && validation?.live_version && (
+              <Badge tone="amber">v{validation.live_version} live · v{validation.next_version} pending</Badge>
+            )}
           </div>
         </div>
 
@@ -406,7 +528,11 @@ export function DppDetail() {
           {!isSnapshot && (
             <RequireRole role="company_advanced">
               {(s === 'draft' || s === 'in_review') && (
-                <Button disabled={busy} onClick={() => run('approveDPP', undefined, 'Passport approved.')}>
+                <Button
+                  disabled={busy || approveBlocked}
+                  title={approveBlocked ? 'Fill all mandatory fields first (see Validation & readiness).' : undefined}
+                  onClick={() => run('approveDPP', undefined, 'Passport approved.')}
+                >
                   Approve
                 </Button>
               )}
@@ -427,11 +553,6 @@ export function DppDetail() {
                   onClick={() => run('regenerateQRToken', undefined, 'QR token regenerated.')}
                 >
                   Regenerate QR token
-                </Button>
-              )}
-              {s !== 'archived' && (
-                <Button variant="outline" disabled={busy} onClick={() => setShowVersionDialog((v) => !v)}>
-                  Create version
                 </Button>
               )}
               {s !== 'archived' && (
@@ -497,30 +618,8 @@ export function DppDetail() {
         </Card>
       )}
 
-      {!isSnapshot && showVersionDialog && (
-        <Card className="space-y-3 border-brand-200">
-          <CardTitle>Create version</CardTitle>
-          <p className="text-sm text-ink-muted">
-            Saves a snapshot of the current passport state. It stays retrievable read-only from the
-            version picker and advances the version number.
-          </p>
-          <Textarea
-            rows={2}
-            value={versionReason}
-            onChange={(e) => setVersionReason(e.target.value)}
-            placeholder="Reason / note (optional, max 500 chars)"
-            maxLength={500}
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setShowVersionDialog(false)}>
-              Cancel
-            </Button>
-            <Button disabled={busy} onClick={createVersion}>
-              {busy ? 'Saving…' : 'Save version'}
-            </Button>
-          </div>
-        </Card>
-      )}
+      {/* ── Validation & readiness (live only): missing mandatory fields + pending changes vs the live version ── */}
+      {!isSnapshot && validation && <ReadinessCard v={validation} />}
 
       {/* ── Aggregated footprint — live preview, or the frozen figures of a snapshot ── */}
       <Card>
@@ -622,11 +721,11 @@ export function DppDetail() {
             <div className="mt-2">
               <Row
                 label="Product ID"
-                value={<span className="font-mono text-xs">{product?.ID}</span>}
+                value={<IdValue id={product?.ID} to={productHref} />}
               />
               <Row label="Name" value={product?.name} />
               <Row label="Brand" value={product?.brand} />
-              <Row label="Category" value={product?.category} />
+              <Row label="Category" value={categoryLabel} />
               <Row label="Model" value={product?.model} />
               <Row label="GTIN" value={product?.gtin} />
               <Row label="Fibre composition" value={product?.fibre_composition} />
@@ -656,7 +755,7 @@ export function DppDetail() {
               <div className="mt-2">
                 <Row
                   label="Variant ID"
-                  value={<span className="font-mono text-xs">{variant?.ID}</span>}
+                  value={<IdValue id={variant?.ID} to={variantHref} />}
                 />
                 <Row label="Colour" value={variant.color} />
                 <Row label="Size" value={variant.size} />
@@ -674,7 +773,7 @@ export function DppDetail() {
               <div className="mt-2">
                 <Row
                   label="Batch ID"
-                  value={<span className="font-mono text-xs">{batch?.ID}</span>}
+                  value={<IdValue id={batch?.ID} to={batchHref} />}
                 />
                 <Row label="Batch number" value={batch.batch_number} />
                 <Row label="Production date" value={fmtDate(batch.production_date)} />
@@ -698,7 +797,7 @@ export function DppDetail() {
               <div className="mt-2">
                 <Row
                   label="Item ID"
-                  value={<span className="font-mono text-xs">{item?.ID}</span>}
+                  value={<IdValue id={item?.ID} to={itemHref} />}
                 />
                 <Row label="Serial number" value={<span className="font-mono text-xs">{item.serial_number}</span>} />
                 <Row label="UPI" value={<span className="font-mono text-xs">{item.upi}</span>} />

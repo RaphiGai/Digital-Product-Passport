@@ -47,7 +47,7 @@ function ProductRow({ product }) {
             {product.name}
           </Link>
           <div className="text-xs text-ink-muted">
-            {[product.brand, product.category].filter(Boolean).join(' · ')}
+            {[product.brand, product.category?.name].filter(Boolean).join(' · ')}
           </div>
         </div>
 
@@ -116,7 +116,7 @@ export function Products() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['Products'],
-    queryFn: () => odataList('Products', { expand: ['variants'], orderby: 'name', top: 100 })
+    queryFn: () => odataList('Products', { expand: ['variants', 'category'], orderby: 'name', top: 100 })
   });
 
   function handleSort(column) {
@@ -137,7 +137,7 @@ export function Products() {
           p.ID,
           p.name,
           p.brand,
-          p.category,
+          p.category?.name,
           typeLabel(p.product_type),
           p.status,
           ...(p.variants ?? []).flatMap((v) => [v.ID, v.sku, v.color, v.size])

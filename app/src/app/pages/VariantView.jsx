@@ -30,7 +30,7 @@ export function VariantView() {
 
   const productQ = useQuery({
     queryKey: ['Products', pid],
-    queryFn: () => odataGet('Products', pid)
+    queryFn: () => odataGet('Products', pid, { expand: ['category'] })
   });
 
   const variantQ = useQuery({
@@ -68,7 +68,7 @@ export function VariantView() {
             {v.sku && <span className="text-sm text-ink-muted">{v.sku}</span>}
             {p && (
               <span className="text-sm text-ink-muted">
-                {[p.brand, p.category].filter(Boolean).join(' · ')}
+                {[p.brand, p.category?.name].filter(Boolean).join(' · ')}
               </span>
             )}
           </div>
@@ -125,7 +125,7 @@ export function VariantView() {
               visibility="internal"
             />
             <InfoRow label="Brand" value={p?.brand} visibility={productVis.brand} />
-            <InfoRow label="Category" value={p?.category} visibility={productVis.category} />
+            <InfoRow label="Category" value={p?.category?.name} visibility={productVis.category} />
             <InfoRow label="Description" value={p?.description} visibility={productVis.description} />
             <InfoRow label="Fibre composition" value={p?.fibre_composition} visibility={productVis.fibre_composition} />
             <InfoRow label="Country of origin" value={p?.country_of_origin} visibility={productVis.country_of_origin} />

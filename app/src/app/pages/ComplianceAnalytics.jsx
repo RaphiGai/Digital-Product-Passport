@@ -105,6 +105,9 @@ const COLUMNS = {
     { key: 'doc_count', header: 'Docs', num: true, sort: (r) => r.doc_count, cell: (r) => r.doc_count, csv: (r) => r.doc_count },
     { key: 'expired_doc_count', header: 'Expired', num: true, sort: (r) => r.expired_doc_count, cell: (r) => r.expired_doc_count, csv: (r) => r.expired_doc_count },
     { key: 'published', header: 'Published DPP', sort: (r) => (r.published ? 1 : 0), cell: (r) => yesNo(r.published), csv: (r) => yesNo(r.published) },
+    { key: 'pending_changes', header: 'Pending changes', sort: (r) => (r.pending_changes ? 1 : 0), cell: (r) => yesNo(r.pending_changes), csv: (r) => yesNo(r.pending_changes) },
+    { key: 'approval_blocking', header: 'Approve-blocking', sort: (r) => r.missing_mandatory_count ?? 0, cell: (r) => (r.approval_blocking ? `${r.missing_mandatory_count} missing` : 'OK'), csv: (r) => (r.approval_blocking ? `${r.missing_mandatory_count} missing` : 'OK') },
+    { key: 'missing_mandatory', header: 'Missing mandatory', sort: (r) => (r.missing_mandatory || []).length, cell: (r) => (r.missing_mandatory || []).join(', ') || '—', csv: (r) => (r.missing_mandatory || []).join(', ') },
     { key: 'risk', header: 'Risk', sort: (r) => RISK_RANK[r.risk_flag] ?? -1, cell: (r) => <RiskBadge flag={r.risk_flag} />, csv: (r) => r.risk_flag }
   ],
   batch: [
@@ -285,6 +288,9 @@ export function ComplianceAnalytics() {
             <Kpi label="Products with no documents" value={kpis.products_no_docs} hint={`${kpis.products_expired_only} expired-only`} tone={kpis.products_no_docs > 0 ? 'warn' : undefined} />
             <Kpi label="Docs expiring (≤90d)" value={kpis.docs_expiring_soon} hint={`${kpis.docs_expired} already expired`} tone={kpis.docs_expiring_soon > 0 ? 'warn' : undefined} />
             <Kpi label="Docs expired" value={kpis.docs_expired} hint={`As of ${fmtDate(data.today)}`} tone={kpis.docs_expired > 0 ? 'danger' : undefined} />
+            <Kpi label="Approval-blocking" value={kpis.approval_blocking_products ?? 0} hint={`${kpis.mandatory_fields_missing ?? 0} mandatory fields missing`} tone={kpis.approval_blocking_products > 0 ? 'danger' : undefined} />
+            <Kpi label="Mandatory complete" value={pctStr(kpis.mandatory_complete_pct, 1)} hint="Products with all mandatory fields filled" />
+            <Kpi label="Pending changes" value={kpis.products_pending_changes ?? 0} hint="Live version stale vs current data" tone={kpis.products_pending_changes > 0 ? 'warn' : undefined} />
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

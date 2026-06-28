@@ -316,7 +316,7 @@ export function ProductDetail() {
 
   const { data: p, isLoading } = useQuery({
     queryKey: ['Products', id],
-    queryFn: () => odataGet('Products', id, { expand: ['variants'] })
+    queryFn: () => odataGet('Products', id, { expand: ['variants', 'category'] })
   });
 
   const archive = useAction('Products', { invalidate: [['Products', id], ['Products']] });
@@ -346,7 +346,7 @@ export function ProductDetail() {
             <StatusBadge status={p.status} />
             <StatusBadge status={p.espr_compliance} />
             <span className="text-sm text-ink-muted">
-              {[p.brand, p.category, p.model].filter(Boolean).join(' · ')}
+              {[p.brand, p.category?.name, p.model].filter(Boolean).join(' · ')}
             </span>
           </div>
         </div>
@@ -374,7 +374,7 @@ export function ProductDetail() {
             <Row label="Product ID" value={p.ID} visibility="internal" />
             <Row label="Type" value={p.product_type} visibility="internal" />
             <Row label="Brand" value={p.brand} visibility={vis.brand} />
-            <Row label="Category" value={p.category} visibility={vis.category} />
+            <Row label="Category" value={p.category?.name} visibility={vis.category} />
             <Row label="GTIN" value={p.gtin} visibility={vis.gtin} />
             <Row label="Description" value={p.description} visibility={vis.description} />
           </div>
