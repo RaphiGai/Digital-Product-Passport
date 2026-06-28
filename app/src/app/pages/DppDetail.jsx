@@ -230,7 +230,7 @@ function SnapshotDocumentList({ docs }) {
  * @param {{ v: { status: string, live_version: number|null, next_version: number,
  *   can_approve: boolean, missing_mandatory: {label:string}[], pending_changes: boolean,
  *   changed_fields: {label:string, old:string, new:string}[] } }} props
- */
+ 
 function ReadinessCard({ v }) {
   const blocking = v.missing_mandatory || [];
   const changed = v.changed_fields || [];
@@ -290,7 +290,7 @@ function ReadinessCard({ v }) {
       )}
     </Card>
   );
-}
+}*/
 
 export function DppDetail() {
   const { id } = useParams();
@@ -301,6 +301,9 @@ export function DppDetail() {
   const [recOpen, setRecOpen] = useState(false);
   // Version picker: '' = live (current) state; otherwise a DPPVersions.ID to view read-only.
   const [selectedVersionId, setSelectedVersionId] = useState('');
+
+  const [showVersionDialog, setShowVersionDialog] = useState(false);
+  const [versionReason, setVersionReason] = useState('');
 
   const { data: dpp, isLoading } = useQuery({
     queryKey: ['DPPs', id],
@@ -381,17 +384,9 @@ const batchComponentsQ = useQuery({
 
   // Readiness + drift for the validation panel (missing mandatory fields, pending
   // changes vs the live version, and the field-level diff). Returns a JSON string.
-  const validationQ = useQuery({
-    queryKey: ['DPPs', id, 'validation'],
-    queryFn: () => callFunction(`DPPs('${id}')/DPPService.validationStatus`),
-    enabled: !!dpp,
-    select: (raw) => {
-      const j = raw?.value ?? raw;
-      return typeof j === 'string' ? JSON.parse(j) : j;
-    }
-  });
 
-  const invalidate = [['DPPs', id], ['DPPs'], ['DPPVersions', id], ['DPPs', id, 'validation']];
+
+  const invalidate = [['DPPs', id], ['DPPs'], ['DPPVersions', id]];
   const act = useAction('DPPs', { invalidate });
   const update = useUpdate('DPPs', { invalidate });
 
@@ -453,9 +448,22 @@ const batchComponentsQ = useQuery({
     );
   };
 
+  const createVersion = () =>
+  act.mutate(
+    { key: id, action: 'createDPPVersion', payload: { change_reason: versionReason } },
+    {
+      onSuccess: () => {
+        setMsg({ kind: 'success', text: 'Version created.' });
+        setShowVersionDialog(false);
+        setVersionReason('');
+      },
+      onError: (err) => setMsg({ kind: 'error', text: err.message })
+    }
+  );
+
   const s = dpp.status;
   const busy = act.isPending || update.isPending;
-  const readiness = validationQ.data || null;
+  
   // Consumer passport URL — opens the public consumer view (same page a QR scan
   // lands on), via the consumer.html?token= entry point. Relative path so it
   // resolves against the current origin in dev (Vite, :5173) and in production
@@ -627,6 +635,15 @@ const batchComponentsQ = useQuery({
               )}
               {s !== 'archived' && (
                 <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setShowVersionDialog((v) => !v)}
+                >
+                  Create version
+                </Button>
+              )}
+              {s !== 'archived' && (
+                <Button
                   variant="danger"
                   disabled={busy}
                   onClick={() => run('archiveDPP', undefined, 'Passport archived.')}
@@ -696,8 +713,29 @@ const batchComponentsQ = useQuery({
         </Card>
       )}
 
-      {/* ── Validation & readiness (live only): missing mandatory fields + pending changes vs the live version ── */}
-      {!isSnapshot && readiness && <ReadinessCard v={readiness} />}
+      {!isSnapshot && showVersionDialog && (
+      <Card className="space-y-3 border-brand-200">
+        <CardTitle>Create version</CardTitle>
+        <p className="text-sm text-ink-muted">
+          Saves a snapshot of the current passport state.
+        </p>
+        <Textarea
+          rows={2}
+          value={versionReason}
+          onChange={(e) => setVersionReason(e.target.value)}
+          placeholder="Reason / note (optional, max 500 chars)"
+          maxLength={500}
+        />
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setShowVersionDialog(false)}>
+            Cancel
+          </Button>
+          <Button disabled={busy} onClick={createVersion}>
+            {busy ? 'Saving…' : 'Save version'}
+          </Button>
+        </div>
+      </Card>
+    )}
 
       {/* ── Aggregated footprint — live preview, or the frozen figures of a snapshot ── */}
       <Card>
