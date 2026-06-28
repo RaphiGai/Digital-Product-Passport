@@ -30,6 +30,8 @@ import { ActivityLogs } from './pages/ActivityLogs';
 import { ReportsLanding } from './pages/ReportsLanding';
 import { SustainabilityAnalytics } from './pages/SustainabilityAnalytics';
 import { ComplianceAnalytics } from './pages/ComplianceAnalytics';
+import { BatchCreate } from './pages/BatchCreate';
+import { Validation } from './pages/Validation';
 
 export function App() {
   useEffect(() => {
@@ -70,17 +72,21 @@ export function App() {
           <Route path="dpps/:id" element={<DppDetail />} />
           <Route path="marketing" element={<Marketing />} />
           <Route path="boms" element={<Boms />} />
-
+          <Route
+            path="/products/:pid/variants/:vid/batches/new"
+            element={<BatchCreate />}
+          />
 
           <Route path="/profile" element={<ProfileSettings />} />
           <Route path="/appearance" element={<AppearanceSettings />} />
+
+          <Route path="/validation" element={<Validation />} />
 
           <Route path="reports" element={<ReportsLanding />} />
           <Route path="reports/sustainability" element={<SustainabilityAnalytics />} />
           <Route path="reports/compliance" element={<ComplianceAnalytics />} />
 
-          {/* Sidebar items without backend yet */}
-          <Route path="validation" element={<ComingSoon title="Validation" />} />
+              
           
           
           <Route path="settings" element={<Settings />} />
