@@ -73,6 +73,24 @@ export function validateDppContext({
       'Production',
       'Assign a production batch.'
     ),
+
+    check(
+      'variant_status_active',
+      'Variant is active',
+      variant?.status === 'active',
+      true,
+      'Variant',
+      'Set variant status to Active.'
+    ),
+
+    check(
+      'batch_status_active',
+      'Batch is approved',
+      batch?.status === 'approved',
+      true,
+      'Batch',
+      'Set batch status to Approved.'
+    ),
     check(
       'item_exists',
       'Item assigned',
@@ -81,6 +99,7 @@ export function validateDppContext({
       'Production',
       'Assign an item to the DPP.'
     ),
+    
     check(
       'item_status_active',
       'Item is active',
@@ -112,6 +131,14 @@ export function validateDppContext({
       true,
       'Product',
       'Set ESPR compliance status to Compliant in Product information.'
+    ),
+    check(
+      'substances_of_concern',
+      'Substances of concern / REACH / SCIP information filled',
+      hasValue(product?.substances_of_concern),
+      true,
+      'Product',
+      'Add substances of concern, REACH status or SCIP reference in Product information.'
     ),
     check(
       'variant_identification',

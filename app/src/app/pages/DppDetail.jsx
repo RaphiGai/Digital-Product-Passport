@@ -12,6 +12,7 @@ import { RequireRole } from '@/auth/RequireRole';
 import { DocumentManager } from '@/ui/DocumentManager';
 import { MarketingLinksManager } from '@/ui/MarketingLinksManager';
 import { printLabels } from '@/lib/printLabels';
+import { validateDppContext } from '@/lib/ValidationRules';
 import { ChevronRight, Printer, AlertTriangle } from 'lucide-react';
 
 /** @param {{ label: string, value: React.ReactNode }} props */
@@ -324,6 +325,26 @@ export function DppDetail() {
     enabled: !!dpp?.item_ID
   });
 
+  const bomsQ = useQuery({
+  queryKey: ['ProductBOMs', 'dpp', variantId],
+  queryFn: () =>
+    odataList('ProductBOMs', {
+      filter: `parent_ID eq '${variantId}' or variant_ID eq '${variantId}'`,
+      top: 2000
+    }),
+  enabled: !!variantId
+});
+
+const batchComponentsQ = useQuery({
+  queryKey: ['BatchComponents', 'dpp', dpp?.batch_ID],
+  queryFn: () =>
+    odataList('BatchComponents', {
+      filter: `batch_ID eq '${dpp.batch_ID}'`,
+      top: 2000
+    }),
+  enabled: !!dpp?.batch_ID
+});
+
   // Live BOM rollup for review before publishing.
   const aggQ = useQuery({
     queryKey: ['DPPs', id, 'aggregated'],
@@ -377,7 +398,18 @@ export function DppDetail() {
   if (isLoading) return <p className="text-ink-muted">Loading…</p>;
   if (!dpp) return <p className="text-ink-muted">Passport not found.</p>;
 
-  const run = (action, payload, successText) =>
+  const run = (action, payload, successText) => {
+    if (
+      (action === 'approveDPP' || action === 'publishDPP') &&
+      !canApproveOrPublish
+    ) {
+      setMsg({
+        kind: 'error',
+        text: 'This DPP cannot be approved or published because mandatory validation checks failed.'
+      });
+      return;
+    }
+
     act.mutate(
       { key: id, action, payload },
       {
@@ -389,15 +421,26 @@ export function DppDetail() {
         onError: (err) => setMsg({ kind: 'error', text: err.message })
       }
     );
+  };
 
-  const publish = () =>
+  const publish = () => {
+    if (!canApproveOrPublish) {
+      setMsg({
+        kind: 'error',
+        text: 'This DPP cannot be published because mandatory validation checks failed.'
+      });
+      return;
+    }
+
     update.mutate(
       { key: id, payload: { visibility: 'public' } },
       {
-        onSuccess: () => run('publishDPP', { change_reason: reason }, 'Passport published and made public.'),
+        onSuccess: () =>
+          run('publishDPP', { change_reason: reason }, 'Passport published and made public.'),
         onError: (err) => setMsg({ kind: 'error', text: err.message })
       }
     );
+  };
 
   const toggleVisibility = () => {
     const target = dpp.visibility === 'public' ? 'internal' : 'public';
@@ -412,10 +455,7 @@ export function DppDetail() {
 
   const s = dpp.status;
   const busy = act.isPending || update.isPending;
-  const validation = validationQ.data || null;
-  // Approve is blocked while mandatory fields are missing (server enforces it too).
-  const approveBlocked = !!validation && validation.can_approve === false;
-
+  const readiness = validationQ.data || null;
   // Consumer passport URL — opens the public consumer view (same page a QR scan
   // lands on), via the consumer.html?token= entry point. Relative path so it
   // resolves against the current origin in dev (Vite, :5173) and in production
@@ -441,6 +481,18 @@ export function DppDetail() {
   const variant = isSnapshot ? snap.variant : variantQ.data;
   const batch = isSnapshot ? snap.batch : batchQ.data;
   const item = isSnapshot ? snap.item : itemQ.data;
+
+  const localValidation = validateDppContext({
+    product,
+    variant,
+    batch,
+    item,
+    dpp,
+    bom: bomsQ.data ?? [],
+    batchComponents: batchComponentsQ.data ?? []
+  });
+
+  const canApproveOrPublish = localValidation.readyToPublish;
 
   // Deep-link targets for the source records — live view only. A frozen snapshot
   // shows historical data, so navigation to the live, editable pages is disabled
@@ -508,8 +560,8 @@ export function DppDetail() {
             <StatusBadge status={viewVisibility} />
             <Badge tone="gray">{viewType}</Badge>
             <span className="text-sm text-ink-muted">v{viewVersion ?? 1}</span>
-            {!isSnapshot && validation?.pending_changes && validation?.live_version && (
-              <Badge tone="amber">v{validation.live_version} live · v{validation.next_version} pending</Badge>
+            {!isSnapshot && readiness?.pending_changes && readiness?.live_version && (
+              <Badge tone="amber">v{readiness.live_version} live · v{readiness.next_version} pending</Badge>
             )}
           </div>
         </div>
@@ -527,17 +579,35 @@ export function DppDetail() {
           {/* Lifecycle + versioning actions — hidden while viewing a past snapshot. */}
           {!isSnapshot && (
             <RequireRole role="company_advanced">
-              {(s === 'draft' || s === 'in_review') && (
-                <Button
-                  disabled={busy || approveBlocked}
-                  title={approveBlocked ? 'Fill all mandatory fields first (see Validation & readiness).' : undefined}
-                  onClick={() => run('approveDPP', undefined, 'Passport approved.')}
-                >
-                  Approve
-                </Button>
-              )}
+                {(s === 'draft' || s === 'in_review') && (
+                  <Button
+                    disabled={busy || !canApproveOrPublish}
+                    className={
+                      !canApproveOrPublish
+                        ? 'cursor-not-allowed bg-gray-300 text-gray-500 opacity-70'
+                        : ''
+                    }
+                    title={
+                      !canApproveOrPublish
+                        ? 'Fill all mandatory fields first.'
+                        : undefined
+                    }
+                    onClick={() => run('approveDPP', undefined, 'Passport approved.')}
+                  >
+                    Approve
+                  </Button>
+                )}
+
               {s === 'approved' && (
-                <Button disabled={busy} onClick={() => setShowPublish((v) => !v)}>
+                <Button
+                  disabled={busy || !canApproveOrPublish}
+                  className={
+                    !canApproveOrPublish
+                      ? 'cursor-not-allowed bg-gray-300 text-gray-500 opacity-70'
+                      : ''
+                  }
+                  onClick={() => setShowPublish((v) => !v)}
+                >
                   Publish
                 </Button>
               )}
@@ -611,7 +681,15 @@ export function DppDetail() {
             <Button variant="outline" onClick={() => setShowPublish(false)}>
               Cancel
             </Button>
-            <Button disabled={busy} onClick={publish}>
+            <Button
+              disabled={busy || !canApproveOrPublish}
+              className={
+                !canApproveOrPublish
+                  ? 'cursor-not-allowed bg-gray-300 text-gray-500 opacity-70'
+                  : ''
+              }
+              onClick={publish}
+            >
               {busy ? 'Publishing…' : 'Confirm publish'}
             </Button>
           </div>
@@ -619,7 +697,7 @@ export function DppDetail() {
       )}
 
       {/* ── Validation & readiness (live only): missing mandatory fields + pending changes vs the live version ── */}
-      {!isSnapshot && validation && <ReadinessCard v={validation} />}
+      {!isSnapshot && readiness && <ReadinessCard v={readiness} />}
 
       {/* ── Aggregated footprint — live preview, or the frozen figures of a snapshot ── */}
       <Card>

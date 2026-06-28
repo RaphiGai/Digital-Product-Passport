@@ -636,24 +636,34 @@ export function Validation() {
 
                     <RequireRole role="company_advanced">
                       {row.dpp.status !== 'published' && (
-                        <Button
-                          size="sm"
-                          disabled={updateDppStatus.isPending || !row.validation.readyToPublish}
-                          onClick={() => updateDppStatus.mutate({ row, status: 'published' })}
-                        >
-                          Publish
-                        </Button>
+                      <Button
+                        size="sm"
+                        disabled={updateDppStatus.isPending || !row.validation.readyToPublish}
+                        className={
+                          !row.validation.readyToPublish
+                            ? 'cursor-not-allowed bg-gray-300 text-gray-500 opacity-70'
+                            : ''
+                        }
+                        onClick={() => updateDppStatus.mutate({ row, status: 'published' })}
+                      >
+                        Publish
+                      </Button>
                       )}
 
                       {row.dpp.status !== 'approved' && row.dpp.status !== 'published' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={updateDppStatus.isPending || !row.validation.readyToPublish}
-                          onClick={() => updateDppStatus.mutate({ row, status: 'approved' })}
-                        >
-                          Approve
-                        </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={updateDppStatus.isPending || !row.validation.readyToPublish}
+                        className={
+                          !row.validation.readyToPublish
+                            ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 opacity-70'
+                            : ''
+                        }
+                        onClick={() => updateDppStatus.mutate({ row, status: 'approved' })}
+                      >
+                        Approve
+                      </Button>
                       )}
                     </RequireRole>
                   </div>
