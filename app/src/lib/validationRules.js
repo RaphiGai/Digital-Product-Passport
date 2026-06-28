@@ -106,6 +106,14 @@ export function validateDppContext({
       'Add product type.'
     ),
     check(
+      'product_espr_compliance',
+      'ESPR compliance status is compliant',
+      product?.espr_compliance === 'compliant',
+      true,
+      'Product',
+      'Set ESPR compliance status to Compliant in Product information.'
+    ),
+    check(
       'variant_identification',
       'Variant identification filled',
       hasValue(variant?.sku) || hasValue(variant?.gtin) || hasValue(variant?.ID),
@@ -349,10 +357,10 @@ export function validateStatusTransition(currentStatus, nextStatus, validation) 
     return { allowed: true, reason: '' };
   }
 
-  if (nextStatus === 'published' && !canPublishDpp(validation)) {
+  if ((nextStatus === 'approved' || nextStatus === 'published') && !canPublishDpp(validation)) {
     return {
       allowed: false,
-      reason: 'This DPP cannot be published because mandatory validation checks failed.'
+      reason: 'This DPP cannot be approved or published because mandatory validation checks failed.'
     };
   }
 

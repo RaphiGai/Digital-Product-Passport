@@ -325,9 +325,9 @@ export function Validation() {
 
   const updateDppStatus = useMutation({
     mutationFn: async ({ row, status }) => {
-      if (status === 'published' && !row.validation.readyToPublish) {
+      if ((status === 'approved' || status === 'published') && !row.validation.readyToPublish) {
         throw new Error(
-          'This DPP cannot be published because mandatory validation checks failed.'
+          'This DPP cannot be approved or published because mandatory validation checks failed.'
         );
       }
 
@@ -354,10 +354,10 @@ export function Validation() {
   mutationFn: async (status) => {
     const rowsToUpdate = selectedRows;
 
-    if (status === 'published') {
+    if (status === 'approved' || status === 'published') {
       const blocked = rowsToUpdate.filter((r) => !r.validation.readyToPublish);
       if (blocked.length > 0) {
-        throw new Error(`${blocked.length} selected DPP(s) cannot be published because mandatory checks failed.`);
+        throw new Error(`${blocked.length} selected DPP(s) cannot be approved or published because mandatory checks failed.`);
       }
     }
 
@@ -649,7 +649,7 @@ export function Validation() {
                         <Button
                           variant="outline"
                           size="sm"
-                          disabled={updateDppStatus.isPending}
+                          disabled={updateDppStatus.isPending || !row.validation.readyToPublish}
                           onClick={() => updateDppStatus.mutate({ row, status: 'approved' })}
                         >
                           Approve
