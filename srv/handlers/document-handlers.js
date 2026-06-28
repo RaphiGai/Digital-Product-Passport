@@ -8,6 +8,9 @@ const { requireOwningOrg } = require('./auth-helpers');
 const ALLOWED_MIME = new Set(['application/pdf', 'image/png', 'image/jpeg']);
 const MAX_BYTES = 20 * 1024 * 1024;
 
+// Mirrors db/product.cds Documents.title / .issuer (String(200)).
+const MAX_TEXT_LEN = 200;
+
 // Batch tenant anchor — same path the central read filter / product-item handler use.
 const BATCH_OWNER_PATH = 'variant.product.owning_organization_ID';
 
@@ -79,6 +82,38 @@ module.exports = (srv) => {
     const len = Number((req.headers && req.headers['content-length']) || (httpReq && httpReq.headers['content-length']));
     if (len && len > MAX_BYTES) {
       req.reject(413, 'File too large (max 20 MB).');
+    }
+  });
+
+  // Metadata constraints: bounded Title/Issuer length and a strict issue_date <
+  // valid_until ordering. Skips the media-stream PUT (no metadata in req.data). On a
+  // partial PATCH the dates are merged with the stored row so the rule holds either way.
+  srv.before(['CREATE', 'UPDATE'], Documents, async (req) => {
+    const d = req.data;
+    const touchesMeta = ['title', 'issuer', 'issue_date', 'valid_until'].some((k) => d[k] !== undefined);
+    if (!touchesMeta) return;
+
+    if (typeof d.title === 'string' && d.title.length > MAX_TEXT_LEN) {
+      req.reject(400, `Title must be at most ${MAX_TEXT_LEN} characters.`);
+    }
+    if (typeof d.issuer === 'string' && d.issuer.length > MAX_TEXT_LEN) {
+      req.reject(400, `Issuer must be at most ${MAX_TEXT_LEN} characters.`);
+    }
+
+    let issue = d.issue_date;
+    let valid = d.valid_until;
+    if (req.event === 'UPDATE' && (issue === undefined || valid === undefined)) {
+      const id = keyFromReq(req);
+      const existing = id
+        ? await SELECT.one.from(Documents).columns('issue_date', 'valid_until').where({ ID: id })
+        : null;
+      if (existing) {
+        if (issue === undefined) issue = existing.issue_date;
+        if (valid === undefined) valid = existing.valid_until;
+      }
+    }
+    if (issue && valid && String(valid) <= String(issue)) {
+      req.reject(400, 'The issue date must be before the valid-until date.');
     }
   });
 

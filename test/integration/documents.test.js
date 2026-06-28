@@ -101,6 +101,43 @@ describe('Documents — validation guards', () => {
     const put = await putContent('doc-putmime', Buffer.from('MZ'), 'application/x-msdownload', alice);
     expect(put.status).toBe(415);
   });
+
+  test('a Title longer than 200 characters → 400', async () => {
+    await expectStatus(
+      POST('/odata/v4/dpp/Documents', { ID: 'doc-longtitle', product_ID: PRODUCT, title: 'A'.repeat(201) }, alice),
+      400
+    );
+  });
+
+  test('an Issuer longer than 200 characters → 400', async () => {
+    await expectStatus(
+      POST('/odata/v4/dpp/Documents', { ID: 'doc-longissuer', product_ID: PRODUCT, title: 'OK', issuer: 'B'.repeat(201) }, alice),
+      400
+    );
+  });
+
+  test('issue_date equal to valid_until → 400 (must be strictly before)', async () => {
+    await expectStatus(
+      POST('/odata/v4/dpp/Documents', { ID: 'doc-eqdate', product_ID: PRODUCT, title: 'Eq', issue_date: '2026-01-01', valid_until: '2026-01-01' }, alice),
+      400
+    );
+  });
+
+  test('issue_date after valid_until → 400', async () => {
+    await expectStatus(
+      POST('/odata/v4/dpp/Documents', { ID: 'doc-revdate', product_ID: PRODUCT, title: 'Rev', issue_date: '2026-02-01', valid_until: '2026-01-01' }, alice),
+      400
+    );
+  });
+
+  test('issue_date strictly before valid_until → created', async () => {
+    const r = await POST(
+      '/odata/v4/dpp/Documents',
+      { ID: 'doc-okdate', product_ID: PRODUCT, title: 'Ok dates', issue_date: '2026-01-01', valid_until: '2026-12-31' },
+      alice
+    );
+    expect(r.data.ID).toBe('doc-okdate');
+  });
 });
 
 describe('Documents — RBAC + tenant isolation', () => {
