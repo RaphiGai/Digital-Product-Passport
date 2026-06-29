@@ -22,6 +22,7 @@ import { BatchEdit } from './pages/BatchEdit';
 import { PartnerEdit } from './pages/PartnerEdit';
 import { Login } from './pages/Login';
 import { Settings } from './pages/Settings';
+import { Import } from './pages/Import';
 
 export function App() {
   return (
@@ -56,6 +57,7 @@ export function App() {
           <Route path="dpps/:id" element={<DppDetail />} />
           <Route path="marketing" element={<Marketing />} />
           <Route path="boms" element={<Boms />} />
+          <Route path="import" element={<Import />} />
 
           {/* Sidebar items without backend yet */}
           <Route path="validation" element={<ComingSoon title="Validation" />} />

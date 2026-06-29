@@ -10,6 +10,8 @@ import { Breadcrumb } from '@/ui/Breadcrumb';
 import { DataTable } from '@/ui/Table';
 import { RequireRole } from '@/auth/RequireRole';
 import { formatDateTime, formatDate } from '@/lib/formatters';
+import { exportData } from '@/lib/exportExcel';
+import { ExportDropdown } from '@/ui/ExportDropdown';
 
 const roleLabel = (v) => PARTNER_ROLES.find((r) => r.value === v)?.label ?? v;
 
@@ -57,6 +59,44 @@ export function PartnerDetail() {
   const roles = bp.roles ?? [];
   const activeBatches = (batches ?? []).filter((b) => b.status === 'active').length;
 
+  function handleExport(format = 'xlsx') {
+    const partnerRows = [{
+      ID: bp.ID,
+      Name: bp.name,
+      Country: bp.country_iso2 ?? '',
+      City: bp.city ?? '',
+      Address: bp.address ?? '',
+      'Contact Person': bp.contact_person ?? '',
+      'Contact Email': bp.contact_email ?? '',
+      Identifier: bp.identifier ?? '',
+      Roles: roles.map((r) => roleLabel(r.role)).join(', '),
+      Status: bp.archived ? 'Archived' : 'Active',
+      'Created At': formatDateTime(bp.createdAt) ?? '',
+      'Last Changed': formatDateTime(bp.lastChange ?? bp.modifiedAt) ?? '',
+    }];
+
+    const batchRows = (batches ?? []).map((b) => ({
+      'Batch Number': b.batch_number ?? '',
+      Product: b.variant?.product?.name ?? '',
+      'Variant SKU': b.variant?.sku ?? '',
+      'Production Date': b.production_date ?? '',
+      'Country of Origin': b.country_of_origin ?? '',
+      'Production Stage': b.production_stage ?? '',
+      'CO₂ Footprint (kg)': b.co2_footprint_kg ?? '',
+      'Recycled Content (%)': b.recycled_content_pct ?? '',
+      Status: b.status ?? '',
+    }));
+
+    exportData(
+      [
+        { name: 'Partner Info', rows: partnerRows },
+        { name: 'Linked Batches', rows: batchRows },
+      ],
+      `partner-${bp.name.replace(/\s+/g, '-').toLowerCase()}`,
+      format
+    );
+  }
+
   return (
     <div className="space-y-6">
       <Breadcrumb
@@ -87,8 +127,9 @@ export function PartnerDetail() {
             </div>
           </div>
         </div>
-        <RequireRole role="company_advanced">
-          <div className="flex gap-2">
+        <div className="flex gap-2">
+          <ExportDropdown onExport={handleExport} label="Export" />
+          <RequireRole role="company_advanced">
             <Button
               variant="danger"
               disabled={bp.archived || archive.isPending}
@@ -99,8 +140,8 @@ export function PartnerDetail() {
             <Button variant="outline" onClick={() => navigate(`/partners/${id}/edit`)}>
               Edit partner
             </Button>
-          </div>
-        </RequireRole>
+          </RequireRole>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">

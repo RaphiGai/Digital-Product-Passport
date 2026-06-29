@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import { odataGet } from '@/api/client';
+import { odataGet, odataList } from '@/api/client';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
 import { Breadcrumb } from '@/ui/Breadcrumb';
 import { BomEditor } from '@/ui/BomEditor';
 import { RequireRole } from '@/auth/RequireRole';
+import { ExportDropdown } from '@/ui/ExportDropdown';
+import { exportData } from '@/lib/exportExcel';
 
 function InfoRow({ label, value, visibility }) {
   return (
@@ -37,6 +39,12 @@ export function VariantView() {
     queryFn: () => odataGet('ProductVariants', vid)
   });
 
+  const bomQ = useQuery({
+    queryKey: ['ProductBOMs', vid],
+    queryFn: () => odataList('ProductBOMs', { filter: `parent_ID eq '${vid}'`, top: 200 }),
+    enabled: !!vid
+  });
+
   const p = productQ.data;
   const v = variantQ.data;
 
@@ -44,6 +52,22 @@ export function VariantView() {
   if (!v) return <p className="text-ink-muted">Variant not found.</p>;
 
   const label = [v.color, v.size].filter(Boolean).join(' / ') || v.sku || v.ID;
+
+  function handleExportBOM(format = 'xlsx') {
+    const lines = bomQ.data ?? [];
+    const rows = lines.map((line) => ({
+      Component: line.component_name ?? '—',
+      Category: line.component_category ?? '',
+      Role: line.component_role ?? '',
+      Quantity: line.quantity ?? '',
+      Unit: line.unit ?? '',
+      'CO₂ (kg)': line.ext_co2_footprint ?? '',
+      'Recycled Content (%)': line.ext_recycled_content_pct ?? '',
+      'External DPP URL': line.external_dpp_url ?? '',
+    }));
+    const slug = label.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || vid;
+    exportData([{ name: 'BOM', rows }], `bom-${slug}`, format);
+  }
 
   return (
     <div className="space-y-6">
@@ -195,9 +219,17 @@ export function VariantView() {
       {/* BOM section header + read-only BOM */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-ink">BOM for {label}</h2>
-        <Link to={`/products/${pid}/variants/${vid}`}>
-          <Button variant="outline" size="sm">Edit BOM</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <ExportDropdown
+            onExport={handleExportBOM}
+            label="Export BOM"
+            disabled={!bomQ.data?.length}
+            size="sm"
+          />
+          <Link to={`/products/${pid}/variants/${vid}`}>
+            <Button variant="outline" size="sm">Edit BOM</Button>
+          </Link>
+        </div>
       </div>
       <BomEditor productId={pid} variantId={vid} readOnly />
     </div>

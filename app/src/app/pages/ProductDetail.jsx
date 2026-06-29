@@ -10,6 +10,8 @@ import { Badge, StatusBadge } from '@/ui/Badge';
 import { Breadcrumb } from '@/ui/Breadcrumb';
 import { RequireRole } from '@/auth/RequireRole';
 import { DocumentManager } from '@/ui/DocumentManager';
+import { ExportDropdown } from '@/ui/ExportDropdown';
+import { exportData } from '@/lib/exportExcel';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -309,6 +311,73 @@ export function ProductDetail() {
 
   const archive = useAction('Products', { invalidate: [['Products', id], ['Products']] });
 
+  const { refetch: fetchForExport, isFetching: isExportLoading } = useQuery({
+    queryKey: ['Products', id, 'full-export'],
+    queryFn: () => odataGet('Products', id, { expand: ['variants($expand=batches($expand=factory,supplier))'] }),
+    enabled: false
+  });
+
+  async function handleExport(format = 'xlsx') {
+    const { data: full } = await fetchForExport();
+    const ep = full ?? p;
+    const productRows = [{
+      Name: ep.name ?? '',
+      Brand: ep.brand ?? '',
+      Category: ep.category ?? '',
+      Type: ep.product_type ?? '',
+      Model: ep.model ?? '',
+      GTIN: ep.gtin ?? '',
+      Status: ep.status ?? '',
+      'Country of Origin': ep.country_of_origin ?? '',
+      Description: ep.description ?? '',
+      'Fibre Composition': ep.fibre_composition ?? '',
+      'Care Instructions': ep.care_instructions ?? '',
+      'Repair Instructions': ep.repair_instructions ?? '',
+      'Disposal Instructions': ep.disposal_instructions ?? '',
+      'Reuse Instructions': ep.reuse_instructions ?? '',
+      'Substances of Concern': ep.substances_of_concern ?? '',
+      'ESPR Compliance': ep.espr_compliance ?? '',
+      'Durability Score': ep.durability_score ?? '',
+      'Repairability Score': ep.repairability_score ?? '',
+      'Care Video URL': ep.care_video_url ?? '',
+      'Repair Video URL': ep.repair_video_url ?? '',
+      'Disposal Video URL': ep.disposal_video_url ?? '',
+      'Reuse Video URL': ep.reuse_video_url ?? '',
+    }];
+    const variantRows = (ep.variants ?? []).map((v) => ({
+      SKU: v.sku ?? '',
+      Color: v.color ?? '',
+      Size: v.size ?? '',
+      GTIN: v.gtin ?? '',
+      'Weight (g)': v.weight_g ?? '',
+      Status: v.status ?? '',
+    }));
+    const batchRows = (ep.variants ?? []).flatMap((v) =>
+      (v.batches ?? []).map((b) => ({
+        'Variant SKU': v.sku ?? '',
+        'Batch Number': b.batch_number ?? '',
+        'Production Date': b.production_date ?? '',
+        'Country of Origin': b.country_of_origin ?? '',
+        'Production Stage': b.production_stage ?? '',
+        Factory: b.factory?.name ?? '',
+        Supplier: b.supplier?.name ?? '',
+        'CO₂ Footprint (kg)': b.co2_footprint_kg ?? '',
+        'Recycled Content (%)': b.recycled_content_pct ?? '',
+        Status: b.status ?? '',
+      }))
+    );
+    const slug = (ep.name ?? 'product').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    exportData(
+      [
+        { name: 'Product', rows: productRows },
+        { name: 'Variants', rows: variantRows },
+        { name: 'Batches', rows: batchRows },
+      ],
+      `product-${slug}`,
+      format
+    );
+  }
+
   if (isLoading) return <p className="text-ink-muted">Loading…</p>;
   if (!p) return <p className="text-ink-muted">Product not found.</p>;
 
@@ -336,8 +405,9 @@ export function ProductDetail() {
             </span>
           </div>
         </div>
-        <RequireRole role="company_advanced">
-          <div className="flex gap-2">
+        <div className="flex gap-2">
+          <ExportDropdown onExport={handleExport} label="Export" disabled={isExportLoading} />
+          <RequireRole role="company_advanced">
             <Link to={`/products/${id}/edit`}>
               <Button variant="outline">Edit</Button>
             </Link>
@@ -348,8 +418,8 @@ export function ProductDetail() {
             >
               {p.status === 'archived' ? 'Archived' : 'Archive'}
             </Button>
-          </div>
-        </RequireRole>
+          </RequireRole>
+        </div>
       </div>
 
       {/* Product info cards */}

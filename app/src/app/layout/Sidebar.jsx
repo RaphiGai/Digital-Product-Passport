@@ -9,7 +9,8 @@ import {
   Megaphone,
   ShieldCheck,
   FileBarChart,
-  Settings
+  Settings,
+  FileUp
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useMe } from '@/auth/useMe';
@@ -26,7 +27,8 @@ const NAV = [
       // separate, unauthenticated HTML entry point, so this is a plain link (new tab),
       // not an in-app NavLink route.
       { href: '/lookup.html', label: 'Open passport (QR token)', icon: ScanLine, external: true },
-      { to: '/boms', label: 'Bill of materials', icon: Layers }
+      { to: '/boms', label: 'Bill of materials', icon: Layers },
+      { to: '/import', label: 'Import', icon: FileUp, adminOnly: true },
     ]
   },
   {

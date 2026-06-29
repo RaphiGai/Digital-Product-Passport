@@ -12,6 +12,8 @@ import { RequireRole } from '@/auth/RequireRole';
 import { DocumentManager } from '@/ui/DocumentManager';
 import { MarketingLinksManager } from '@/ui/MarketingLinksManager';
 import { printLabels } from '@/lib/printLabels';
+import { exportData } from '@/lib/exportExcel';
+import { ExportDropdown } from '@/ui/ExportDropdown';
 import { ChevronRight, Printer } from 'lucide-react';
 
 /** @param {{ label: string, value: React.ReactNode }} props */
@@ -81,7 +83,7 @@ function VersionRow({ v }) {
 }
 
 /** Read-only version history card (US5.9). One row per published version. */
-function VersionHistoryCard({ dppId }) {
+function VersionHistoryCard({ dppId, productName }) {
   const q = useQuery({
     queryKey: ['DPPVersions', dppId],
     queryFn: () =>
@@ -93,9 +95,99 @@ function VersionHistoryCard({ dppId }) {
     enabled: !!dppId
   });
   const rows = q.data ?? [];
+
+  const fmt = (v) => {
+    if (!v) return '';
+    const [y, m, d] = String(v).slice(0, 10).split('-');
+    return d && m && y ? `${d}.${m}.${y}` : String(v).slice(0, 10);
+  };
+
+  function handleExportVersionHistory(format = 'xlsx') {
+    const summaryRows = [...rows]
+      .sort((a, b) => a.version_number - b.version_number)
+      .map((v) => ({
+        'Version':       `v${v.version_number}`,
+        'Published At':  fmt(v.snapshot_date),
+        'Change Reason': v.change_reason ?? '',
+        'Changed By':    v.changed_by?.display_name ?? '',
+        'Content Hash':  v.content_hash ?? '',
+      }));
+
+    const snapshotRows = [...rows]
+      .sort((a, b) => a.version_number - b.version_number)
+      .map((v) => {
+        let snap = null;
+        try { snap = v.snapshot_data ? JSON.parse(v.snapshot_data) : null; } catch { snap = null; }
+        const p = snap?.product ?? {};
+        const va = snap?.variant ?? {};
+        const b = snap?.batch ?? {};
+        const item = snap?.item ?? {};
+        return {
+          'Version':              `v${v.version_number}`,
+          'Published At':         fmt(v.snapshot_date),
+          'DPP Type':             snap?.dpp?.dpp_type ?? '',
+          'Visibility at Publish':snap?.dpp?.visibility ?? '',
+          'Product Name':         p.name ?? '',
+          'Brand':                p.brand ?? '',
+          'Category':             p.category ?? '',
+          'GTIN':                 p.gtin ?? '',
+          'Country of Origin':    p.country_of_origin ?? '',
+          'ESPR Compliance':      p.espr_compliance ?? '',
+          'Fibre Composition':    p.fibre_composition ?? '',
+          'Durability Score':     p.durability_score ?? '',
+          'Repairability Score':  p.repairability_score ?? '',
+          'Variant SKU':          va.sku ?? '',
+          'Colour':               va.color ?? '',
+          'Size':                 va.size ?? '',
+          'Batch Number':         b.batch_number ?? '',
+          'Production Date':      fmt(b.production_date),
+          'Country of Origin (Batch)': b.country_of_origin ?? '',
+          'CO₂ Footprint (kg)':   b.co2_footprint_kg ?? '',
+          'Recycled Content (%)': b.recycled_content_pct ?? '',
+          'Serial Number':        item.serial_number ?? '',
+          'UPI':                  item.upi ?? '',
+        };
+      });
+
+    const bomRows = [...rows]
+      .sort((a, b) => a.version_number - b.version_number)
+      .flatMap((v) => {
+        let snap = null;
+        try { snap = v.snapshot_data ? JSON.parse(v.snapshot_data) : null; } catch { snap = null; }
+        return (snap?.bom ?? []).map((line) => ({
+          'Version':                  `v${v.version_number}`,
+          'Component Name':           line.component_name ?? '',
+          'Component Category':       line.component_category ?? '',
+          'Fibre Composition':        line.component_fibre_composition ?? '',
+          'Quantity':                 line.quantity ?? '',
+          'Unit':                     line.unit ?? '',
+          'Role':                     line.component_role ?? '',
+          'External CO₂ (per unit)':  line.ext_co2_footprint ?? '',
+          'External Recycled (%)':    line.ext_recycled_content_pct ?? '',
+          'Mandatory':                line.is_mandatory ? 'Yes' : 'No',
+        }));
+      });
+
+    const filename = `dpp-version-history-${(productName ?? dppId).replace(/\s+/g, '-').toLowerCase()}`;
+    exportData(
+      [
+        { name: 'Version Summary',  rows: summaryRows },
+        { name: 'Snapshot Details', rows: snapshotRows },
+        ...(bomRows.length ? [{ name: 'BOM at Publish', rows: bomRows }] : []),
+      ],
+      filename,
+      format
+    );
+  }
+
   return (
     <Card>
-      <CardTitle>Version history</CardTitle>
+      <div className="flex items-center justify-between">
+        <CardTitle>Version history</CardTitle>
+        {rows.length > 0 && (
+          <ExportDropdown onExport={handleExportVersionHistory} label="Export history" size="sm" />
+        )}
+      </div>
       {q.isLoading ? (
         <p className="mt-3 text-sm text-ink-muted">Loading…</p>
       ) : rows.length ? (
@@ -247,6 +339,93 @@ export function DppDetail() {
   }
   const recycledParts = (breakdown?.components ?? []).filter((c) => c.mass_kg != null && c.recycled_pct != null);
 
+  function fv(field, value) {
+    return { Field: field, Value: value != null && value !== '' ? String(value) : '' };
+  }
+
+  function handleExport(format = 'xlsx') {
+    const consumerUrlFull = dpp.qr_token
+      ? `${window.location.origin}/consumer.html?token=${encodeURIComponent(dpp.qr_token)}`
+      : '';
+
+    const passportRows = [
+      fv('Passport ID',  dpp.ID),
+      fv('Type',         dpp.dpp_type),
+      fv('Status',       dpp.status),
+      fv('Visibility',   dpp.visibility),
+      fv('Version',      dpp.current_version),
+      fv('Created',      fmtDate(dpp.createdAt)),
+      fv('Last updated', fmtDate(dpp.last_updated || dpp.lastChange)),
+      fv('QR token',     dpp.qr_token),
+      fv('Public URL',   consumerUrlFull),
+    ];
+
+    const productRows = product ? [
+      fv('Name',                  product.name),
+      fv('Brand',                 product.brand),
+      fv('Category',              product.category),
+      fv('Model',                 product.model),
+      fv('GTIN',                  product.gtin),
+      fv('Fibre composition',     product.fibre_composition),
+      fv('Country of origin',     product.country_of_origin),
+      fv('Substances of concern', product.substances_of_concern),
+      fv('Care instructions',     product.care_instructions),
+      fv('Repair instructions',   product.repair_instructions),
+      fv('Reuse instructions',    product.reuse_instructions),
+      fv('Disposal instructions', product.disposal_instructions),
+      fv('Durability score',      product.durability_score),
+      fv('Repairability score',   product.repairability_score),
+      fv('ESPR compliance',       product.espr_compliance),
+      fv('Status',                product.status),
+    ] : [];
+
+    const variantRows = variant ? [
+      fv('Colour',    variant.color),
+      fv('Size',      variant.size),
+      fv('SKU',       variant.sku),
+      fv('GTIN',      variant.gtin),
+      fv('Weight (g)', variant.weight_g),
+      fv('Status',    variant.status),
+    ] : [];
+
+    const batchRows = batch ? [
+      fv('Batch number',           batch.batch_number),
+      fv('Production date',        fmtDate(batch.production_date)),
+      fv('Production stage',       batch.production_stage),
+      fv('Factory',                batch.factory?.name),
+      fv('Supplier',               batch.supplier?.name),
+      fv('Country of origin',      batch.country_of_origin),
+      fv('CO₂ footprint (kg)',     batch.co2_footprint_kg),
+      fv('Recycled content (%)',   batch.recycled_content_pct),
+      fv('Status',                 batch.status),
+    ] : [];
+
+    const itemRows = item ? [
+      fv('Serial number',      item.serial_number),
+      fv('UPI',                item.upi),
+      fv('Manufacturing date', fmtDate(item.manufacturing_date)),
+      fv('Status',             item.status),
+    ] : [];
+
+    const footprintRows = agg ? [
+      fv('CO₂ footprint — rolled up (kg)', agg.co2_footprint_kg),
+      fv('Recycled content — rolled up (%)', agg.recycled_content_pct),
+      fv('Aggregation complete', agg.incomplete ? 'No' : 'Yes'),
+    ] : [];
+
+    const sheets = [
+      { name: 'Passport',   rows: passportRows },
+      ...(productRows.length  ? [{ name: 'Product',   rows: productRows  }] : []),
+      ...(variantRows.length  ? [{ name: 'Variant',   rows: variantRows  }] : []),
+      ...(batchRows.length    ? [{ name: 'Batch',     rows: batchRows    }] : []),
+      ...(itemRows.length     ? [{ name: 'Item',      rows: itemRows     }] : []),
+      ...(footprintRows.length ? [{ name: 'Footprint', rows: footprintRows }] : []),
+    ];
+
+    const filename = `dpp-${(product?.name ?? dpp.ID).replace(/\s+/g, '-').toLowerCase()}`;
+    exportData(sheets, filename, format);
+  }
+
   return (
     <div className="space-y-6">
       <Breadcrumb
@@ -268,8 +447,9 @@ export function DppDetail() {
           </div>
         </div>
 
-        <RequireRole role="company_advanced">
-          <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          <ExportDropdown onExport={handleExport} label="Export" />
+          <RequireRole role="company_advanced">
             {(s === 'draft' || s === 'in_review') && (
               <Button disabled={busy} onClick={() => run('approveDPP', undefined, 'Passport approved.')}>
                 Approve
@@ -303,8 +483,8 @@ export function DppDetail() {
                 Archive
               </Button>
             )}
-          </div>
-        </RequireRole>
+          </RequireRole>
+        </div>
       </div>
 
       {msg && <Banner kind={msg.kind}>{msg.text}</Banner>}
@@ -516,7 +696,7 @@ export function DppDetail() {
           <MarketingLinksManager dppId={id} />
 
           {/* ── Version history (US5.9) ── */}
-          <VersionHistoryCard dppId={id} />
+          <VersionHistoryCard dppId={id} productName={product?.name} />
         </div>
 
         <div className="space-y-6">
