@@ -94,6 +94,14 @@ module.exports = (srv) => {
       .where({ owning_organization_ID: org.ID });
     const existingNames = new Set(existing.map((p) => p.name?.toLowerCase()));
 
+    // Product category is curated master data (code list dpp.ProductCategories),
+    // no longer a free string. Map the imported value to a known code
+    // (case-insensitive) and write the foreign key `category_code`.
+    const categoryRows = await SELECT.from('dpp.ProductCategories').columns('code');
+    const categoryByLower = new Map(
+      categoryRows.map((c) => [String(c.code).toLowerCase(), c.code])
+    );
+
     const allIssues = [];
     const toInsert  = [];
 
@@ -104,6 +112,10 @@ module.exports = (srv) => {
       requireField(allIssues, i, 'name',                  r.name);
       requireField(allIssues, i, 'brand',                 r.brand);
       requireField(allIssues, i, 'category',              r.category);
+      const categoryCode = categoryByLower.get(str(r.category).toLowerCase()) || null;
+      if (str(r.category) && !categoryCode)
+        err(allIssues, i, 'category',
+          `Unknown category "${str(r.category)}". Valid categories: ${[...categoryByLower.values()].join(', ') || '(none configured)'}.`);
       requireField(allIssues, i, 'product_type',          r.product_type);
       requireEnum (allIssues, i, 'product_type',          r.product_type,  PRODUCT_TYPES);
       requireField(allIssues, i, 'status',                r.status);
@@ -135,7 +147,7 @@ module.exports = (srv) => {
           owning_organization_ID: org.ID,
           name,
           brand:                 str(r.brand),
-          category:              str(r.category),
+          category_code:         categoryCode,
           product_type:          str(r.product_type),
           model:                 str(r.model)              || null,
           gtin:                  str(r.gtin)               || null,
