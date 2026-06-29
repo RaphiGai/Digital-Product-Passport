@@ -4,6 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { odataGet, odataList } from '@/api/client';
 import { useAction } from '@/api/hooks';
+import { mergeVisibility, PRODUCT_CATALOGUE } from '@/lib/fieldCatalogue';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
@@ -37,9 +38,11 @@ function ItemRow({ item, dpp }) {
   return (
     <div className="grid grid-cols-[2fr_1fr_1fr_auto] items-center gap-4 border-b border-black/5 px-4 py-2.5 last:border-0 bg-white/40">
       <div>
-        <span className="text-xs font-mono text-ink">{item.upi || item.serial_number || item.ID}</span>
-        {item.serial_number && item.upi && (
-          <span className="ml-2 text-xs text-ink-muted">· {item.serial_number}</span>
+        <span className="text-xs font-mono text-ink">{item.ID}</span>
+        {(item.upi || item.serial_number) && (
+          <span className="ml-2 text-xs text-ink-muted">
+            · {[item.upi, item.serial_number].filter(Boolean).join(' · ')}
+          </span>
         )}
       </div>
       <StatusBadge status={item.status} />
@@ -125,7 +128,13 @@ function BatchRow({ batch, pid, vid }) {
             {batch.batch_number ?? batch.ID}
           </span>
           <div className="text-xs text-ink-muted">
-            {[batch.production_date, batch.factory?.name].filter(Boolean).join(' · ')}
+            <span className="font-mono">{batch.ID}</span>
+            {[batch.production_date, batch.factory?.name].filter(Boolean).length > 0 && (
+              <span>
+                {' · '}
+                {[batch.production_date, batch.factory?.name].filter(Boolean).join(' · ')}
+              </span>
+            )}
           </div>
         </Link>
 
@@ -236,7 +245,10 @@ function VariantRow({ variant, pid }) {
 
         <Link to={`/products/${pid}/variants/${variant.ID}/view`} className="min-w-0 hover:text-brand-700">
           <span className="font-medium text-ink hover:text-brand-700">{label}</span>
-          <div className="text-xs text-ink-muted">{variant.sku}</div>
+          <div className="text-xs text-ink-muted">
+            <span className="font-mono">{variant.ID}</span>
+            {variant.sku && <span> · {variant.sku}</span>}
+          </div>
         </Link>
 
         <StatusBadge status={variant.status} />
@@ -306,7 +318,7 @@ export function ProductDetail() {
 
   const { data: p, isLoading } = useQuery({
     queryKey: ['Products', id],
-    queryFn: () => odataGet('Products', id, { expand: ['variants'] })
+    queryFn: () => odataGet('Products', id, { expand: ['variants', 'category'] })
   });
 
   const archive = useAction('Products', { invalidate: [['Products', id], ['Products']] });
@@ -382,6 +394,8 @@ export function ProductDetail() {
   if (!p) return <p className="text-ink-muted">Product not found.</p>;
 
   const variants = p.variants ?? [];
+  // Effective per-field visibility (saved overrides → catalogue defaults; locked → public).
+  const vis = mergeVisibility(PRODUCT_CATALOGUE, p.field_visibility);
 
   return (
     <div className="space-y-6">
@@ -401,7 +415,7 @@ export function ProductDetail() {
             <StatusBadge status={p.status} />
             <StatusBadge status={p.espr_compliance} />
             <span className="text-sm text-ink-muted">
-              {[p.brand, p.category, p.model].filter(Boolean).join(' · ')}
+              {[p.brand, p.category?.name, p.model].filter(Boolean).join(' · ')}
             </span>
           </div>
         </div>
@@ -427,24 +441,25 @@ export function ProductDetail() {
         <Card>
           <CardTitle>Basic information</CardTitle>
           <div className="mt-2">
+            <Row label="Product ID" value={p.ID} visibility="internal" />
             <Row label="Type" value={p.product_type} visibility="internal" />
-            <Row label="Brand" value={p.brand} visibility="public" />
-            <Row label="Category" value={p.category} visibility="public" />
-            <Row label="GTIN" value={p.gtin} visibility="internal" />
-            <Row label="Description" value={p.description} visibility="public" />
+            <Row label="Brand" value={p.brand} visibility={vis.brand} />
+            <Row label="Category" value={p.category?.name} visibility={vis.category} />
+            <Row label="GTIN" value={p.gtin} visibility={vis.gtin} />
+            <Row label="Description" value={p.description} visibility={vis.description} />
           </div>
         </Card>
 
         <Card>
           <CardTitle>Material, care &amp; compliance</CardTitle>
           <div className="mt-2">
-            <Row label="Fibre composition" value={p.fibre_composition} visibility="public" />
-            <Row label="Substances of concern" value={p.substances_of_concern} visibility="public" />
-            <Row label="Country of origin" value={p.country_of_origin} visibility="public" />
+            <Row label="Fibre composition" value={p.fibre_composition} visibility={vis.fibre_composition} />
+            <Row label="Substances of concern" value={p.substances_of_concern} visibility={vis.substances_of_concern} />
+            <Row label="Country of origin" value={p.country_of_origin} visibility={vis.country_of_origin} />
             <Row
               label="Care & washing instructions"
               value={p.care_instructions}
-              visibility="public"
+              visibility={vis.care_instructions}
             />
             <Row
               label="Care video"
@@ -460,13 +475,13 @@ export function ProductDetail() {
                   </a>
                 ) : null
               }
-              visibility="public"
+              visibility={vis.care_video_url}
             />
 
             <Row
               label="Repair instructions"
               value={p.repair_instructions}
-              visibility="public"
+              visibility={vis.repair_instructions}
             />
             <Row
               label="Repair video"
@@ -482,13 +497,13 @@ export function ProductDetail() {
                   </a>
                 ) : null
               }
-              visibility="public"
+              visibility={vis.repair_video_url}
             />
 
             <Row
               label="Reuse instructions"
               value={p.reuse_instructions}
-              visibility="public"
+              visibility={vis.reuse_instructions}
             />
             <Row
               label="Reuse video"
@@ -504,9 +519,9 @@ export function ProductDetail() {
                   </a>
                 ) : null
               }
-              visibility="public"
+              visibility={vis.reuse_video_url}
             />
-            <Row label="Disposal instructions" value={p.disposal_instructions} visibility="public" />
+            <Row label="Disposal instructions" value={p.disposal_instructions} visibility={vis.disposal_instructions} />
             <Row
               label="Disposal video"
               value={
@@ -521,11 +536,11 @@ export function ProductDetail() {
                   </a>
                 ) : null
               }
-              visibility="public"
+              visibility={vis.disposal_video_url}
             />
-            <Row label="Durability score" value={p.durability_score != null ? `${p.durability_score} / 10` : null} visibility="public" />
-            <Row label="Repairability score" value={p.repairability_score != null ? `${p.repairability_score} / 10` : null} visibility="public" />
-            <Row label="ESPR compliance" value={<StatusBadge status={p.espr_compliance} />} visibility="public" />
+            <Row label="Durability score" value={p.durability_score != null ? `${p.durability_score} / 10` : null} visibility={vis.durability_score} />
+            <Row label="Repairability score" value={p.repairability_score != null ? `${p.repairability_score} / 10` : null} visibility={vis.repairability_score} />
+            <Row label="ESPR compliance" value={<StatusBadge status={p.espr_compliance} />} visibility={vis.espr_compliance} />
           </div>
         </Card>
       </div>

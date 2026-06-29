@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useMe } from '@/auth/useMe';
 import { useCreate } from '@/api/hooks';
-import { ApiError } from '@/api/client';
+import { ApiError, odataList } from '@/api/client';
 import {
   PRODUCT_CATALOGUE,
   PRODUCT_TYPES,
@@ -13,13 +14,13 @@ import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Banner } from '@/ui/Breadcrumb';
 import { FieldCatalogueAside } from '@/ui/FieldCatalogueAside';
-import { FormSection, FieldRow, Input, Textarea, RadioCards, CountrySelect } from '@/ui/Form';
+import { FormSection, FieldRow, Input, Textarea, RadioCards, CountrySelect, Select } from '@/ui/Form';
 
 const EMPTY = {
   product_type: 'finished',
   name: '',
   brand: '',
-  category: '',
+  category_code: '',
   model: '',
   gtin: '',
   description: '',
@@ -44,7 +45,7 @@ const EMPTY = {
 const REQUIRED = [
   'name',
   'brand',
-  'category',
+  'category_code',
   'fibre_composition',
   'substances_of_concern',
   'country_of_origin',
@@ -58,6 +59,13 @@ export function Step1Product({ ctx, setCtx, next }) {
   const { data: me } = useMe();
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState('');
+
+  // Category options from the ProductCategories code list (single source of truth).
+  const categoriesQ = useQuery({
+    queryKey: ['ProductCategories'],
+    queryFn: () => odataList('ProductCategories', { select: ['code', 'name'], orderby: 'name' })
+  });
+  const categoryOptions = categoriesQ.data ?? [];
 
   const create = useCreate('Products', {
     invalidate: [['Products'], ['count', 'Products']],
@@ -153,7 +161,15 @@ export function Step1Product({ ctx, setCtx, next }) {
               <Input id="brand" value={form.brand} onChange={set('brand')} placeholder="FashionCo" />
             </FieldRow>
             <FieldRow label="Category" required visibility="public" htmlFor="category">
-              <Input id="category" value={form.category} onChange={set('category')} placeholder="Apparel / T-Shirt" />
+              <Select
+                id="category"
+                value={form.category_code}
+                onChange={set('category_code')}
+                options={[
+                  { value: '', label: 'Select category…' },
+                  ...categoryOptions.map((c) => ({ value: c.code, label: c.name }))
+                ]}
+              />
             </FieldRow>
             <FieldRow label="Model" visibility="public" htmlFor="model" hint="Season or model line.">
               <Input id="model" value={form.model} onChange={set('model')} placeholder="AW 2025" />
@@ -268,7 +284,7 @@ export function Step1Product({ ctx, setCtx, next }) {
                 ['Name', form.name],
                 ['Brand', form.brand],
                 ['Type', PRODUCT_TYPES.find((t) => t.value === form.product_type)?.label],
-                ['Category', form.category],
+                ['Category', categoryOptions.find((c) => c.code === form.category_code)?.name],
                 ['Country of origin', form.country_of_origin],
                 ['Product status', form.status],
                 ['ESPR status', form.espr_compliance]

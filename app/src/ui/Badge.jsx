@@ -1,3 +1,4 @@
+import { Lock } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 const TONE_CLASSES = {
@@ -68,5 +69,56 @@ export function FieldVisibilityBadge({ visibility }) {
     <Badge tone={visibility === 'public' ? 'green' : 'gray'} className="font-normal">
       {visibility === 'public' ? 'Public' : 'Internal'}
     </Badge>
+  );
+}
+
+/**
+ * Visibility badge that a company_advanced user can click to flip a field between
+ * Public and Internal. `locked` fields are required-public by regulation and render
+ * a non-interactive "Public · required" badge. Without `canEdit` it is read-only
+ * (same look as FieldVisibilityBadge).
+ * @param {{
+ *   value: 'public' | 'internal',
+ *   onChange?: (v: 'public' | 'internal') => void,
+ *   locked?: boolean,
+ *   canEdit?: boolean
+ * }} props
+ */
+export function EditableVisibilityBadge({ value, onChange, locked, canEdit }) {
+  if (locked) {
+    return (
+      <Badge
+        tone="green"
+        className="gap-1 font-normal"
+        title="Required to be public by regulation — cannot be hidden."
+      >
+        <Lock className="h-3 w-3" />
+        Public · required
+      </Badge>
+    );
+  }
+
+  const isPublic = value === 'public';
+
+  if (!canEdit) return <FieldVisibilityBadge visibility={value} />;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onChange?.(isPublic ? 'internal' : 'public')}
+      title={
+        isPublic
+          ? 'Shown on the public passport — click to make internal'
+          : 'Hidden from the public passport — click to make public'
+      }
+      className={cn(
+        'inline-flex cursor-pointer items-center rounded-full px-2.5 py-0.5 text-xs font-normal ring-1 ring-inset transition-colors',
+        isPublic
+          ? 'bg-brand-100 text-brand-800 ring-brand-200 hover:bg-brand-200'
+          : 'bg-gray-100 text-gray-700 ring-gray-200 hover:bg-gray-200'
+      )}
+    >
+      {isPublic ? 'Public' : 'Internal'}
+    </button>
   );
 }

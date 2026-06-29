@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
+import { useEffect } from 'react';
 import { Dashboard } from './pages/Dashboard';
 import { Products } from './pages/Products';
 import { ProductDetail } from './pages/ProductDetail';
@@ -21,15 +22,30 @@ import { ComingSoon } from './pages/ComingSoon';
 import { BatchEdit } from './pages/BatchEdit';
 import { PartnerEdit } from './pages/PartnerEdit';
 import { Login } from './pages/Login';
+import { PasswordReset } from './pages/PasswordReset';
 import { Settings } from './pages/Settings';
 import { Import } from './pages/Import';
+import { ProfileSettings } from './pages/ProfileSettings';
+import { AppearanceSettings } from './pages/AppearanceSettings';
+import { ActivityLogs } from './pages/ActivityLogs';
+import { ReportsLanding } from './pages/ReportsLanding';
+import { SustainabilityAnalytics } from './pages/SustainabilityAnalytics';
+import { ComplianceAnalytics } from './pages/ComplianceAnalytics';
+import { BatchCreate } from './pages/BatchCreate';
+import { Validation } from './pages/Validation';
 
 export function App() {
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('appearanceTheme') || 'green';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public login route — rendered OUTSIDE AppShell (no me() / no auth gate). */}
+        {/* Public routes — rendered OUTSIDE AppShell (no me() / no auth gate). */}
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<PasswordReset />} />
 
         <Route element={<AppShell />}>
           <Route index element={<Dashboard />} />
@@ -58,11 +74,29 @@ export function App() {
           <Route path="marketing" element={<Marketing />} />
           <Route path="boms" element={<Boms />} />
           <Route path="import" element={<Import />} />
+          <Route
+            path="/products/:pid/variants/:vid/batches/new"
+            element={<BatchCreate />}
+          />
 
-          {/* Sidebar items without backend yet */}
-          <Route path="validation" element={<ComingSoon title="Validation" />} />
-          <Route path="reports" element={<ComingSoon title="Reports" />} />
+          <Route path="/profile" element={<ProfileSettings />} />
+          <Route path="/appearance" element={<AppearanceSettings />} />
+
+          <Route path="/validation" element={<Validation />} />
+
+          <Route path="reports" element={<ReportsLanding />} />
+          <Route path="reports/sustainability" element={<SustainabilityAnalytics />} />
+          <Route path="reports/compliance" element={<ComplianceAnalytics />} />
+
+              
+          
+          
           <Route path="settings" element={<Settings />} />
+          <Route
+            path="/activity-logs"
+            element={<ActivityLogs />}
+          />
+
 
           <Route path="*" element={<ComingSoon title="Not found" />} />
         </Route>

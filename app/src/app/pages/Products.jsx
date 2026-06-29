@@ -47,18 +47,28 @@ function ProductRow({ product, selectionMode = false, selected = false, onToggle
         >
           <ChevronRight className={cn('h-4 w-4 transition-transform', open && 'rotate-90')} />
         </button>
+
+        <span className="w-44 shrink-0 font-mono text-xs text-ink-muted">
+          {product.ID}
+        </span>
+
         <div className="min-w-0 flex-1">
           <Link to={`/products/${product.ID}`} className="font-medium text-ink hover:text-brand-700">
             {product.name}
           </Link>
           <div className="text-xs text-ink-muted">
-            {[product.brand, product.category].filter(Boolean).join(' · ')}
+            {[product.brand, product.category?.name].filter(Boolean).join(' · ')}
           </div>
         </div>
+
         <span className="flex w-40 shrink-0">
           <Badge tone="gray">{typeLabel(product.product_type)}</Badge>
         </span>
-        <span className="w-24 shrink-0 text-right text-xs text-ink-muted">{variants.length} variants</span>
+
+        <span className="w-24 shrink-0 text-right text-xs text-ink-muted">
+          {variants.length} variants
+        </span>
+
         <span className="flex w-28 shrink-0 justify-end">
           <StatusBadge status={product.status} />
         </span>
@@ -69,10 +79,19 @@ function ProductRow({ product, selectionMode = false, selected = false, onToggle
           <ul className="space-y-1.5">
             {variants.map((v) => (
               <li key={v.ID} className="flex items-center justify-between gap-3">
-                <span className="text-sm text-ink">
-                  {[v.color, v.size].filter(Boolean).join(' / ') || v.sku}
-                  <span className="ml-2 text-xs text-ink-muted">{v.sku}</span>
-                </span>
+                <div className="min-w-0">
+                  <Link
+                    to={`/products/${product.ID}/variants/${v.ID}/view`}
+                    className="text-sm font-medium text-ink hover:text-brand-700"
+                  >
+                    {[v.color, v.size].filter(Boolean).join(' / ') || v.sku || v.ID}
+                  </Link>
+
+                  <div className="text-xs text-ink-muted">
+                    <span className="font-mono">{v.ID}</span>
+                    {v.sku && <span> · {v.sku}</span>}
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
                   <StatusBadge status={v.status} />
                   <RequireRole role="company_advanced">
@@ -109,7 +128,7 @@ export function Products() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['Products'],
-    queryFn: () => odataList('Products', { expand: ['variants($expand=batches($expand=factory,supplier))'], orderby: 'name', top: 100 })
+    queryFn: () => odataList('Products', { expand: ['variants($expand=batches($expand=factory,supplier))', 'category'], orderby: 'name', top: 100 })
   });
 
   function handleSort(column) {
@@ -126,14 +145,15 @@ export function Products() {
     if (!query) return data ?? [];
 
     return (data ?? []).filter((p) => {
-      const searchableText = [
-        p.name,
-        p.brand,
-        p.category,
-        typeLabel(p.product_type),
-        p.status,
-        ...(p.variants ?? []).flatMap((v) => [v.sku, v.color, v.size])
-      ]
+        const searchableText = [
+          p.ID,
+          p.name,
+          p.brand,
+          p.category?.name,
+          typeLabel(p.product_type),
+          p.status,
+          ...(p.variants ?? []).flatMap((v) => [v.ID, v.sku, v.color, v.size])
+        ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
@@ -337,17 +357,22 @@ export function Products() {
           <>
             <div className="flex items-center gap-3 border-b border-black/5 px-5 py-2.5 text-xs uppercase tracking-wider text-ink-muted">
               <span className="h-4 w-4 shrink-0" aria-hidden="true" />
+
+                <span className="w-44 shrink-0">
+                <SortHeader label="ID" column="ID" sortConfig={sortConfig} onSort={handleSort} />
+              </span>
+
               <span className="min-w-0 flex-1">
-                <SortHeader label="Product" column="name" sortConfig={sortConfig} onSort={handleSort} />
+                <SortHeader label="PRODUCT NAME" column="name" sortConfig={sortConfig} onSort={handleSort} />
               </span>
               <span className="w-40 shrink-0">
-                <SortHeader label="Type" column="product_type" sortConfig={sortConfig} onSort={handleSort} />
+                <SortHeader label="TYPE" column="product_type" sortConfig={sortConfig} onSort={handleSort} />
               </span>
               <span className="flex w-24 shrink-0 justify-end">
-                <SortHeader label="Variants" column="variants" sortConfig={sortConfig} onSort={handleSort} />
+                <SortHeader label="VARIANTS" column="variants" sortConfig={sortConfig} onSort={handleSort} />
               </span>
               <span className="flex w-28 shrink-0 justify-end">
-                <SortHeader label="Status" column="status" sortConfig={sortConfig} onSort={handleSort} />
+                <SortHeader label="STATUS" column="status" sortConfig={sortConfig} onSort={handleSort} />
               </span>
             </div>
             {sortedProducts.map((p) => (

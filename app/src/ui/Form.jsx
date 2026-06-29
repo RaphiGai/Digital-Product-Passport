@@ -1,5 +1,5 @@
 import { cn } from '@/lib/cn';
-import { FieldVisibilityBadge } from './Badge';
+import { FieldVisibilityBadge, EditableVisibilityBadge } from './Badge';
 import { COUNTRIES } from '@/lib/countries';
 
 /**
@@ -18,13 +18,17 @@ export function FormSection({ title, description, children }) {
 
 /**
  * Label row with optional mandatory marker, Public/Internal badge and hint.
+ *
+ * Pass `visibilityControl` to make the badge an interactive Public/Internal toggle
+ * (company_advanced edit mode); pass `visibility` for a static read-only badge.
  * @param {{
  *   label: string, htmlFor?: string, required?: boolean,
- *   visibility?: 'public' | 'internal', hint?: string,
- *   className?: string, children: React.ReactNode
+ *   visibility?: 'public' | 'internal',
+ *   visibilityControl?: { value: 'public'|'internal', onChange?: (v: 'public'|'internal') => void, locked?: boolean, canEdit?: boolean },
+ *   hint?: string, className?: string, children: React.ReactNode
  * }} props
  */
-export function FieldRow({ label, htmlFor, required, visibility, hint, className, children }) {
+export function FieldRow({ label, htmlFor, required, visibility, visibilityControl, hint, className, children }) {
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
       <label htmlFor={htmlFor} className="flex items-center gap-2 text-sm font-medium text-ink">
@@ -32,7 +36,11 @@ export function FieldRow({ label, htmlFor, required, visibility, hint, className
           {label}
           {required && <span className="ml-0.5 text-red-600">*</span>}
         </span>
-        {visibility && <FieldVisibilityBadge visibility={visibility} />}
+        {visibilityControl ? (
+          <EditableVisibilityBadge {...visibilityControl} />
+        ) : (
+          visibility && <FieldVisibilityBadge visibility={visibility} />
+        )}
       </label>
       {children}
       {hint && <p className="text-xs text-ink-muted">{hint}</p>}

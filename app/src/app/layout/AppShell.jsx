@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -13,6 +14,20 @@ import { AccountNotActivated } from '@/app/pages/AccountNotActivated';
  */
 export function AppShell() {
   const { data: me, isLoading, error } = useMe();
+
+  // Apply the user's saved colour theme app-wide (server value is the source of
+  // truth; localStorage is kept in sync only for an instant, flash-free apply on
+  // the next hard reload — see App.jsx).
+  useEffect(() => {
+    if (me?.appearanceTheme) {
+      document.documentElement.setAttribute('data-theme', me.appearanceTheme);
+      try {
+        localStorage.setItem('appearanceTheme', me.appearanceTheme);
+      } catch {
+        /* ignore storage errors */
+      }
+    }
+  }, [me?.appearanceTheme]);
 
   if (isLoading) {
     return <div className="flex h-full items-center justify-center text-ink-muted">Loading…</div>;

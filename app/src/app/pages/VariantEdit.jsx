@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { odataGet, odataList, ApiError } from '@/api/client';
 import { useUpdate } from '@/api/hooks';
+import { useHasRole } from '@/auth/useMe';
+import { VARIANT_CATALOGUE, catalogueByKey, mergeVisibility } from '@/lib/fieldCatalogue';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
@@ -21,7 +23,24 @@ export function VariantEdit() {
   const { pid, vid } = useParams();
   const navigate = useNavigate();
   const [form, setForm] = useState(null);
+  const [fieldVis, setFieldVis] = useState(null);
   const [msg, setMsg] = useState(null);
+  const isAdvanced = useHasRole('company_advanced');
+  const VARIANT_VIS = useMemo(() => catalogueByKey(VARIANT_CATALOGUE), []);
+
+  const visCtl = (key) => ({
+    value: fieldVis?.[key] ?? 'public',
+    onChange: (v) => setFieldVis((m) => ({ ...(m ?? {}), [key]: v })),
+    locked: !!VARIANT_VIS[key]?.locked,
+    canEdit: isAdvanced
+  });
+  // The "Product image" row controls image_url + image_data together.
+  const imageVisCtl = {
+    value: fieldVis?.image_url ?? 'public',
+    onChange: (v) => setFieldVis((m) => ({ ...(m ?? {}), image_url: v, image_data: v })),
+    locked: false,
+    canEdit: isAdvanced
+  };
 
   const remaining = (value, max) => `${max - (value?.length ?? 0)} characters remaining`;
 
@@ -57,6 +76,7 @@ export function VariantEdit() {
         image_data: v.image_data ?? '',
         status: v.status ?? 'active'
       });
+      setFieldVis(mergeVisibility(VARIANT_CATALOGUE, v.field_visibility));
     }
   }, [variantQ.data, form]);
 
@@ -99,7 +119,8 @@ export function VariantEdit() {
           weight_g: form.weight_g === '' ? null : Number(form.weight_g),
           image_url: form.image_url?.trim() || null,
           image_data: form.image_data || null,
-          status: form.status
+          status: form.status,
+          field_visibility: JSON.stringify(fieldVis ?? {})
         }
       },
       {
@@ -145,9 +166,20 @@ export function VariantEdit() {
           title="Variant details"
           description="Identifies a concrete colour/size of the product."
         >
+            <FieldRow label="Variant ID" visibility="internal">
+            <span className="font-mono text-sm text-ink">
+              {variantQ.data.ID}
+            </span>
+          </FieldRow>
+
+          <FieldRow label="Product ID" visibility="internal">
+            <span className="font-mono text-sm text-ink">
+              {productQ.data?.ID ?? pid}
+            </span>
+          </FieldRow>
           <FieldRow
             label="SKU"
-            visibility="internal"
+            visibilityControl={visCtl('sku')}
             htmlFor="sku"
             
           >
@@ -157,7 +189,7 @@ export function VariantEdit() {
           </FieldRow>
           <FieldRow
             label="Colour"
-            visibility="public"
+            visibilityControl={visCtl('color')}
             htmlFor="color"
             hint={remaining(form.color, LIMITS.color)}
           >
@@ -171,7 +203,7 @@ export function VariantEdit() {
 
           <FieldRow
             label="Size"
-            visibility="public"
+            visibilityControl={visCtl('size')}
             htmlFor="size"
             hint={remaining(form.size, LIMITS.size)}
           >
@@ -187,7 +219,7 @@ export function VariantEdit() {
 
           <FieldRow
             label="GTIN"
-            visibility="internal"
+            visibilityControl={visCtl('gtin')}
             htmlFor="gtin"
             hint={
               form.gtin && form.gtin.length < 8
@@ -231,7 +263,7 @@ export function VariantEdit() {
               }
             />
           </FieldRow>
-          <FieldRow label="Product image" visibility="public" htmlFor="img" className="md:col-span-2"
+          <FieldRow label="Product image" visibilityControl={imageVisCtl} htmlFor="img" className="md:col-span-2"
             hint="Colour-correct product image — shown top-right in the green header of the consumer passport.">
             <ImageUpload
               value={form.image_data || null}

@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText, FileImage, File as FileIcon, Upload, Download, Pencil, Trash2, X } from 'lucide-react';
+import { FileText, FileImage, File as FileIcon, Upload, Download, Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
 import { odataList, odataCreate, odataUpdate, odataDelete, odataUploadMedia, newId, ApiError } from '@/api/client';
 import { DOCUMENT_TYPES, DOC_TYPE_LABEL } from '@/lib/fieldCatalogue';
 import { Card, CardTitle } from './Card';
 import { Button } from './Button';
 import { Banner } from './Breadcrumb';
 import { FieldRow, Input, Select, RadioCards } from './Form';
-import { FieldVisibilityBadge } from './Badge';
+import { Badge, FieldVisibilityBadge } from './Badge';
 
 // Fixed per the approved plan — kept in sync with srv/handlers/document-handlers.js.
 const ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg'];
@@ -50,6 +50,9 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
   const [msg, setMsg] = useState(null);
 
   const today = new Date().toISOString().slice(0, 10);
+  // A document is expired once its valid-until date is in the past. Both values are
+  // YYYY-MM-DD strings, so a lexical comparison orders them by date correctly.
+  const isExpired = (validUntil) => !!validUntil && String(validUntil).slice(0, 10) < today;
   const filter = scope === 'product' ? `product_ID eq '${ownerId}'` : `batch_ID eq '${ownerId}'`;
 
   const docsQ = useQuery({
@@ -58,6 +61,7 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
     enabled: !!ownerId
   });
   const rows = docsQ.data ?? [];
+  const expiredCount = rows.filter((d) => isExpired(d.valid_until)).length;
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -161,8 +165,8 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
       setMsg({ kind: 'error', text: 'Please choose a file.' });
       return;
     }
-    if (form.issue_date && form.valid_until && form.valid_until < form.issue_date) {
-      setMsg({ kind: 'error', text: 'Valid-until cannot be before the issue date.' });
+    if (form.issue_date && form.valid_until && form.valid_until <= form.issue_date) {
+      setMsg({ kind: 'error', text: 'The issue date must be before the valid-until date.' });
       return;
     }
     saveMut.mutate();
@@ -178,6 +182,16 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
         </div>
       )}
 
+      {expiredCount > 0 && (
+        <div className="mt-3">
+          <Banner kind="warning">
+            {expiredCount === 1
+              ? '1 document has passed its valid-until date and is expired.'
+              : `${expiredCount} documents have passed their valid-until date and are expired.`}
+          </Banner>
+        </div>
+      )}
+
       {rows.length > 0 ? (
         <div className="mt-3 divide-y divide-black/5">
           {rows.map((d) => (
@@ -185,12 +199,34 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
               <FileTypeIcon mime={d.mime_type} className="h-5 w-5 shrink-0 text-ink-muted" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium text-ink">{d.title || d.file_name}</span>
+                  {d.file_name ? (
+                    <a
+                      href={`/odata/v4/dpp/Documents('${d.ID}')/content`}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Open"
+                      className="truncate text-sm font-medium text-ink hover:text-brand-700 hover:underline"
+                    >
+                      {d.title || d.file_name}
+                    </a>
+                  ) : (
+                    <span className="truncate text-sm font-medium text-ink">{d.title || d.file_name}</span>
+                  )}
                   <FieldVisibilityBadge visibility={d.visibility === 'public' ? 'public' : 'internal'} />
+                  {isExpired(d.valid_until) && (
+                    <Badge tone="red" className="gap-1 font-normal">
+                      <AlertTriangle className="h-3 w-3" />
+                      Expired
+                    </Badge>
+                  )}
                 </div>
                 <div className="truncate text-xs text-ink-muted">
                   {[DOC_TYPE_LABEL[d.doc_type] ?? d.doc_type, d.issuer, fmtSize(d.file_size)].filter(Boolean).join(' · ')}
-                  {d.valid_until ? ` · valid until ${fmtDate(d.valid_until)}` : ''}
+                  {d.valid_until && (
+                    <span className={isExpired(d.valid_until) ? 'font-medium text-red-600' : undefined}>
+                      {` · valid until ${fmtDate(d.valid_until)}`}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -340,7 +376,7 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
               <Input id="doc-issue" type="date" max={today} value={form.issue_date} onChange={set('issue_date')} />
             </FieldRow>
             <FieldRow label="Valid until" htmlFor="doc-valid">
-              <Input id="doc-valid" type="date" value={form.valid_until} onChange={set('valid_until')} />
+              <Input id="doc-valid" type="date" min={form.issue_date || undefined} value={form.valid_until} onChange={set('valid_until')} />
             </FieldRow>
           </div>
 

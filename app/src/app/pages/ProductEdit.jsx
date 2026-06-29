@@ -1,25 +1,43 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { odataGet, ApiError } from '@/api/client';
+import { odataGet, odataList, ApiError } from '@/api/client';
 import { useUpdate } from '@/api/hooks';
-import { PRODUCT_TYPES, PRODUCT_STATUSES, ESPR_STATUSES } from '@/lib/fieldCatalogue';
+import { useHasRole } from '@/auth/useMe';
+import {
+  PRODUCT_TYPES,
+  PRODUCT_STATUSES,
+  ESPR_STATUSES,
+  PRODUCT_CATALOGUE,
+  catalogueByKey,
+  mergeVisibility
+} from '@/lib/fieldCatalogue';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
-import { FormSection, FieldRow, Input, Textarea, RadioCards, CountrySelect } from '@/ui/Form';
+import { FormSection, FieldRow, Input, Textarea, RadioCards, CountrySelect, Select } from '@/ui/Form';
 import { DocumentManager } from '@/ui/DocumentManager';
 
 export function ProductEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [form, setForm] = useState(null);
+  const [fieldVis, setFieldVis] = useState(null);
   const [msg, setMsg] = useState(null);
+  const isAdvanced = useHasRole('company_advanced');
+  const PRODUCT_VIS = useMemo(() => catalogueByKey(PRODUCT_CATALOGUE), []);
+
+  /** Build the props for an editable Public/Internal badge bound to `key`. */
+  const visCtl = (key) => ({
+    value: fieldVis?.[key] ?? 'public',
+    onChange: (v) => setFieldVis((m) => ({ ...(m ?? {}), [key]: v })),
+    locked: !!PRODUCT_VIS[key]?.locked,
+    canEdit: isAdvanced
+  });
 
   const LIMITS = {
     name: 70,
     brand: 70,
-    category: 60,
     model: 70,
     gtin: 14,
     description: 500,
@@ -41,6 +59,14 @@ export function ProductEdit() {
     queryFn: () => odataGet('Products', id)
   });
 
+  // Category options come from the ProductCategories code list (single source of truth) —
+  // adding a category there makes it selectable here with no frontend change.
+  const categoriesQ = useQuery({
+    queryKey: ['ProductCategories'],
+    queryFn: () => odataList('ProductCategories', { select: ['code', 'name'], orderby: 'name' })
+  });
+  const categoryOptions = categoriesQ.data ?? [];
+
   useEffect(() => {
     if (productQ.data && !form) {
       const p = productQ.data;
@@ -57,7 +83,7 @@ export function ProductEdit() {
         product_type: p.product_type ?? 'finished',
         name: p.name ?? '',
         brand: p.brand ?? '',
-        category: p.category ?? '',
+        category_code: p.category_code ?? '',
         model: p.model ?? '',
         gtin: p.gtin ?? '',
         description: p.description ?? '',
@@ -78,6 +104,7 @@ export function ProductEdit() {
         espr_compliance: p.espr_compliance ?? 'draft',
         storytelling
       });
+      setFieldVis(mergeVisibility(PRODUCT_CATALOGUE, p.field_visibility));
     }
   }, [productQ.data, form]);
 
@@ -135,7 +162,7 @@ export function ProductEdit() {
           product_type: form.product_type,
           name: form.name.trim(),
           brand: form.brand || null,
-          category: form.category || null,
+          category_code: form.category_code || null,
           model: form.model || null,
           gtin: form.gtin || null,
           description: form.description || null,
@@ -154,7 +181,8 @@ export function ProductEdit() {
           reuse_video_url: form.reuse_video_url?.trim() || null,
           status: form.status,
           espr_compliance: form.espr_compliance,
-          storytelling: story.length ? JSON.stringify(story) : null
+          storytelling: story.length ? JSON.stringify(story) : null,
+          field_visibility: JSON.stringify(fieldVis ?? {})
         }
       },
       {
@@ -207,21 +235,34 @@ export function ProductEdit() {
           title="Basic information"
           description="Name, Brand and Category appear publicly on the consumer DPP."
         >
-          <FieldRow label="Product name" required visibility="public" htmlFor="name">
+          <FieldRow label="Product ID" visibility="internal">
+            <span className="font-mono text-sm text-ink">
+              {productQ.data.ID}
+            </span>
+          </FieldRow>
+          <FieldRow label="Product name" required visibilityControl={visCtl('name')} htmlFor="name">
             <Input id="name" value={form.name} onChange={set('name')} maxLength={LIMITS.name} />
           </FieldRow>
-          <FieldRow label="Brand" visibility="public" htmlFor="brand">
+          <FieldRow label="Brand" visibilityControl={visCtl('brand')} htmlFor="brand">
             <Input id="brand" value={form.brand} onChange={set('brand')} maxLength={LIMITS.brand} />
           </FieldRow>
-          <FieldRow label="Category" visibility="public" htmlFor="category">
-            <Input id="category" value={form.category} onChange={set('category')} maxLength={LIMITS.category} />
+          <FieldRow label="Category" visibilityControl={visCtl('category')} htmlFor="category">
+            <Select
+              id="category"
+              value={form.category_code}
+              onChange={set('category_code')}
+              options={[
+                { value: '', label: 'Select category…' },
+                ...categoryOptions.map((c) => ({ value: c.code, label: c.name }))
+              ]}
+            />
           </FieldRow>
-          <FieldRow label="Model" visibility="public" htmlFor="model" hint="Season or model line.">
+          <FieldRow label="Model" visibilityControl={visCtl('model')} htmlFor="model" hint="Season or model line.">
             <Input id="model" value={form.model} onChange={set('model')} maxLength={LIMITS.model} />
           </FieldRow>
           <FieldRow
             label="GTIN"
-            visibility="internal"
+            visibilityControl={visCtl('gtin')}
             htmlFor="gtin"
             hint={
               form.gtin && form.gtin.length < 8
@@ -246,7 +287,7 @@ export function ProductEdit() {
           </FieldRow>
           <FieldRow
             label="Description"
-            visibility="public"
+            visibilityControl={visCtl('description')}
             htmlFor="desc"
             className="md:col-span-2"
             hint={remaining(form.description, LIMITS.description)}
@@ -261,7 +302,7 @@ export function ProductEdit() {
         >
           <FieldRow
             label="Fibre composition"
-            visibility="public"
+            visibilityControl={visCtl('fibre_composition')}
             htmlFor="fibre"
             hint={remaining(form.fibre_composition, LIMITS.fibre_composition)}
           >
@@ -269,7 +310,7 @@ export function ProductEdit() {
           </FieldRow>
           <FieldRow
             label="Substances of concern"
-            visibility="public"
+            visibilityControl={visCtl('substances_of_concern')}
             htmlFor="soc"
             hint={remaining(form.substances_of_concern, LIMITS.substances_of_concern)}
           >
@@ -282,7 +323,7 @@ export function ProductEdit() {
           </FieldRow>
           <FieldRow
             label="Country of origin"
-            visibility="public"
+            visibilityControl={visCtl('country_of_origin')}
             htmlFor="coo"
             className="md:col-span-2"
           >
@@ -294,15 +335,15 @@ export function ProductEdit() {
           title="Care, repair, reuse & end-of-life"
           description="Mandatory ESPR lifecycle information. All appear publicly. Each block can have an optional how-to video link, shown only when set."
         >
-          <FieldRow label="Care & washing instructions" visibility="public" htmlFor="care" className="md:col-span-2" hint={remaining(form.care_instructions, LIMITS.care_instructions)}>
+          <FieldRow label="Care & washing instructions" visibilityControl={visCtl('care_instructions')} htmlFor="care" className="md:col-span-2" hint={remaining(form.care_instructions, LIMITS.care_instructions)}>
             <Textarea id="care" value={form.care_instructions} onChange={set('care_instructions')} maxLength={LIMITS.care_instructions} />
             <Input className="mt-2" value={form.care_video_url} onChange={set('care_video_url')} placeholder="Care/washing video link (optional, https://…)" />
           </FieldRow>
-          <FieldRow label="Repair instructions" visibility="public" htmlFor="repair" hint={remaining(form.repair_instructions, LIMITS.repair_instructions)}>
+          <FieldRow label="Repair instructions" visibilityControl={visCtl('repair_instructions')} htmlFor="repair" hint={remaining(form.repair_instructions, LIMITS.repair_instructions)}>
             <Textarea id="repair" value={form.repair_instructions} onChange={set('repair_instructions')} maxLength={LIMITS.repair_instructions} />
             <Input className="mt-2" value={form.repair_video_url} onChange={set('repair_video_url')} placeholder="Repair video link (optional, https://…)" />
           </FieldRow>
-          <FieldRow label="Disposal instructions" visibility="public" htmlFor="disposal" hint={remaining(form.disposal_instructions, LIMITS.disposal_instructions)}>
+          <FieldRow label="Disposal instructions" visibilityControl={visCtl('disposal_instructions')} htmlFor="disposal" hint={remaining(form.disposal_instructions, LIMITS.disposal_instructions)}>
             <Textarea
               id="disposal"
               value={form.disposal_instructions}
@@ -311,7 +352,7 @@ export function ProductEdit() {
             />
             <Input className="mt-2" value={form.disposal_video_url} onChange={set('disposal_video_url')} placeholder="Disposal video link (optional, https://…)" />
           </FieldRow>
-          <FieldRow label="Reuse instructions" visibility="public" htmlFor="reuse" className="md:col-span-2" hint={remaining(form.reuse_instructions, LIMITS.reuse_instructions)}>
+          <FieldRow label="Reuse instructions" visibilityControl={visCtl('reuse_instructions')} htmlFor="reuse" className="md:col-span-2" hint={remaining(form.reuse_instructions, LIMITS.reuse_instructions)}>
             <Textarea id="reuse" value={form.reuse_instructions} onChange={set('reuse_instructions')} maxLength={LIMITS.reuse_instructions} placeholder="Second-life / reuse guidance (resale, donation, repurposing…)" />
             <Input className="mt-2" value={form.reuse_video_url} onChange={set('reuse_video_url')} placeholder="Reuse video link (optional, https://…)" />
           </FieldRow>
@@ -321,10 +362,10 @@ export function ProductEdit() {
           title="Durability & repairability (ESPR)"
           description="ESPR scores on a 0–10 scale (one decimal). Shown publicly when set."
         >
-          <FieldRow label="Durability score" visibility="public" htmlFor="durability" hint="0–10 (e.g. 8.5). Leave empty if not assessed.">
+          <FieldRow label="Durability score" visibilityControl={visCtl('durability_score')} htmlFor="durability" hint="0–10 (e.g. 8.5). Leave empty if not assessed.">
             <Input id="durability" type="number" min="0" max="10" step="0.1" value={form.durability_score} onChange={set('durability_score')} />
           </FieldRow>
-          <FieldRow label="Repairability score" visibility="public" htmlFor="repairability" hint="0–10 (e.g. 7.0). Leave empty if not assessed.">
+          <FieldRow label="Repairability score" visibilityControl={visCtl('repairability_score')} htmlFor="repairability" hint="0–10 (e.g. 7.0). Leave empty if not assessed.">
             <Input id="repairability" type="number" min="0" max="10" step="0.1" value={form.repairability_score} onChange={set('repairability_score')} />
           </FieldRow>
         </FormSection>

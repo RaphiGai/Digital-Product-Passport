@@ -50,7 +50,8 @@
  * @property {string} ID
  * @property {string} name
  * @property {string} [brand]
- * @property {string} [category]
+ * @property {string} [category_code]
+ * @property {{ code: string, name: string }} [category]
  * @property {string} [model]
  * @property {ProductType} product_type
  * @property {ProductStatus} status

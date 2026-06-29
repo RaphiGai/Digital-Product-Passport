@@ -1,28 +1,36 @@
 /**
- * DPP field catalogue — drives the "Field catalogue" sidebar and form validation hints.
+ * DPP field catalogue — drives the "Field catalogue" sidebar, form validation hints
+ * AND the per-field consumer visibility (Public/Internal) toggle in the edit forms.
  * Source: Fashion_DPP_Object_Field_Catalogue.xlsm + the create-form mockups.
  *
- * `visibility: 'public'` means the field appears on the consumer DPP (see toConsumerDTO
- * in the backend public-handler.js); 'internal' stays inside DPP Studio.
+ * `visibility: 'public'` is the DEFAULT — the field appears on the consumer DPP (enforced
+ * in the backend by srv/lib/field-visibility.js / public-handler.js); 'internal' stays
+ * inside DPP Studio. A `company_advanced` user can flip non-locked fields per object.
+ *
+ * `locked: true` = the field is required to be public by regulation and can NEVER be set
+ * internal (server-enforced). This is a REVIEWABLE default derived from the `mandatory`
+ * flag + the ESPR / EU textile-labelling context — NOT legal advice; confirm with a
+ * compliance advisor. KEEP IN SYNC with the backend mirror dpp_capgemini/srv/lib/field-visibility.js.
  */
 
-/** @typedef {{ key: string, label: string, mandatory: boolean, visibility: 'public' | 'internal' }} CatalogueField */
+/** @typedef {{ key: string, label: string, mandatory: boolean, visibility: 'public' | 'internal', locked?: boolean }} CatalogueField */
 
 /** @type {CatalogueField[]} */
 export const PRODUCT_CATALOGUE = [
   { key: 'product_type', label: 'ProductType', mandatory: true, visibility: 'internal' },
-  { key: 'name', label: 'ProductName', mandatory: true, visibility: 'public' },
-  { key: 'brand', label: 'Brand', mandatory: true, visibility: 'public' },
-  { key: 'category', label: 'Category', mandatory: true, visibility: 'public' },
-  { key: 'fibre_composition', label: 'FibreComposition', mandatory: true, visibility: 'public' },
-  { key: 'care_instructions', label: 'CareInstructions', mandatory: true, visibility: 'public' },
-  { key: 'repair_instructions', label: 'RepairInstructions', mandatory: true, visibility: 'public' },
+  { key: 'name', label: 'ProductName', mandatory: true, visibility: 'public', locked: true },
+  { key: 'brand', label: 'Brand', mandatory: true, visibility: 'public', locked: true },
+  { key: 'category', label: 'Category', mandatory: true, visibility: 'public', locked: true },
+  { key: 'fibre_composition', label: 'FibreComposition', mandatory: true, visibility: 'public', locked: true },
+  { key: 'care_instructions', label: 'CareInstructions', mandatory: true, visibility: 'public', locked: true },
+  { key: 'repair_instructions', label: 'RepairInstructions', mandatory: true, visibility: 'public', locked: true },
   { key: 'reuse_instructions', label: 'ReuseInstructions', mandatory: false, visibility: 'public' },
   {
     key: 'disposal_instructions',
     label: 'DisposalInstructions',
     mandatory: true,
-    visibility: 'public'
+    visibility: 'public',
+    locked: true
   },
   { key: 'durability_score', label: 'DurabilityScore', mandatory: false, visibility: 'public' },
   { key: 'repairability_score', label: 'RepairabilityScore', mandatory: false, visibility: 'public' },
@@ -30,20 +38,78 @@ export const PRODUCT_CATALOGUE = [
   { key: 'repair_video_url', label: 'RepairVideoLink', mandatory: false, visibility: 'public' },
   { key: 'disposal_video_url', label: 'DisposalVideoLink', mandatory: false, visibility: 'public' },
   { key: 'reuse_video_url', label: 'ReuseVideoLink', mandatory: false, visibility: 'public' },
-  { key: 'country_of_origin', label: 'CountryOfOrigin', mandatory: true, visibility: 'public' },
+  { key: 'country_of_origin', label: 'CountryOfOrigin', mandatory: true, visibility: 'public', locked: true },
   {
     key: 'substances_of_concern',
     label: 'SubstancesOfConcern',
     mandatory: true,
-    visibility: 'public'
+    visibility: 'public',
+    locked: true
   },
-  { key: 'espr_compliance', label: 'ESPRComplianceStatus', mandatory: true, visibility: 'public' },
+  { key: 'espr_compliance', label: 'ESPRComplianceStatus', mandatory: true, visibility: 'public', locked: true },
   { key: 'status', label: 'ProductStatus', mandatory: true, visibility: 'internal' },
   { key: 'model', label: 'Model', mandatory: false, visibility: 'public' },
   { key: 'description', label: 'Description', mandatory: false, visibility: 'public' },
   { key: 'gtin', label: 'GTIN', mandatory: false, visibility: 'internal' },
   { key: 'storytelling', label: 'Storytelling', mandatory: false, visibility: 'public' }
 ];
+
+/**
+ * Consumer-facing variant fields (mirror toConsumerDTO.variant). None regulatory-locked.
+ * @type {CatalogueField[]}
+ */
+export const VARIANT_CATALOGUE = [
+  { key: 'color', label: 'Colour', mandatory: false, visibility: 'public' },
+  { key: 'size', label: 'Size', mandatory: false, visibility: 'public' },
+  { key: 'sku', label: 'SKU', mandatory: false, visibility: 'internal' },
+  { key: 'gtin', label: 'GTIN', mandatory: false, visibility: 'internal' },
+  // The "Product image" row controls both keys together.
+  { key: 'image_url', label: 'ProductImage', mandatory: false, visibility: 'public' },
+  { key: 'image_data', label: 'ProductImage', mandatory: false, visibility: 'public' }
+];
+
+/**
+ * Consumer-facing batch fields (mirror toConsumerDTO.batch).
+ * @type {CatalogueField[]}
+ */
+export const BATCH_CATALOGUE = [
+  { key: 'batch_number', label: 'BatchNumber', mandatory: false, visibility: 'internal' },
+  { key: 'production_date', label: 'ProductionDate', mandatory: false, visibility: 'internal' },
+  { key: 'country_of_origin', label: 'CountryOfOrigin', mandatory: true, visibility: 'public', locked: true },
+  { key: 'co2_footprint_kg', label: 'CO2Footprint', mandatory: false, visibility: 'public' },
+  { key: 'recycled_content_pct', label: 'RecycledContent', mandatory: false, visibility: 'public' }
+];
+
+/** key → catalogue entry, for O(1) lookup of visibility/locked. */
+export function catalogueByKey(catalogue) {
+  return Object.fromEntries(catalogue.map((f) => [f.key, f]));
+}
+
+/**
+ * Effective per-field visibility map: catalogue defaults, overridden by a stored
+ * `field_visibility` JSON, with locked fields forced to 'public'.
+ * @param {CatalogueField[]} catalogue
+ * @param {string|object|null} storedJson
+ * @returns {Record<string, 'public'|'internal'>}
+ */
+export function mergeVisibility(catalogue, storedJson) {
+  let stored = {};
+  if (storedJson) {
+    try {
+      const o = typeof storedJson === 'string' ? JSON.parse(storedJson) : storedJson;
+      if (o && typeof o === 'object') stored = o;
+    } catch {
+      /* ignore malformed field_visibility */
+    }
+  }
+  const out = {};
+  for (const f of catalogue) {
+    if (f.locked) out[f.key] = 'public';
+    else if (stored[f.key] === 'public' || stored[f.key] === 'internal') out[f.key] = stored[f.key];
+    else out[f.key] = f.visibility;
+  }
+  return out;
+}
 
 /** @type {CatalogueField[]} */
 export const PARTNER_CATALOGUE = [
