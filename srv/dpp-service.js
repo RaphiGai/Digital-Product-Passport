@@ -10,6 +10,8 @@ const documentHandlers    = require('./handlers/document-handlers');
 const meHandler           = require('./handlers/me-handler');
 const userHandlers        = require('./handlers/user-handlers');
 const importHandlers      = require('./handlers/import-handlers');
+const analyticsHandlers   = require('./handlers/analytics-handlers');
+const complianceHandlers  = require('./handlers/compliance-handlers');
 
 /**
  * App-internal RBAC + tenant isolation is enforced here in handlers instead
@@ -169,4 +171,6 @@ module.exports = (srv) => {
   meHandler(srv);
   userHandlers(srv);
   importHandlers(srv);
+  analyticsHandlers(srv);
+  complianceHandlers(srv);
 };

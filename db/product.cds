@@ -15,8 +15,21 @@ using {
 } from './common';
 using { dpp.Organizations, dpp.BusinessPartners, dpp.audited } from './org';
 using { dpp.DPPs } from './dpp';
+using { sap.common.CodeList } from '@sap/cds/common';
 
 namespace dpp;
+
+// ----- Product category (code list / master data) -----
+// Top-level product category, aligned with the ESPR product-group concept (textiles
+// first; furniture, electronics, … to follow). Modelled as a CODE LIST rather than a
+// CDS enum so categories are curated as master data: new categories are added as rows
+// (seed CSV today, an admin UI later) WITHOUT a model change or redeploy, and they
+// carry a human-readable, translatable name. Seeded with 'textiles' only — the product
+// forms therefore currently offer Textiles as the sole selectable category.
+// See db/data/dpp-ProductCategories.csv.
+entity ProductCategories : CodeList {
+  key code : String(20);
+}
 
 // ----- Product master data (catalogue Sheet 2 R6) -----
 // Generic product entity: finished product, material, component or packaging.
@@ -25,7 +38,7 @@ entity Products : identified, audited {
   product_type          : ProductType  not null default 'finished';
   name                  : String(120)  not null;
   brand                 : String(120);
-  category              : String(60);
+  category              : Association to ProductCategories;   // top-level category (ESPR product group); code list — currently only 'textiles'
   model                 : String(120);
   description           : String(500);
   gtin                  : GTIN;
@@ -47,6 +60,10 @@ entity Products : identified, audited {
   reuse_video_url        : URL;
   status                : ProductStatus        default 'draft';
   storytelling          : LargeString;                         // JSON array [{title, body}] — consumer story (per product)
+  // Per-field consumer visibility overrides as a JSON map {fieldName: 'public'|'internal'}.
+  // null/absent ⇒ the field catalogue default applies. Enforced in srv/handlers/public-handler.js
+  // via srv/lib/field-visibility.js; regulatory-locked fields are never hidden.
+  field_visibility      : LargeString;
 
   variants : Association to many ProductVariants on variants.product = $self;
 }
@@ -64,6 +81,7 @@ entity ProductVariants : identified, audited {
   image_url : URL;                            // colour-correct product image (external URL)
   image_data : LargeString;                   // uploaded product image as a base64 data URL (preferred over image_url)
   status   : VariantStatus default 'active';
+  field_visibility : LargeString;             // per-field consumer visibility map (see Products.field_visibility)
 
   batches : Association to many Batches    on batches.variant = $self;
   bom     : Composition of many ProductBOMs on bom.parent     = $self;
@@ -86,6 +104,7 @@ entity Batches : identified, audited {
   co2_footprint_kg     : Decimal(10, 3);
   recycled_content_pct : Decimal(5, 2);
   status               : BatchStatus default 'draft';
+  field_visibility     : LargeString;          // per-field consumer visibility map (see Products.field_visibility)
 
   items : Association to many ProductItems on items.batch = $self;
 }
@@ -134,6 +153,10 @@ entity ProductBOMs : identified, audited {
   ext_co2_footprint        : Decimal(10, 4);
   ext_recycled_content_pct : Decimal(5, 2);
   status           : BOMStatus default 'active';
+  // Consumer visibility of this component in the public materials tree.
+  // 'internal' ⇒ the component (and its sub-DPP link) is omitted from the consumer view;
+  // it still counts in the CO2/recycled aggregation (display-only flag).
+  visibility       : Visibility default 'public';
 }
 
 annotate ProductBOMs with @assert.unique : { edge : [parent, component] };

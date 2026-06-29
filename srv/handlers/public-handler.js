@@ -4,8 +4,21 @@ const cds = require('@sap/cds');
 const QRCode = require('qrcode');
 const tokens = require('../lib/token');
 const { aggregate, firstItemDpp } = require('../lib/aggregator');
+const { applyFieldVisibility, isFieldPublic } = require('../lib/field-visibility');
 
 const MAX_DEPTH = 8;
+
+// A passport is reachable by the public (QR / direct link) once it has been PUBLISHED
+// at least once and is `public`. It stays reachable while a new draft version is being
+// prepared (editing a published DPP reverts its status to `draft`, but `published_at`
+// remains) and after archiving — labels already in circulation must keep resolving. The
+// consumer is always served the last PUBLISHED frozen snapshot, so unpublished edits
+// never leak. "Was published" = `published_at` set OR status published/archived (the
+// latter covers fixtures/seed rows that set the status without a published_at stamp).
+const isPubliclyVisible = (dpp) =>
+  dpp &&
+  dpp.visibility === 'public' &&
+  (dpp.published_at != null || dpp.status === 'published' || dpp.status === 'archived');
 
 /**
  * Recursively expand the BOM tree of a finished-product variant for consumer
@@ -16,8 +29,9 @@ const MAX_DEPTH = 8;
  * keyed by BOM line ID): the consumed component batch's passport = the DPP of its
  * first item. With several sourced batches, the first published+public one is the
  * representative link. Without an override, the variant-level default applies.
- * Only published+public passports are linked. `overrides` apply only at the top
- * level (the finished good's batch) → an empty map is passed to recursion.
+ * Only publicly-visible passports (published or archived) are linked. `overrides`
+ * apply only at the top level (the finished good's batch) → an empty map is
+ * passed to recursion.
  */
 async function expandBomTree(variantId, productsById, bomsByParent, overrides = new Map(), depth = 0, visited = new Set()) {
   if (depth > MAX_DEPTH) return [];
@@ -25,13 +39,17 @@ async function expandBomTree(variantId, productsById, bomsByParent, overrides = 
   visited.add(variantId);
 
   const { DPPs, ProductVariants } = cds.entities('dpp');
-  const isPublic = (d) => d && d.status === 'published' && d.visibility === 'public' && d.qr_token;
+  const isPublic = (d) => isPubliclyVisible(d) && d.qr_token;
   const loadDpp = (id) =>
-    SELECT.one.from(DPPs).columns(['ID', 'qr_token', 'status', 'visibility']).where({ ID: id });
+    SELECT.one.from(DPPs).columns(['ID', 'qr_token', 'status', 'visibility', 'published_at']).where({ ID: id });
 
   const edges = bomsByParent.get(variantId) || [];
   const out = [];
   for (const e of edges) {
+    // Per-component visibility (company_advanced toggle): 'internal' hides the
+    // component + its sub-DPP link from the consumer materials tree. The CO2/recycled
+    // aggregation (aggregator.js) is deliberately NOT affected — display-only flag.
+    if (e.visibility === 'internal') continue;
     const componentProduct = productsById.get(e.component_ID);
     const node = {
       component_ID: e.component_ID,
@@ -95,17 +113,13 @@ function toConsumerDTO(dpp, ctx) {
   if (ctx.product?.storytelling) {
     try { storytelling = JSON.parse(ctx.product.storytelling); } catch { storytelling = []; }
   }
-  return {
-    id: dpp.ID,
-    status: dpp.status,
-    version: dpp.current_version,
-    valid_from: dpp.valid_from,
-    last_updated: dpp.last_updated,
-    qr_code: dpp.qr_token
-      ? { id: dpp.qr_token, value: dpp.qr_payload_url }
-      : null,
-    product: ctx.product
-      ? {
+
+  // Per-field consumer visibility: a company_advanced user can mark individual fields
+  // 'internal' (stored per entity in field_visibility). Such fields are dropped from
+  // the section; regulatory-locked fields are always kept (see srv/lib/field-visibility.js).
+  const product = ctx.product
+    ? applyFieldVisibility(
+        {
           name: ctx.product.name,
           brand: ctx.product.brand,
           category: ctx.product.category,
@@ -126,39 +140,73 @@ function toConsumerDTO(dpp, ctx) {
           substances_of_concern: ctx.product.substances_of_concern,
           espr_compliance: ctx.product.espr_compliance,
           storytelling,
-        }
-      : null,
-    variant: ctx.variant
-      ? {
+        },
+        'product',
+        ctx.product.field_visibility,
+      )
+    : null;
+
+  const variant = ctx.variant
+    ? applyFieldVisibility(
+        {
           color: ctx.variant.color,
           size: ctx.variant.size,
           sku: ctx.variant.sku,
           gtin: ctx.variant.gtin,
           image_url: ctx.variant.image_url,
           image_data: ctx.variant.image_data,
-        }
-      : null,
-    batch: ctx.batch
-      ? {
+        },
+        'variant',
+        ctx.variant.field_visibility,
+      )
+    : null;
+
+  const batch = ctx.batch
+    ? applyFieldVisibility(
+        {
           batch_number: ctx.batch.batch_number,
           production_date: ctx.batch.production_date,
           country_of_origin: ctx.batch.country_of_origin,
           co2_footprint_kg: ctx.batch.co2_footprint_kg,
           recycled_content_pct: ctx.batch.recycled_content_pct,
-        }
+        },
+        'batch',
+        ctx.batch.field_visibility,
+      )
+    : null;
+
+  // Identification & traceability (US6.11). Identifiers (dpp/product/serial/UPI) are
+  // always shown; the batch number follows the batch's own field-visibility setting
+  // (single source — no separate DPP-level control). The Identification consumer
+  // component drops null fields.
+  const showBatchNumber = ctx.batch
+    ? isFieldPublic('batch', 'batch_number', ctx.batch.field_visibility)
+    : false;
+  const identification = {
+    dpp_id: dpp.ID,
+    product_id: dpp.product_ID,
+    batch_number: showBatchNumber ? (ctx.batch?.batch_number ?? null) : null,
+    serial_number: ctx.item?.serial_number ?? null,
+    upi: ctx.item?.upi ?? null,
+  };
+
+  return {
+    id: dpp.ID,
+    status: dpp.status,
+    version: dpp.current_version,
+    valid_from: dpp.valid_from,
+    last_updated: dpp.last_updated,
+    qr_code: dpp.qr_token
+      ? { id: dpp.qr_token, value: dpp.qr_payload_url }
       : null,
+    product,
+    variant,
+    batch,
     materials: ctx.materialsTree,
     aggregated: ctx.aggregated,
     marketing: ctx.marketing || [],
     documents: ctx.documents || [],
-    // Identification & traceability shown on the consumer view (US6.11).
-    identification: {
-      dpp_id: dpp.ID,
-      product_id: dpp.product_ID,
-      batch_number: ctx.batch?.batch_number ?? null,
-      serial_number: ctx.item?.serial_number ?? null,
-      upi: ctx.item?.upi ?? null,
-    },
+    identification,
   };
 }
 
@@ -220,7 +268,7 @@ async function loadPublicDocuments(dpp) {
 }
 
 async function loadDPPContext(dpp) {
-  const { Products, ProductVariants, Batches, ProductItems, ProductBOMs, BatchComponents } = cds.entities('dpp');
+  const { Products, ProductVariants, Batches, ProductItems, ProductBOMs, BatchComponents, ProductCategories } = cds.entities('dpp');
 
   const product = await SELECT.one.from(Products).where({ ID: dpp.product_ID });
 
@@ -255,6 +303,15 @@ async function loadDPPContext(dpp) {
     SELECT.from(ProductBOMs),
   ]);
   const productsById = new Map(allProducts.map((p) => [p.ID, p]));
+
+  // Resolve category codes → display names ("Textiles") so the consumer view and the
+  // BOM materials tree show the human-readable category, not the raw code. The product
+  // rows carry only the `category_code` FK; one lookup covers the whole tree.
+  const catRows = await SELECT.from(ProductCategories).columns('code', 'name');
+  const catName = new Map(catRows.map((c) => [c.code, c.name]));
+  if (product) product.category = product.category_code ? (catName.get(product.category_code) ?? null) : null;
+  for (const p of allProducts) p.category = p.category_code ? (catName.get(p.category_code) ?? null) : null;
+
   const bomsByParent = new Map();
   for (const e of allBoms) {
     if (!bomsByParent.has(e.parent_ID)) bomsByParent.set(e.parent_ID, []);
@@ -280,14 +337,57 @@ async function loadDPPContext(dpp) {
   return { product, variant, batch, item, materialsTree, aggregated, marketing, documents };
 }
 
+/**
+ * Build the consumer-facing DTO from LIVE data. Called at publish time and frozen into
+ * DPPVersions.consumer_snapshot so the public view keeps showing the published version
+ * until the next publish. Exported for srv/handlers/dpp-handlers.js#publishDPP.
+ */
+async function buildConsumerSnapshot(dpp) {
+  const ctx = await loadDPPContext(dpp);
+  return toConsumerDTO(dpp, ctx);
+}
+
+/**
+ * Refresh the live/identity bits on a frozen consumer payload: pin the displayed
+ * version to the served snapshot, rebuild the QR + document download URLs from the
+ * CURRENT token (it can be regenerated), and drop frozen documents that are no longer
+ * live+public so that everything shown is actually downloadable.
+ */
+async function overlayLive(frozen, dpp, versionNumber) {
+  const livePublic = await loadPublicDocuments(dpp);
+  const liveById = new Map(livePublic.map((d) => [d.id, d]));
+  const documents = (frozen.documents || [])
+    .filter((d) => liveById.has(d.id))
+    .map((d) => ({ ...d, download_url: liveById.get(d.id).download_url }));
+  return {
+    ...frozen,
+    version: versionNumber,
+    qr_code: dpp.qr_token ? { id: dpp.qr_token, value: dpp.qr_payload_url } : null,
+    documents,
+  };
+}
+
 async function loadDPPByToken(token) {
   if (!tokens.verify(token)) return null;
-  const { DPPs } = cds.entities('dpp');
+  const { DPPs, DPPVersions } = cds.entities('dpp');
 
   const dpp = await SELECT.one.from(DPPs).where({ qr_token: token });
   if (!dpp) return null;
-  if (dpp.status !== 'published') return null;
-  if (dpp.visibility !== 'public') return null;
+  if (!isPubliclyVisible(dpp)) return null;
+
+  // Serve the FROZEN consumer payload of the latest published version — edits in
+  // progress (status reverted to draft) stay invisible until re-publish. Fall back to
+  // LIVE rendering for legacy/seed DPPs that were never published through publishDPP.
+  const versions = await SELECT.from(DPPVersions)
+    .columns('version_number', 'consumer_snapshot')
+    .where({ dpp_ID: dpp.ID })
+    .orderBy('version_number desc');
+  const latest = versions[0] || null;
+  if (latest && latest.consumer_snapshot) {
+    let frozen = null;
+    try { frozen = JSON.parse(latest.consumer_snapshot); } catch { frozen = null; }
+    if (frozen) return overlayLive(frozen, dpp, latest.version_number);
+  }
 
   const ctx = await loadDPPContext(dpp);
   return toConsumerDTO(dpp, ctx);
@@ -297,7 +397,8 @@ async function resolveDPPByToken(req, res) {
   try {
     const dto = await loadDPPByToken(req.params.token);
     if (!dto) return res.status(404).json({ error: 'not_found' });
-    res.set('Cache-Control', 'public, max-age=60');
+    // No caching: visibility/field edits must reflect immediately on the consumer view.
+    res.set('Cache-Control', 'no-store');
     res.json(dto);
   } catch (err) {
     req.app?.locals?.logger?.error?.(err) || console.error('public-handler error', err);
@@ -308,8 +409,9 @@ async function resolveDPPByToken(req, res) {
 /**
  * Token-protected download of a PUBLIC document for the consumer DPP. Consumers
  * have no login, so this streams the media outside the OData auth gate. Three hard
- * checks: valid token → published+public DPP; document is `public`; and the document
- * belongs to the same product/batch the token resolves to (no cross-DPP leak).
+ * checks: valid token → consumer-visible (published or archived) + public DPP;
+ * document is `public`; and the document belongs to the same product/batch the
+ * token resolves to (no cross-DPP leak).
  */
 async function downloadPublicDocument(req, res) {
   try {
@@ -318,9 +420,9 @@ async function downloadPublicDocument(req, res) {
     const { DPPs, Documents } = cds.entities('dpp');
 
     const dpp = await SELECT.one.from(DPPs)
-      .columns('ID', 'product_ID', 'batch_ID', 'status', 'visibility', 'qr_token')
+      .columns('ID', 'product_ID', 'batch_ID', 'status', 'visibility', 'published_at', 'qr_token')
       .where({ qr_token: token });
-    if (!dpp || dpp.status !== 'published' || dpp.visibility !== 'public') return res.status(404).end();
+    if (!isPubliclyVisible(dpp)) return res.status(404).end();
 
     const doc = await SELECT.one.from(Documents)
       .columns('ID', 'product_ID', 'batch_ID', 'visibility', 'file_name', 'mime_type')
@@ -373,4 +475,4 @@ async function getQRImage(req, res) {
   }
 }
 
-module.exports = { resolveDPPByToken, getQRImage, loadDPPByToken, downloadPublicDocument };
+module.exports = { resolveDPPByToken, getQRImage, loadDPPByToken, downloadPublicDocument, buildConsumerSnapshot };

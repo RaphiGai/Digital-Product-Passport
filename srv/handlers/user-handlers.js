@@ -6,6 +6,9 @@ const { APP_ROLES, requireActiveUser, requireRole } = require('./auth-helpers');
 const credentials = require('../lib/credentials');
 const passwords = require('../lib/passwords');
 
+// Allowed per-user UI themes (mirrors the AppearanceTheme enum in db/common.cds).
+const APPEARANCE_THEMES = ['green', 'blue', 'purple'];
+
 /**
  * User-management actions for the app-managed authentication (US1.3 / US1.6).
  *
@@ -96,6 +99,55 @@ module.exports = (srv) => {
     } catch (e) {
       req.reject(e.status || 400, e.message);
     }
+    return true;
+  });
+
+  // ----- updateProfile: caller maintains their OWN name / email / theme (self-service) -----
+  // NOT a write event, so any active user (incl. read-only company_user) can update their
+  // own profile. PARTIAL update — only the fields provided are changed, so the profile page
+  // (name + email) and the appearance page (theme) can each send just what they edit. Login
+  // is by username, so changing the email is safe; values persist and surface on the next
+  // me() / login. Writes the underlying Users row directly (bypasses the company_advanced-
+  // gated Users OData projection).
+  srv.on('updateProfile', async (req) => {
+    const callerOrgId = await requireActiveUser(req);
+    const uid = req.user._appUserId;
+    if (!uid) req.reject(403, 'Your account is not active. Please contact your administrator.');
+
+    const changes = {};
+
+    if (req.data.displayName !== undefined) {
+      const displayName = String(req.data.displayName).trim();
+      if (!displayName) req.reject(400, 'Name is required.');
+      changes.display_name = displayName;
+    }
+
+    if (req.data.email !== undefined) {
+      const email = String(req.data.email).trim();
+      if (!email) req.reject(400, 'Email is required.');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        req.reject(400, 'Please enter a valid email address.');
+      }
+      // Email must stay unique within the caller's organization (excluding self).
+      const clash = await SELECT.one.from(Users).columns('ID')
+        .where({ email, organization_ID: callerOrgId });
+      if (clash && clash.ID !== uid) {
+        req.reject(409, 'A user with this email address already exists in your organization.');
+      }
+      changes.email = email;
+    }
+
+    if (req.data.appearanceTheme !== undefined) {
+      const theme = String(req.data.appearanceTheme).trim();
+      if (!APPEARANCE_THEMES.includes(theme)) {
+        req.reject(400, 'Invalid appearance theme. Choose green, blue or purple.');
+      }
+      changes.appearance_theme = theme;
+    }
+
+    if (Object.keys(changes).length === 0) req.reject(400, 'Nothing to update.');
+
+    await UPDATE(Users).set(changes).where({ ID: uid });
     return true;
   });
 

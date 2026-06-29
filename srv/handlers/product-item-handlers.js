@@ -4,7 +4,7 @@ const cds = require('@sap/cds');
 const { randomUUID } = require('crypto');
 const tokens = require('../lib/token');
 const { requireOwningOrg } = require('./auth-helpers');
-const { rotateActiveQRCode } = require('./dpp-handlers');
+const { rotateActiveQRCode, reevaluateDrift } = require('./dpp-handlers');
 
 const BATCH_OWNER_PATH = 'variant.product.owning_organization_ID';
 
@@ -13,13 +13,22 @@ const BATCH_OWNER_PATH = 'variant.product.owning_organization_ID';
  * auto-created DPP can carry direct product/variant/batch references.
  */
 async function resolveChain(batchId) {
-  const { Batches, ProductVariants } = cds.entities('dpp');
-  const batch = await SELECT.one.from(Batches).columns(['ID', 'variant_ID']).where({ ID: batchId });
+  const { Batches, ProductVariants, Products } = cds.entities('dpp');
+  const batch = await SELECT.one.from(Batches).columns(['ID', 'variant_ID', 'batch_number']).where({ ID: batchId });
   if (!batch) return null;
   const variant = await SELECT.one.from(ProductVariants)
-    .columns(['ID', 'product_ID']).where({ ID: batch.variant_ID });
+    .columns(['ID', 'product_ID', 'sku']).where({ ID: batch.variant_ID });
   if (!variant) return null;
-  return { batch_ID: batch.ID, variant_ID: variant.ID, product_ID: variant.product_ID };
+  const product = await SELECT.one.from(Products).columns(['ID', 'gtin']).where({ ID: variant.product_ID });
+  return {
+    batch_ID: batch.ID,
+    variant_ID: variant.ID,
+    product_ID: variant.product_ID,
+    // Business codes for the structured QR token.
+    batch_number: batch.batch_number,
+    sku: variant.sku,
+    gtin: product && product.gtin
+  };
 }
 
 module.exports = (srv) => {
@@ -50,7 +59,14 @@ module.exports = (srv) => {
     const dppId = randomUUID();
     const now = new Date().toISOString();
     const uid = req.user._appUserId || null;
-    const qrToken = tokens.generate();
+    // Structured token carrying the product/variant/batch/item + creation date.
+    const qrToken = tokens.generate({
+      gtin: chain.gtin,
+      sku: chain.sku,
+      batch_number: chain.batch_number,
+      serial: item.serial_number,
+      date: now
+    });
     const base = process.env.PUBLIC_BASE_URL || '';
     const payloadUrl = `${base}/public/dpp/${qrToken}`;
     const qrImageUrl = `${base}/public/dpp/${qrToken}/qr.png`;
@@ -78,5 +94,16 @@ module.exports = (srv) => {
     // requires the DPP to be published). Keeps the "always a unique DPP + QR"
     // guarantee for every serialized item.
     await rotateActiveQRCode(dppId, payloadUrl, qrImageUrl);
+  });
+
+  // Drift: editing/removing a serialized item re-evaluates its item-level DPP
+  // (CREATE is excluded — it just created a fresh draft DPP above).
+  srv.after(['UPDATE', 'DELETE'], ProductItems, async (_d, req) => {
+    const last = req.params && req.params[req.params.length - 1];
+    const itemId = last && typeof last === 'object' ? last.ID : last;
+    if (!itemId) return;
+    const { DPPs } = cds.entities('dpp');
+    const rows = await SELECT.from(DPPs).columns('ID').where({ item_ID: itemId });
+    await reevaluateDrift(rows.map((r) => r.ID));
   });
 };

@@ -3,6 +3,7 @@ using {
   dpp.CountryISO2,
   dpp.GLN,
   dpp.UserRole,
+  dpp.AppearanceTheme,
   dpp.BusinessPartnerRole,
   dpp.EmailAddr,
   dpp.URL
@@ -46,6 +47,8 @@ entity Users : identified {
   role             : UserRole not null;
   external_user_id : String(120);
   active           : Boolean default true;
+  // Per-user UI colour theme (self-service via the updateProfile action). green | blue | purple.
+  appearance_theme : AppearanceTheme default 'green';
 
   // ---- App-managed credentials (own auth, replaces XSUAA) ----
   // The login layer authenticates `username` + password against `password_hash`.
@@ -58,6 +61,10 @@ entity Users : identified {
   password_updated_at : Timestamp;
   failed_login_count  : Integer default 0;     // brute-force counter (login layer)
   locked_until        : Timestamp;             // lockout window (login layer)
+  // Self-service password reset: single-use, time-limited token (sha256 hash stored,
+  // never the plaintext). Set on request, cleared on consume. Not exposed via OData.
+  reset_token_hash    : String(64);
+  reset_token_expires : Timestamp;
 }
 
 annotate Users with @assert.unique : { email_per_org : [email, organization] };
