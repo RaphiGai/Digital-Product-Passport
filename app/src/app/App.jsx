@@ -33,6 +33,9 @@ import { SustainabilityAnalytics } from './pages/SustainabilityAnalytics';
 import { ComplianceAnalytics } from './pages/ComplianceAnalytics';
 import { BatchCreate } from './pages/BatchCreate';
 import { Validation } from './pages/Validation';
+import ComplianceCenter from '@/app/pages/ComplianceCenter';
+
+
 
 export function App() {
   useEffect(() => {
@@ -78,6 +81,7 @@ export function App() {
             path="/products/:pid/variants/:vid/batches/new"
             element={<BatchCreate />}
           />
+           <Route path="/compliance" element={<ComplianceCenter />} />
 
           <Route path="/profile" element={<ProfileSettings />} />
           <Route path="/appearance" element={<AppearanceSettings />} />

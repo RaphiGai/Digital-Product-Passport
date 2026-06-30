@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Building2, Shirt } from 'lucide-react';
 import { useMe } from '@/auth/useMe';
-import { odataCount } from '@/api/client';
+import { AlertTriangle, Building2, Shirt } from 'lucide-react';
 import { Card, CardDescription, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
+import { buildComplianceIssues } from '@/lib/complianceIssues';
+import { odataCount, odataList } from '@/api/client';
+
 
 /** @param {Date} [date] */
 function greeting(date = new Date()) {
@@ -41,6 +43,47 @@ export function Dashboard() {
   });
   const dpps = useQuery({ queryKey: ['count', 'DPPs'], queryFn: () => odataCount('DPPs') });
 
+const warnings = useQuery({
+  queryKey: ['dashboard', 'compliance-issues-total'],
+  queryFn: async () => {
+    const safeList = async (entityName) => {
+      try {
+        return await odataList(entityName, { top: 1000 });
+      } catch {
+        return [];
+      }
+    };
+
+    const [
+      products,
+      variants,
+      batches,
+      items,
+      docs,
+      boms,
+      batchComponents
+    ] = await Promise.all([
+      safeList('Products'),
+      safeList('ProductVariants'),
+      safeList('Batches'),
+      safeList('ProductItems'),
+      safeList('Documents'),
+      safeList('ProductBOMs'),
+      safeList('BatchComponents')
+    ]);
+
+    return buildComplianceIssues({
+      products,
+      variants,
+      batches,
+      items,
+      docs,
+      boms,
+      batchComponents
+    }).length;
+  }
+});
+
   const today = new Date().toLocaleDateString('en-GB', {
     weekday: 'long',
     day: 'numeric',
@@ -59,7 +102,7 @@ export function Dashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <Kpi label="Total products" value={products.data ?? '—'} hint="Access all products" to="/products" />
       <Kpi
         label="Business partners"
@@ -72,6 +115,12 @@ export function Dashboard() {
         value={dpps.data ?? '—'}
         hint="Across all product variants"
         to="/dpps"
+      />
+      <Kpi
+        label="Warnings"
+        value={warnings.data ?? '—'}
+        hint="Active compliance issues"
+        to="/compliance/warnings"
       />
       </div>
 
