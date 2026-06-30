@@ -100,6 +100,7 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
   const [childParent, setChildParent] = useState(null);
   const [originalRows, setOriginalRows] = useState([]);
   const [draftRows, setDraftRows] = useState([]);
+  const [deletedIds, setDeletedIds] = useState(() => new Set());
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -125,6 +126,7 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
       const tree = await loadBomTree(variantId);
       setOriginalRows(tree);
       setDraftRows(tree);
+      setDeletedIds(new Set());
       setMsg(null);
     } catch (err) {
       setMsg({
@@ -203,6 +205,7 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
     setChildParent(null);
     setRow(EMPTY_ROW);
     setMsg(null);
+    setDeletedIds(new Set());
 
     navigate(`/products/${productId}/variants/${variantId}/view`);
   };
@@ -230,10 +233,17 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
   const deleteRow = (id) => {
     const idsToDelete = [id, ...collectChildIds(id, draftRows)];
 
+    setDeletedIds((prev) => {
+      const next = new Set(prev);
+      idsToDelete.forEach((x) => next.add(x));
+      return next;
+    });
+
     setDraftRows((prev) => prev.filter((r) => !idsToDelete.includes(r.ID)));
 
     if (idsToDelete.includes(editingId)) {
       setEditingId(null);
+      setChildParent(null);
       setRow(EMPTY_ROW);
     }
 
@@ -257,56 +267,66 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
     ];
   };
 
-  const submit = () => {
+  const isFormDirty = () =>
+    row.component_ID ||
+    row.component_name ||
+    row.quantity ||
+    row.component_role ||
+    row.external_dpp_url ||
+    row.dpp_source !== EMPTY_ROW.dpp_source ||
+    row.unit !== EMPTY_ROW.unit;
+
+  const applyCurrentFormToRows = (sourceRows) => {
     const isExternal = row.dpp_source === 'external';
     const externalUrl = row.external_dpp_url.trim();
 
     if (!isExternal && !row.component_ID) {
-      setMsg({ kind: 'error', text: 'Pick a component product.' });
-      return;
+      throw new Error('Pick a component product.');
     }
 
     if (isExternal && !row.component_name.trim()) {
-      setMsg({ kind: 'error', text: 'Enter the component name.' });
-      return;
+      throw new Error('Enter the component name.');
     }
 
     if (isExternal && !externalUrl) {
-      setMsg({ kind: 'error', text: 'Enter the external DPP URL.' });
-      return;
+      throw new Error('Enter the external DPP URL.');
     }
 
     if (isExternal && !/^https?:\/\//i.test(externalUrl)) {
-      setMsg({ kind: 'error', text: 'External DPP URL must start with https:// or http://.' });
-      return;
+      throw new Error('External DPP URL must start with https:// or http://.');
     }
 
-    if (row.quantity !== '' && Number(row.quantity) <= 0) {
-      setMsg({ kind: 'error', text: 'Quantity must be greater than 0.' });
-      return;
+    if (row.quantity === '' || row.quantity === null || row.quantity === undefined) {
+      throw new Error('Enter the quantity.');
+    }
+
+    if (Number(row.quantity) <= 0) {
+      throw new Error('Quantity must be greater than 0.');
     }
 
     if (row.unit === 'pcs' && row.quantity !== '' && !Number.isInteger(Number(row.quantity))) {
-      setMsg({ kind: 'error', text: 'Pieces must be a whole number.' });
-      return;
+      throw new Error('Pieces must be a whole number.');
     }
 
+    const existingRow = editingId
+      ? sourceRows.find((r) => r.ID === editingId)
+      : null;
+
     const parentIdForDuplicate = editingId
-      ? draftRows.find((r) => r.ID === editingId)?.parent_ID
+      ? existingRow?.parent_ID
       : childParent?.parentId ?? variantId;
 
-      if (!isExternal) {
-        const duplicate = draftRows.some(
-          (r) =>
-            r.parent_ID === parentIdForDuplicate &&
-            r.component_ID === row.component_ID &&
-            r.ID !== editingId
-        );
+    if (!isExternal) {
+      const duplicate = sourceRows.some(
+        (r) =>
+          r.parent_ID === parentIdForDuplicate &&
+          r.component_ID === row.component_ID &&
+          r.ID !== editingId
+      );
 
-        if (duplicate) {
-          setMsg({ kind: 'error', text: 'This component already exists on this level.' });
-          return;
-        }
+      if (duplicate) {
+        throw new Error('This component already exists on this level.');
+      }
     }
 
     const payload = {
@@ -325,47 +345,59 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
       external_dpp_url: isExternal ? externalUrl : null,
       ext_co2_footprint: null,
       ext_recycled_content_pct: null,
-      __depth: editingId
-        ? draftRows.find((r) => r.ID === editingId)?.__depth ?? 0
-        : childParent?.depth ?? 0,
-      __parentBomId: editingId
-        ? draftRows.find((r) => r.ID === editingId)?.__parentBomId ?? null
-        : childParent?.parentBomId ?? null,
+      __depth: editingId ? existingRow?.__depth ?? 0 : childParent?.depth ?? 0,
+      __parentBomId: editingId ? existingRow?.__parentBomId ?? null : childParent?.parentBomId ?? null,
       __isNew: !editingId
     };
 
-    setDraftRows((prev) => {
-      if (editingId) {
-        return prev.map((r) => (r.ID === editingId ? { ...r, ...payload } : r));
-      }
+    if (editingId) {
+      return sourceRows.map((r) => (r.ID === editingId ? { ...r, ...payload } : r));
+    }
 
-      if (childParent?.parentBomId) {
-        return insertAfterSubtree(prev, childParent.parentBomId, payload);
-      }
+    if (childParent?.parentBomId) {
+      return insertAfterSubtree(sourceRows, childParent.parentBomId, payload);
+    }
 
-      return [...prev, payload];
-    });
+    return [...sourceRows, payload];
+  };
 
-    setEditingId(null);
-    setChildParent(null);
-    setRow(EMPTY_ROW);
-    setMsg({ kind: 'success', text: 'Change added. Click Save all to write it to the database.' });
+  const submit = () => {
+    try {
+      const nextRows = applyCurrentFormToRows(draftRows);
+
+      setDraftRows(nextRows);
+      setEditingId(null);
+      setChildParent(null);
+      setRow(EMPTY_ROW);
+      setMsg({ kind: 'success', text: 'Change added. Click Save all to write it to the database.' });
+    } catch (err) {
+      setMsg({ kind: 'error', text: err.message });
+    }
   };
 
   const saveAll = async () => {
     setSaving(true);
 
     try {
-      const originalIds = originalRows.map((r) => r.ID);
-      const draftIds = draftRows.map((r) => r.ID);
+      let rowsToSave = draftRows.filter((r) => !deletedIds.has(r.ID));
 
-      const deletedRows = originalRows.filter((r) => !draftIds.includes(r.ID));
+      if (editingId || childParent || isFormDirty()) {
+        rowsToSave = applyCurrentFormToRows(rowsToSave);
+        setDraftRows(rowsToSave);
+      }
+
+      const originalIds = originalRows.map((r) => r.ID);
+      const draftIds = rowsToSave.map((r) => r.ID);
+
+      const deletedRows = originalRows.filter(
+        (r) => deletedIds.has(r.ID) || !draftIds.includes(r.ID)
+      );
 
       for (const r of deletedRows) {
         await odataDelete('ProductBOMs', r.ID);
       }
 
-      for (const draft of draftRows) {
+      for (const draft of rowsToSave) {
         let sub_dpp_ID = null;
 
         if (!draft.external_dpp_url && draft.component_ID) {
@@ -391,6 +423,8 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
       }
 
       qc.invalidateQueries({ queryKey: ['ProductBOMs'] });
+
+      setDeletedIds(new Set());
       await loadData();
 
       setEditingId(null);
@@ -400,12 +434,13 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
     } catch (err) {
       setMsg({
         kind: 'error',
-        text: err instanceof ApiError ? err.message : 'Could not save BOM.'
+        text: err instanceof ApiError ? err.message : err.message || 'Could not save BOM.'
       });
     } finally {
       setSaving(false);
     }
   };
+
 
   const formTitle = editingId
     ? 'Edit component'
@@ -601,10 +636,6 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
         <div className="mt-4 border-t border-black/5 pt-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="text-sm font-medium text-ink">{formTitle}</div>
-
-            <Button type="button" variant="outline" onClick={startAddRoot}>
-              Add root component
-            </Button>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -669,6 +700,7 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
                 value={row.quantity}
                 onChange={set('quantity')}
                 placeholder="80"
+                required
               />
             </FieldRow>
 
