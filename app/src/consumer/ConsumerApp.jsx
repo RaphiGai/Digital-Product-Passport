@@ -20,8 +20,10 @@ import {
   Download,
   Share2,
   Copy,
-  Printer
+  Printer,
+  ShoppingBag
 } from 'lucide-react';
+import { MARKETING_LINK_LABEL } from '@/lib/fieldCatalogue';
 
 /**
  * Public consumer view (no auth). Opened from a QR scan at /public/dpp/:token.
@@ -237,11 +239,28 @@ function Passport({ dpp }) {
   const co2 = deNum(agg.co2_footprint_kg ?? b.co2_footprint_kg, 2);
   const recycled = deNum(agg.recycled_content_pct ?? b.recycled_content_pct, 2);
 
+  // The product story sits directly under the hero (1st block), before the stats and
+  // composition — it is the marketing lead-in to the passport.
+  const story = p.storytelling?.length > 0 ? p.storytelling : null;
+
   return (
     <>
       <Hero product={p} variant={v} espr={p.espr_compliance} />
 
-      <Stats co2={co2} recycled={recycled} origin={origin} />
+      {story && (
+        <Section icon={Sparkles} title="The story" className="mt-4">
+          <div className="space-y-3">
+            {story.map((s, i) => (
+              <div key={i}>
+                {s.title && <p className="text-sm font-medium text-ink">{s.title}</p>}
+                {s.body && <p className="text-sm text-ink-muted">{s.body}</p>}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      <Stats co2={co2} recycled={recycled} origin={origin} hasStoryAbove={!!story} />
 
       <div className="mt-4 space-y-4">
         <Section icon={Layers} title="Materials & composition">
@@ -261,29 +280,16 @@ function Passport({ dpp }) {
 
         {hasCareInfo(p) && (
           <Section icon={Droplets} title="Care, repair, reuse & end-of-life">
-            <CareBlock icon={Droplets} label="Care & washing" text={p.care_instructions} videoUrl={p.care_video_url} />
-            <CareBlock icon={Wrench} label="Repair" text={p.repair_instructions} videoUrl={p.repair_video_url} />
-            <CareBlock icon={Repeat} label="Reuse" text={p.reuse_instructions} videoUrl={p.reuse_video_url} />
-            <CareBlock icon={Trash2} label="End-of-life" text={p.disposal_instructions} videoUrl={p.disposal_video_url} />
+            <CareBlock icon={Droplets} label="Care & washing" text={p.care_instructions} videoUrl={p.care_video_url} productsUrl={p.care_products_url} />
+            <CareBlock icon={Wrench} label="Repair" text={p.repair_instructions} videoUrl={p.repair_video_url} productsUrl={p.repair_products_url} />
+            <CareBlock icon={Repeat} label="Reuse" text={p.reuse_instructions} videoUrl={p.reuse_video_url} productsUrl={p.reuse_products_url} />
+            <CareBlock icon={Trash2} label="End-of-life" text={p.disposal_instructions} videoUrl={p.disposal_video_url} productsUrl={p.disposal_products_url} />
           </Section>
         )}
 
         {dpp.materials?.length > 0 && (
           <Section icon={Layers} title="What it's made of">
             <Materials items={dpp.materials} />
-          </Section>
-        )}
-
-        {p.storytelling?.length > 0 && (
-          <Section icon={Sparkles} title="The story">
-            <div className="space-y-3">
-              {p.storytelling.map((s, i) => (
-                <div key={i}>
-                  {s.title && <p className="text-sm font-medium text-ink">{s.title}</p>}
-                  {s.body && <p className="text-sm text-ink-muted">{s.body}</p>}
-                </div>
-              ))}
-            </div>
           </Section>
         )}
 
@@ -313,22 +319,12 @@ function Passport({ dpp }) {
         )}
 
         {dpp.marketing?.length > 0 && (
-          <Section icon={ExternalLink} title="More information">
-            <ul className="space-y-2">
+          <Section icon={ExternalLink} title="Discover more">
+            <div className="space-y-3">
               {dpp.marketing.map((m, i) => (
-                <li key={i}>
-                  <a
-                    href={m.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between gap-2 rounded-lg border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-gray-50"
-                  >
-                    {m.title}
-                    <ExternalLink className="h-4 w-4 text-ink-muted" />
-                  </a>
-                </li>
+                <MarketingCard key={i} link={m} flip={i % 2 === 1} />
               ))}
-            </ul>
+            </div>
           </Section>
         )}
 
@@ -393,7 +389,7 @@ function Hero({ product, variant, espr }) {
   );
 }
 
-function Stats({ co2, recycled, origin }) {
+function Stats({ co2, recycled, origin, hasStoryAbove }) {
   const tiles = [
     co2 != null && { icon: Leaf, value: `${co2} kg`, label: 'CO₂ footprint' },
     recycled != null && { icon: Recycle, value: `${recycled} %`, label: 'Recycled content' },
@@ -402,8 +398,10 @@ function Stats({ co2, recycled, origin }) {
 
   if (!tiles.length) return null;
 
+  // Directly under the hero the tiles overlap its rounded bottom (-mt-5). When the story
+  // sits between hero and stats, use a normal gap instead so nothing clips the story card.
   return (
-    <div className="-mt-5 grid grid-cols-3 gap-3">
+    <div className={`${hasStoryAbove ? 'mt-4' : '-mt-5'} grid grid-cols-3 gap-3`}>
       {tiles.map((t, i) => {
         const Icon = t.icon;
         return (
@@ -421,15 +419,71 @@ function Stats({ co2, recycled, origin }) {
   );
 }
 
-function Section({ icon: Icon, title, children }) {
+function Section({ icon: Icon, title, children, className = '' }) {
   return (
-    <section className="rounded-2xl border border-black/5 bg-card p-5 shadow-sm">
+    <section className={`rounded-2xl border border-black/5 bg-card p-5 shadow-sm ${className}`}>
       <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
         <Icon className="h-4 w-4 text-brand-600" />
         {title}
       </h2>
       <div className="mt-3">{children}</div>
     </section>
+  );
+}
+
+/**
+ * Marketing/advertising tile (US5.8). With an image or video thumbnail it renders as a
+ * media card — the thumbnail alternates left/right (`flip`) and the whole card is the
+ * hyperlink, so the consumer view doubles as a marketing surface. A video tile adds a
+ * play overlay. Without an image it falls back to the compact link row.
+ */
+function MarketingCard({ link, flip }) {
+  const image = link.image_data || link.image_url;
+  const typeLabel = MARKETING_LINK_LABEL[link.link_type] ?? link.link_type;
+  const isVideo = link.media_type === 'video';
+
+  if (!image) {
+    return (
+      <a
+        href={link.url}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center justify-between gap-2 rounded-lg border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-gray-50"
+      >
+        <span className="min-w-0">
+          <span className="block truncate">{link.title}</span>
+          {link.subtitle && <span className="block truncate text-xs font-normal text-ink-muted">{link.subtitle}</span>}
+        </span>
+        <ExternalLink className="h-4 w-4 shrink-0 text-ink-muted" />
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={link.url}
+      target="_blank"
+      rel="noreferrer"
+      className={`flex items-stretch gap-4 overflow-hidden rounded-xl border border-black/5 transition-colors hover:bg-gray-50 ${flip ? 'flex-row-reverse' : 'flex-row'}`}
+    >
+      {/* Thumbnails are hidden in the printed PDF so large images don't bloat the output. */}
+      <div className="relative h-24 w-24 shrink-0 sm:h-28 sm:w-28 print:hidden">
+        <img src={image} alt={link.title} className="h-full w-full object-cover" />
+        {isVideo && (
+          <span className="absolute inset-0 flex items-center justify-center bg-black/20">
+            <PlayCircle className="h-8 w-8 text-white drop-shadow" />
+          </span>
+        )}
+      </div>
+      <div className={`flex min-w-0 flex-col justify-center py-3 ${flip ? 'pl-4' : 'pr-4'}`}>
+        <span className="text-[11px] font-medium uppercase tracking-wide text-brand-600">{typeLabel}</span>
+        <span className="mt-0.5 text-sm font-semibold text-ink">{link.title}</span>
+        {link.subtitle && <span className="mt-0.5 text-sm text-ink-muted">{link.subtitle}</span>}
+        <span className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-brand-700">
+          {isVideo ? 'Watch' : 'Discover'} <ExternalLink className="h-3.5 w-3.5" />
+        </span>
+      </div>
+    </a>
   );
 }
 
@@ -443,33 +497,47 @@ function KeyVal({ label, value }) {
   );
 }
 
-/** True when the product has any care/repair/reuse/end-of-life text or video. */
+/** True when the product has any care/repair/reuse/end-of-life text, video or shop link. */
 function hasCareInfo(p) {
   return Boolean(
-    p.care_instructions || p.care_video_url ||
-    p.repair_instructions || p.repair_video_url ||
-    p.reuse_instructions || p.reuse_video_url ||
-    p.disposal_instructions || p.disposal_video_url
+    p.care_instructions || p.care_video_url || p.care_products_url ||
+    p.repair_instructions || p.repair_video_url || p.repair_products_url ||
+    p.reuse_instructions || p.reuse_video_url || p.reuse_products_url ||
+    p.disposal_instructions || p.disposal_video_url || p.disposal_products_url
   );
 }
 
-function CareBlock({ icon: Icon, label, text, videoUrl }) {
-  if (!text && !videoUrl) return null;
+function CareBlock({ icon: Icon, label, text, videoUrl, productsUrl }) {
+  if (!text && !videoUrl && !productsUrl) return null;
   return (
     <div className="flex gap-3 border-t border-black/5 py-2.5 first:border-0 first:pt-0">
       <Icon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</p>
         {text && <p className="mt-0.5 text-sm text-ink">{text}</p>}
-        {videoUrl && (
-          <a
-            href={videoUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
-          >
-            <PlayCircle className="h-4 w-4" /> Watch video
-          </a>
+        {(videoUrl || productsUrl) && (
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+            {videoUrl && (
+              <a
+                href={videoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
+              >
+                <PlayCircle className="h-4 w-4" /> Watch video
+              </a>
+            )}
+            {productsUrl && (
+              <a
+                href={productsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
+              >
+                <ShoppingBag className="h-4 w-4" /> Recommended products
+              </a>
+            )}
+          </div>
         )}
       </div>
     </div>

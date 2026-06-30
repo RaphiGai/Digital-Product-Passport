@@ -40,6 +40,8 @@ export function ProductEdit() {
     brand: 70,
     model: 70,
     gtin: 14,
+    upc: 20,
+    ein: 20,
     description: 500,
     fibre_composition: 500,
     substances_of_concern: 500,
@@ -86,6 +88,8 @@ export function ProductEdit() {
         category_code: p.category_code ?? '',
         model: p.model ?? '',
         gtin: p.gtin ?? '',
+        upc: p.upc ?? '',
+        ein: p.ein ?? '',
         description: p.description ?? '',
         fibre_composition: p.fibre_composition ?? '',
         substances_of_concern: p.substances_of_concern ?? '',
@@ -100,6 +104,10 @@ export function ProductEdit() {
         repair_video_url: p.repair_video_url ?? '',
         disposal_video_url: p.disposal_video_url ?? '',
         reuse_video_url: p.reuse_video_url ?? '',
+        care_products_url: p.care_products_url ?? '',
+        repair_products_url: p.repair_products_url ?? '',
+        reuse_products_url: p.reuse_products_url ?? '',
+        disposal_products_url: p.disposal_products_url ?? '',
         status: p.status ?? 'draft',
         espr_compliance: p.espr_compliance ?? 'draft',
         storytelling
@@ -144,11 +152,14 @@ export function ProductEdit() {
         return;
       }
     }
-    const videoFields = ['care_video_url', 'repair_video_url', 'disposal_video_url', 'reuse_video_url'];
-    for (const key of videoFields) {
+    const urlFields = [
+      'care_video_url', 'repair_video_url', 'disposal_video_url', 'reuse_video_url',
+      'care_products_url', 'repair_products_url', 'reuse_products_url', 'disposal_products_url'
+    ];
+    for (const key of urlFields) {
       const v = form[key]?.trim();
       if (v && !/^https?:\/\//i.test(v)) {
-        setMsg({ kind: 'error', text: 'Video links must start with https:// (or http://).' });
+        setMsg({ kind: 'error', text: 'Links must start with https:// (or http://).' });
         return;
       }
     }
@@ -165,6 +176,8 @@ export function ProductEdit() {
           category_code: form.category_code || null,
           model: form.model || null,
           gtin: form.gtin || null,
+          upc: form.upc || null,
+          ein: form.ein || null,
           description: form.description || null,
           fibre_composition: form.fibre_composition || null,
           substances_of_concern: form.substances_of_concern || null,
@@ -179,6 +192,10 @@ export function ProductEdit() {
           repair_video_url: form.repair_video_url?.trim() || null,
           disposal_video_url: form.disposal_video_url?.trim() || null,
           reuse_video_url: form.reuse_video_url?.trim() || null,
+          care_products_url: form.care_products_url?.trim() || null,
+          repair_products_url: form.repair_products_url?.trim() || null,
+          reuse_products_url: form.reuse_products_url?.trim() || null,
+          disposal_products_url: form.disposal_products_url?.trim() || null,
           status: form.status,
           espr_compliance: form.espr_compliance,
           storytelling: story.length ? JSON.stringify(story) : null,
@@ -285,6 +302,12 @@ export function ProductEdit() {
               }
             />
           </FieldRow>
+          <FieldRow label="UPC" visibilityControl={visCtl('upc')} htmlFor="upc" hint="Universal Product Code (optional).">
+            <Input id="upc" value={form.upc} onChange={set('upc')} maxLength={LIMITS.upc} />
+          </FieldRow>
+          <FieldRow label="EIN" visibilityControl={visCtl('ein')} htmlFor="ein" hint="EIN product number (optional).">
+            <Input id="ein" value={form.ein} onChange={set('ein')} maxLength={LIMITS.ein} />
+          </FieldRow>
           <FieldRow
             label="Description"
             visibilityControl={visCtl('description')}
@@ -333,15 +356,17 @@ export function ProductEdit() {
 
         <FormSection
           title="Care, repair, reuse & end-of-life"
-          description="Mandatory ESPR lifecycle information. All appear publicly. Each block can have an optional how-to video link, shown only when set."
+          description="Mandatory ESPR lifecycle information. All appear publicly. Each block can have an optional how-to video link and a “recommended products” shop link, shown only when set."
         >
           <FieldRow label="Care & washing instructions" visibilityControl={visCtl('care_instructions')} htmlFor="care" className="md:col-span-2" hint={remaining(form.care_instructions, LIMITS.care_instructions)}>
             <Textarea id="care" value={form.care_instructions} onChange={set('care_instructions')} maxLength={LIMITS.care_instructions} />
             <Input className="mt-2" value={form.care_video_url} onChange={set('care_video_url')} placeholder="Care/washing video link (optional, https://…)" />
+            <Input className="mt-2" value={form.care_products_url} onChange={set('care_products_url')} placeholder="Recommended products link (optional, https://…)" />
           </FieldRow>
           <FieldRow label="Repair instructions" visibilityControl={visCtl('repair_instructions')} htmlFor="repair" hint={remaining(form.repair_instructions, LIMITS.repair_instructions)}>
             <Textarea id="repair" value={form.repair_instructions} onChange={set('repair_instructions')} maxLength={LIMITS.repair_instructions} />
             <Input className="mt-2" value={form.repair_video_url} onChange={set('repair_video_url')} placeholder="Repair video link (optional, https://…)" />
+            <Input className="mt-2" value={form.repair_products_url} onChange={set('repair_products_url')} placeholder="Recommended products link (optional, https://…)" />
           </FieldRow>
           <FieldRow label="Disposal instructions" visibilityControl={visCtl('disposal_instructions')} htmlFor="disposal" hint={remaining(form.disposal_instructions, LIMITS.disposal_instructions)}>
             <Textarea
@@ -351,10 +376,12 @@ export function ProductEdit() {
               maxLength={LIMITS.disposal_instructions}
             />
             <Input className="mt-2" value={form.disposal_video_url} onChange={set('disposal_video_url')} placeholder="Disposal video link (optional, https://…)" />
+            <Input className="mt-2" value={form.disposal_products_url} onChange={set('disposal_products_url')} placeholder="Recommended products link (optional, https://…)" />
           </FieldRow>
           <FieldRow label="Reuse instructions" visibilityControl={visCtl('reuse_instructions')} htmlFor="reuse" className="md:col-span-2" hint={remaining(form.reuse_instructions, LIMITS.reuse_instructions)}>
             <Textarea id="reuse" value={form.reuse_instructions} onChange={set('reuse_instructions')} maxLength={LIMITS.reuse_instructions} placeholder="Second-life / reuse guidance (resale, donation, repurposing…)" />
             <Input className="mt-2" value={form.reuse_video_url} onChange={set('reuse_video_url')} placeholder="Reuse video link (optional, https://…)" />
+            <Input className="mt-2" value={form.reuse_products_url} onChange={set('reuse_products_url')} placeholder="Recommended products link (optional, https://…)" />
           </FieldRow>
         </FormSection>
 

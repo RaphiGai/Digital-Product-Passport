@@ -339,6 +339,8 @@ export function ProductDetail() {
       Type: ep.product_type ?? '',
       Model: ep.model ?? '',
       GTIN: ep.gtin ?? '',
+      UPC: ep.upc ?? '',
+      EIN: ep.ein ?? '',
       Status: ep.status ?? '',
       'Country of Origin': ep.country_of_origin ?? '',
       Description: ep.description ?? '',
@@ -355,6 +357,10 @@ export function ProductDetail() {
       'Repair Video URL': ep.repair_video_url ?? '',
       'Disposal Video URL': ep.disposal_video_url ?? '',
       'Reuse Video URL': ep.reuse_video_url ?? '',
+      'Care Products URL': ep.care_products_url ?? '',
+      'Repair Products URL': ep.repair_products_url ?? '',
+      'Reuse Products URL': ep.reuse_products_url ?? '',
+      'Disposal Products URL': ep.disposal_products_url ?? '',
     }];
     const variantRows = (ep.variants ?? []).map((v) => ({
       SKU: v.sku ?? '',
@@ -446,6 +452,8 @@ export function ProductDetail() {
             <Row label="Brand" value={p.brand} visibility={vis.brand} />
             <Row label="Category" value={p.category?.name} visibility={vis.category} />
             <Row label="GTIN" value={p.gtin} visibility={vis.gtin} />
+            <Row label="UPC" value={p.upc} visibility={vis.upc} />
+            <Row label="EIN" value={p.ein} visibility={vis.ein} />
             <Row label="Description" value={p.description} visibility={vis.description} />
           </div>
         </Card>
@@ -477,6 +485,17 @@ export function ProductDetail() {
               }
               visibility={vis.care_video_url}
             />
+            <Row
+              label="Care recommended products"
+              value={
+                p.care_products_url ? (
+                  <a href={p.care_products_url} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                    Open link
+                  </a>
+                ) : null
+              }
+              visibility={vis.care_products_url}
+            />
 
             <Row
               label="Repair instructions"
@@ -498,6 +517,17 @@ export function ProductDetail() {
                 ) : null
               }
               visibility={vis.repair_video_url}
+            />
+            <Row
+              label="Repair recommended products"
+              value={
+                p.repair_products_url ? (
+                  <a href={p.repair_products_url} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                    Open link
+                  </a>
+                ) : null
+              }
+              visibility={vis.repair_products_url}
             />
 
             <Row
@@ -521,6 +551,17 @@ export function ProductDetail() {
               }
               visibility={vis.reuse_video_url}
             />
+            <Row
+              label="Reuse recommended products"
+              value={
+                p.reuse_products_url ? (
+                  <a href={p.reuse_products_url} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                    Open link
+                  </a>
+                ) : null
+              }
+              visibility={vis.reuse_products_url}
+            />
             <Row label="Disposal instructions" value={p.disposal_instructions} visibility={vis.disposal_instructions} />
             <Row
               label="Disposal video"
@@ -537,6 +578,17 @@ export function ProductDetail() {
                 ) : null
               }
               visibility={vis.disposal_video_url}
+            />
+            <Row
+              label="Disposal recommended products"
+              value={
+                p.disposal_products_url ? (
+                  <a href={p.disposal_products_url} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
+                    Open link
+                  </a>
+                ) : null
+              }
+              visibility={vis.disposal_products_url}
             />
             <Row label="Durability score" value={p.durability_score != null ? `${p.durability_score} / 10` : null} visibility={vis.durability_score} />
             <Row label="Repairability score" value={p.repairability_score != null ? `${p.repairability_score} / 10` : null} visibility={vis.repairability_score} />

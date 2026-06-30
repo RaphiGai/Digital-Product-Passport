@@ -38,6 +38,10 @@ export const PRODUCT_CATALOGUE = [
   { key: 'repair_video_url', label: 'RepairVideoLink', mandatory: false, visibility: 'public' },
   { key: 'disposal_video_url', label: 'DisposalVideoLink', mandatory: false, visibility: 'public' },
   { key: 'reuse_video_url', label: 'ReuseVideoLink', mandatory: false, visibility: 'public' },
+  { key: 'care_products_url', label: 'CareProductsLink', mandatory: false, visibility: 'public' },
+  { key: 'repair_products_url', label: 'RepairProductsLink', mandatory: false, visibility: 'public' },
+  { key: 'reuse_products_url', label: 'ReuseProductsLink', mandatory: false, visibility: 'public' },
+  { key: 'disposal_products_url', label: 'DisposalProductsLink', mandatory: false, visibility: 'public' },
   { key: 'country_of_origin', label: 'CountryOfOrigin', mandatory: true, visibility: 'public', locked: true },
   {
     key: 'substances_of_concern',
@@ -51,6 +55,8 @@ export const PRODUCT_CATALOGUE = [
   { key: 'model', label: 'Model', mandatory: false, visibility: 'public' },
   { key: 'description', label: 'Description', mandatory: false, visibility: 'public' },
   { key: 'gtin', label: 'GTIN', mandatory: false, visibility: 'internal' },
+  { key: 'upc', label: 'UPC', mandatory: false, visibility: 'internal' },
+  { key: 'ein', label: 'EIN', mandatory: false, visibility: 'internal' },
   { key: 'storytelling', label: 'Storytelling', mandatory: false, visibility: 'public' }
 ];
 
@@ -182,6 +188,15 @@ export const MARKETING_LINK_TYPES = [
 
 /** Quick value→label lookup for rendering marketing-link rows. */
 export const MARKETING_LINK_LABEL = Object.fromEntries(MARKETING_LINK_TYPES.map((t) => [t.value, t.label]));
+
+/**
+ * How a marketing link renders on the consumer DPP (mirrors the CDS `MarketingMediaType`
+ * enum). 'image' = a clickable image tile; 'video' = a play overlay on the thumbnail.
+ */
+export const MARKETING_MEDIA_TYPES = [
+  { value: 'image', label: 'Image' },
+  { value: 'video', label: 'Video' }
+];
 
 export const PARTNER_ROLES = [
   { value: 'supplier', label: 'Supplier', hint: 'Provides raw materials or components' },

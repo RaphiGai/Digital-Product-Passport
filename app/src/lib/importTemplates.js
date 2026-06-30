@@ -38,6 +38,10 @@ const TEMPLATES = {
       { header: 'Repair Video URL',         hint: 'URL (optional)',                                                        example: '' },
       { header: 'Disposal Video URL',       hint: 'URL (optional)',                                                        example: '' },
       { header: 'Reuse Video URL',          hint: 'URL (optional)',                                                        example: '' },
+      { header: 'Care Products URL',        hint: 'Recommended-products shop link (optional)',                             example: '' },
+      { header: 'Repair Products URL',      hint: 'Recommended-products shop link (optional)',                             example: '' },
+      { header: 'Reuse Products URL',       hint: 'Recommended-products shop link (optional)',                             example: '' },
+      { header: 'Disposal Products URL',    hint: 'Recommended-products shop link (optional)',                             example: '' },
     ],
     fieldMap: {
       'Name *':                  'name',
@@ -63,6 +67,10 @@ const TEMPLATES = {
       'Repair Video URL':        'repair_video_url',
       'Disposal Video URL':      'disposal_video_url',
       'Reuse Video URL':         'reuse_video_url',
+      'Care Products URL':       'care_products_url',
+      'Repair Products URL':     'repair_products_url',
+      'Reuse Products URL':      'reuse_products_url',
+      'Disposal Products URL':   'disposal_products_url',
     },
     // Key columns shown in the import wizard preview table
     previewFields: ['name', 'brand', 'category', 'product_type', 'status'],

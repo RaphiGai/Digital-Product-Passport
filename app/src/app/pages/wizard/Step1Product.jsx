@@ -23,6 +23,8 @@ const EMPTY = {
   category_code: '',
   model: '',
   gtin: '',
+  upc: '',
+  ein: '',
   description: '',
   fibre_composition: '',
   substances_of_concern: '',
@@ -37,6 +39,10 @@ const EMPTY = {
   repair_video_url: '',
   disposal_video_url: '',
   reuse_video_url: '',
+  care_products_url: '',
+  repair_products_url: '',
+  reuse_products_url: '',
+  disposal_products_url: '',
   status: 'draft',
   espr_compliance: 'draft',
   storytelling: [{ title: '', body: '' }]
@@ -105,10 +111,13 @@ export function Step1Product({ ctx, setCtx, next }) {
         return;
       }
     }
-    for (const key of ['care_video_url', 'repair_video_url', 'disposal_video_url', 'reuse_video_url']) {
+    for (const key of [
+      'care_video_url', 'repair_video_url', 'disposal_video_url', 'reuse_video_url',
+      'care_products_url', 'repair_products_url', 'reuse_products_url', 'disposal_products_url'
+    ]) {
       const v = form[key]?.trim();
       if (v && !/^https?:\/\//i.test(v)) {
-        setError('Video links must start with https:// (or http://).');
+        setError('Links must start with https:// (or http://).');
         return;
       }
     }
@@ -119,6 +128,8 @@ export function Step1Product({ ctx, setCtx, next }) {
       {
         ...form,
         gtin: form.gtin || null,
+        upc: form.upc || null,
+        ein: form.ein || null,
         reuse_instructions: form.reuse_instructions || null,
         durability_score: form.durability_score === '' ? null : Number(form.durability_score),
         repairability_score: form.repairability_score === '' ? null : Number(form.repairability_score),
@@ -126,6 +137,10 @@ export function Step1Product({ ctx, setCtx, next }) {
         repair_video_url: form.repair_video_url?.trim() || null,
         disposal_video_url: form.disposal_video_url?.trim() || null,
         reuse_video_url: form.reuse_video_url?.trim() || null,
+        care_products_url: form.care_products_url?.trim() || null,
+        repair_products_url: form.repair_products_url?.trim() || null,
+        reuse_products_url: form.reuse_products_url?.trim() || null,
+        disposal_products_url: form.disposal_products_url?.trim() || null,
         storytelling: story.length ? JSON.stringify(story) : null,
         owning_organization_ID: me?.organizationId
       },
@@ -177,6 +192,12 @@ export function Step1Product({ ctx, setCtx, next }) {
             <FieldRow label="GTIN" visibility="internal" htmlFor="gtin">
               <Input id="gtin" value={form.gtin} onChange={set('gtin')} placeholder="1234567890123" />
             </FieldRow>
+            <FieldRow label="UPC" visibility="internal" htmlFor="upc" hint="Universal Product Code (optional).">
+              <Input id="upc" value={form.upc} onChange={set('upc')} placeholder="012345678905" />
+            </FieldRow>
+            <FieldRow label="EIN" visibility="internal" htmlFor="ein" hint="EIN product number (optional).">
+              <Input id="ein" value={form.ein} onChange={set('ein')} placeholder="4012345678901" />
+            </FieldRow>
             <FieldRow label="Description" visibility="public" htmlFor="desc" className="md:col-span-2" hint="Max 500 characters.">
               <Textarea id="desc" value={form.description} onChange={set('description')} maxLength={500} />
             </FieldRow>
@@ -194,22 +215,26 @@ export function Step1Product({ ctx, setCtx, next }) {
             </FieldRow>
           </FormSection>
 
-          <FormSection title="Care, repair, reuse & end-of-life" description="Mandatory ESPR lifecycle information. All appear publicly. Each block can have an optional how-to video link, shown only when set.">
+          <FormSection title="Care, repair, reuse & end-of-life" description="Mandatory ESPR lifecycle information. All appear publicly. Each block can have an optional how-to video link and a “recommended products” shop link, shown only when set.">
             <FieldRow label="Care & washing instructions" required visibility="public" htmlFor="care" className="md:col-span-2">
               <Textarea id="care" value={form.care_instructions} onChange={set('care_instructions')} />
               <Input className="mt-2" value={form.care_video_url} onChange={set('care_video_url')} placeholder="Care/washing video link (optional, https://…)" />
+              <Input className="mt-2" value={form.care_products_url} onChange={set('care_products_url')} placeholder="Recommended products link (optional, https://…)" />
             </FieldRow>
             <FieldRow label="Repair instructions" required visibility="public" htmlFor="repair">
               <Textarea id="repair" value={form.repair_instructions} onChange={set('repair_instructions')} />
               <Input className="mt-2" value={form.repair_video_url} onChange={set('repair_video_url')} placeholder="Repair video link (optional, https://…)" />
+              <Input className="mt-2" value={form.repair_products_url} onChange={set('repair_products_url')} placeholder="Recommended products link (optional, https://…)" />
             </FieldRow>
             <FieldRow label="Disposal instructions" required visibility="public" htmlFor="disposal">
               <Textarea id="disposal" value={form.disposal_instructions} onChange={set('disposal_instructions')} />
               <Input className="mt-2" value={form.disposal_video_url} onChange={set('disposal_video_url')} placeholder="Disposal video link (optional, https://…)" />
+              <Input className="mt-2" value={form.disposal_products_url} onChange={set('disposal_products_url')} placeholder="Recommended products link (optional, https://…)" />
             </FieldRow>
             <FieldRow label="Reuse instructions" visibility="public" htmlFor="reuse" className="md:col-span-2" hint="Second-life / reuse guidance (resale, donation, repurposing…).">
               <Textarea id="reuse" value={form.reuse_instructions} onChange={set('reuse_instructions')} />
               <Input className="mt-2" value={form.reuse_video_url} onChange={set('reuse_video_url')} placeholder="Reuse video link (optional, https://…)" />
+              <Input className="mt-2" value={form.reuse_products_url} onChange={set('reuse_products_url')} placeholder="Recommended products link (optional, https://…)" />
             </FieldRow>
           </FormSection>
 

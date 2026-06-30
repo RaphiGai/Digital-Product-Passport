@@ -2,18 +2,23 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Pencil, Trash2 } from 'lucide-react';
 import { odataList, odataCreate, odataUpdate, odataDelete, newId, ApiError } from '@/api/client';
-import { MARKETING_LINK_TYPES, MARKETING_LINK_LABEL } from '@/lib/fieldCatalogue';
+import { MARKETING_LINK_TYPES, MARKETING_LINK_LABEL, MARKETING_MEDIA_TYPES } from '@/lib/fieldCatalogue';
 import { useHasRole } from '@/auth/useMe';
 import { Card, CardTitle } from './Card';
 import { Button } from './Button';
 import { Banner } from './Breadcrumb';
 import { FieldRow, Input, Select, RadioCards } from './Form';
 import { Badge } from './Badge';
+import { ImageUpload } from './ImageUpload';
 
 const EMPTY_FORM = {
   link_type: 'advertisement',
   title: '',
+  subtitle: '',
   url: '',
+  media_type: 'image',
+  image_url: '',
+  image_data: '',
   is_active: true,
   display_order: '',
   valid_from: '',
@@ -91,7 +96,11 @@ export function MarketingLinksManager({ dppId }) {
       const payload = {
         link_type: form.link_type,
         title: form.title.trim(),
+        subtitle: form.subtitle.trim() || null,
         url: form.url.trim() || null,
+        media_type: form.media_type || 'image',
+        image_url: form.image_url.trim() || null,
+        image_data: form.image_data || null,
         is_active: !!form.is_active,
         display_order: form.display_order === '' ? 0 : Number(form.display_order),
         valid_from: form.valid_from || null,
@@ -125,7 +134,11 @@ export function MarketingLinksManager({ dppId }) {
     setForm({
       link_type: l.link_type ?? 'advertisement',
       title: l.title ?? '',
+      subtitle: l.subtitle ?? '',
       url: l.url ?? '',
+      media_type: l.media_type ?? 'image',
+      image_url: l.image_url ?? '',
+      image_data: l.image_data ?? '',
       is_active: l.is_active !== false,
       display_order: l.display_order ?? '',
       valid_from: l.valid_from ?? '',
@@ -142,6 +155,10 @@ export function MarketingLinksManager({ dppId }) {
     }
     if (form.url.trim() && !/^https?:\/\//i.test(form.url.trim())) {
       setMsg({ kind: 'error', text: 'URL must start with https:// (or http://).' });
+      return;
+    }
+    if (form.image_url.trim() && !/^https?:\/\//i.test(form.image_url.trim())) {
+      setMsg({ kind: 'error', text: 'Image URL must start with https:// (or http://).' });
       return;
     }
     if (form.valid_from && form.valid_to && form.valid_to < form.valid_from) {
@@ -169,6 +186,13 @@ export function MarketingLinksManager({ dppId }) {
         <div className="mt-3 divide-y divide-black/5">
           {rows.map((l) => (
             <div key={l.ID} className="flex items-center gap-3 py-3">
+              {(l.image_data || l.image_url) && (
+                <img
+                  src={l.image_data || l.image_url}
+                  alt=""
+                  className="h-10 w-10 shrink-0 rounded-md border border-black/5 object-cover"
+                />
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium text-ink">{l.title}</span>
@@ -235,6 +259,32 @@ export function MarketingLinksManager({ dppId }) {
 
             <FieldRow label="URL" htmlFor="ml-url" className="md:col-span-2">
               <Input id="ml-url" value={form.url} onChange={set('url')} maxLength={500} placeholder="https://…" />
+            </FieldRow>
+
+            <FieldRow
+              label="Subtitle"
+              htmlFor="ml-subtitle"
+              className="md:col-span-2"
+              hint="Optional call-to-action shown under the title on the consumer view."
+            >
+              <Input id="ml-subtitle" value={form.subtitle} onChange={set('subtitle')} maxLength={300} placeholder="e.g. Shop the matching care kit" />
+            </FieldRow>
+
+            <FieldRow label="Media type" htmlFor="ml-media-type" hint="“Video” adds a play overlay on the thumbnail.">
+              <Select id="ml-media-type" value={form.media_type} onChange={set('media_type')} options={MARKETING_MEDIA_TYPES} />
+            </FieldRow>
+            <span className="hidden md:block" />
+
+            <FieldRow
+              label="Image / thumbnail"
+              htmlFor="ml-image-url"
+              className="md:col-span-2"
+              hint="Upload an image, or paste an external image URL. Shown as a clickable tile on the consumer passport."
+            >
+              <div className="space-y-2">
+                <ImageUpload value={form.image_data || null} onChange={(v) => setForm((f) => ({ ...f, image_data: v || '' }))} />
+                <Input id="ml-image-url" value={form.image_url} onChange={set('image_url')} maxLength={500} placeholder="https://… (used only if no image is uploaded)" />
+              </div>
             </FieldRow>
 
             {!dppId && (
