@@ -7,6 +7,22 @@ const { requireOwningOrg, requireActiveUser } = require('./auth-helpers');
 const { aggregate } = require('../lib/aggregator');
 const { evaluateDppChecks, loadDppValidationContext } = require('../lib/dpp-validation');
 const { contentHash, diffNormalized } = require('../lib/snapshot-hash');
+const { parseBag } = require('../lib/catalogue');
+
+/**
+ * Replace a row's raw `attributes` JSON string by the parsed object so the
+ * snapshot hashes/diffs it field-by-field (stableStringify sorts keys; the diff
+ * then reports `product.attributes.<key>` paths). An EMPTY bag is removed from
+ * the row entirely — existing rows all have attributes = null, and keeping the
+ * key would change every stored baseline hash and mass-revert published DPPs.
+ */
+function inflateAttributes(row) {
+  if (!row || !Object.prototype.hasOwnProperty.call(row, 'attributes')) return row;
+  const bag = parseBag(row.attributes);
+  if (Object.keys(bag).length) row.attributes = bag;
+  else delete row.attributes;
+  return row;
+}
 
 const DPP_OWNER_PATH = 'product.owning_organization_ID';
 
@@ -176,6 +192,10 @@ async function buildSnapshot(dpp) {
     snapshotDocuments(dpp),
     snapshotAggregated(dpp.ID)
   ]);
+
+  inflateAttributes(product);
+  inflateAttributes(variant);
+  inflateAttributes(batch);
 
   return {
     captured_at: new Date().toISOString(),

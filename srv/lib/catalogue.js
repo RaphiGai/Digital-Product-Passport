@@ -119,6 +119,7 @@ async function loadFromDb(categoryCode) {
       key: d.key,
       level: d.level,
       storage: d.storage,
+      category: d.category_code || null,   // null ⇒ core field (all categories)
       label: d.label,
       description: d.description ?? null,
       datatype: d.datatype,

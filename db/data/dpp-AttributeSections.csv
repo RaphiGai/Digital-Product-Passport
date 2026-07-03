@@ -1,9 +1,9 @@
 ID;category_code;key;title;icon;sort_order;show_on_consumer
 sec-basic;;basic;Basic information;info;10;false
-sec-compliance;;compliance;Compliance & origin;shield-check;20;true
-sec-scores;;scores;Durability & repairability;gauge;40;true
-sec-variant;;variant;Variant details;layers;50;true
+sec-compliance;;compliance;Compliance & origin;shield-check;20;false
+sec-scores;;scores;Durability & repairability;gauge;40;false
+sec-variant;;variant;Variant details;layers;50;false
 sec-production;;production;Batch & production;factory;60;false
-sec-sustainability;;sustainability;Sustainability;leaf;70;true
+sec-sustainability;;sustainability;Sustainability;leaf;70;false
 sec-materials;textiles;materials;Material & composition;shirt;25;true
 sec-care;textiles;care;Care, repair, reuse & end-of-life;heart-handshake;30;true

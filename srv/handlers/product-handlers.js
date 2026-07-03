@@ -3,6 +3,8 @@
 const cds = require('@sap/cds');
 const { getUserOrg, requireOwningOrg } = require('./auth-helpers');
 const { assertHttpUrls } = require('../lib/url-validate');
+const { loadCatalogue } = require('../lib/catalogue');
+const { validateAttributes } = require('../lib/attribute-validate');
 const dppHandlers = require('./dpp-handlers'); // for reevaluateDrift (one-way require)
 
 // Product URL fields rendered as <a href> on the public consumer page — must be http(s).
@@ -101,6 +103,76 @@ module.exports = (srv) => {
     }
     // Consumer-facing URLs must be http(s) — block stored javascript:/data: XSS.
     assertHttpUrls(req, req.data, PRODUCT_URL_FIELDS);
+  });
+
+  // ----- Attribute-bag validation against the category catalogue (Epic 12) -----
+  // The `attributes` JSON bag carries category-specific field values; every write is
+  // validated against the AttributeDefinitions of the (target) category and stored
+  // normalized (sorted keys, empties dropped) so the drift hash stays stable.
+  // Changing a product's category re-validates the STORED bag against the new
+  // category — a leftover attribute of the old category blocks the switch cleanly.
+  srv.before(['CREATE', 'UPDATE'], Products, async (req) => {
+    const changingCategory = req.event === 'UPDATE' && req.data.category_code !== undefined;
+    if (req.data.attributes === undefined && !changingCategory) return;
+
+    const db = cds.entities('dpp');
+    let targetCode = req.data.category_code;
+    if (targetCode === undefined) {
+      const id = keyOf(req);
+      const row = id ? await SELECT.one.from(db.Products).columns('category_code').where({ ID: id }) : null;
+      targetCode = row ? row.category_code : null;
+    }
+    const catalogue = await loadCatalogue(targetCode);
+
+    if (req.data.attributes === undefined) {
+      // Category change without a bag in the payload: the stored bag must fit the new category.
+      const id = keyOf(req);
+      const row = id ? await SELECT.one.from(db.Products).columns('attributes').where({ ID: id }) : null;
+      if (row && row.attributes) {
+        validateAttributes(row.attributes, catalogue, 'product', (msg) =>
+          req.reject(400, `The product's saved attributes do not fit the selected category. ${msg}`));
+      }
+      return;
+    }
+    const normalized = validateAttributes(req.data.attributes, catalogue, 'product', (msg) => req.reject(400, msg));
+    if (normalized !== undefined) req.data.attributes = normalized;
+  });
+
+  srv.before(['CREATE', 'UPDATE'], ProductVariants, async (req) => {
+    if (req.data.attributes === undefined) return;
+    const db = cds.entities('dpp');
+    let productId = req.data.product_ID;
+    if (!productId) {
+      const id = keyOf(req);
+      const row = id ? await SELECT.one.from(db.ProductVariants).columns('product_ID').where({ ID: id }) : null;
+      productId = row && row.product_ID;
+    }
+    const prod = productId
+      ? await SELECT.one.from(db.Products).columns('category_code').where({ ID: productId })
+      : null;
+    const catalogue = await loadCatalogue(prod ? prod.category_code : null);
+    const normalized = validateAttributes(req.data.attributes, catalogue, 'variant', (msg) => req.reject(400, msg));
+    if (normalized !== undefined) req.data.attributes = normalized;
+  });
+
+  srv.before(['CREATE', 'UPDATE'], Batches, async (req) => {
+    if (req.data.attributes === undefined) return;
+    const db = cds.entities('dpp');
+    let variantId = req.data.variant_ID;
+    if (!variantId) {
+      const id = keyOf(req);
+      const row = id ? await SELECT.one.from(db.Batches).columns('variant_ID').where({ ID: id }) : null;
+      variantId = row && row.variant_ID;
+    }
+    const variant = variantId
+      ? await SELECT.one.from(db.ProductVariants).columns('product_ID').where({ ID: variantId })
+      : null;
+    const prod = variant && variant.product_ID
+      ? await SELECT.one.from(db.Products).columns('category_code').where({ ID: variant.product_ID })
+      : null;
+    const catalogue = await loadCatalogue(prod ? prod.category_code : null);
+    const normalized = validateAttributes(req.data.attributes, catalogue, 'batch', (msg) => req.reject(400, msg));
+    if (normalized !== undefined) req.data.attributes = normalized;
   });
 
   srv.before('CREATE', BusinessPartners, async (req) => {

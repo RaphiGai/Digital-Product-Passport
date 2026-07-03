@@ -5,7 +5,49 @@ const QRCode = require('qrcode');
 const tokens = require('../lib/token');
 const { aggregate, firstItemDpp } = require('../lib/aggregator');
 const { applyFieldVisibility, isFieldPublic } = require('../lib/field-visibility');
-const { loadCatalogue } = require('../lib/catalogue');
+const { loadCatalogue, getAttrValue } = require('../lib/catalogue');
+
+/**
+ * Self-describing, category-specific consumer sections (Epic 12): every
+ * CATEGORY-scoped catalogue field (core fields stay in the named product/
+ * variant/batch DTO blocks rendered by the fixed consumer layout) is projected
+ * into its section with label/widget/grp rendering hints, per-field visibility
+ * applied and empty values dropped. Frozen into consumer_snapshot on publish,
+ * so every published passport carries its own rendering schema.
+ */
+function buildAttributeSections(ctx) {
+  const cat = ctx.catalogue;
+  const rows = { product: ctx.product, variant: ctx.variant, batch: ctx.batch };
+  const visJson = {
+    product: ctx.product?.field_visibility,
+    variant: ctx.variant?.field_visibility,
+    batch: ctx.batch?.field_visibility,
+  };
+  const sections = [];
+  for (const s of cat.sections) {
+    if (!s.show_on_consumer) continue;
+    const fields = [];
+    for (const f of cat.fields) {
+      if (!f.category || f.section !== s.key || !rows[f.level]) continue;
+      if (!isFieldPublic(cat.byLevel[f.level], f.key, visJson[f.level])) continue;
+      const value = getAttrValue(rows[f.level], f);
+      if (value === null || value === undefined || value === '') continue;
+      fields.push({
+        key: f.key,
+        label: f.label,
+        datatype: f.datatype,
+        widget: f.widget,
+        grp: f.grp,
+        unit: f.unit,
+        value,
+      });
+    }
+    if (fields.length) {
+      sections.push({ key: s.key, title: s.title, icon: s.icon, fields });
+    }
+  }
+  return sections;
+}
 
 const MAX_DEPTH = 8;
 
@@ -209,6 +251,7 @@ function toConsumerDTO(dpp, ctx) {
     product,
     variant,
     batch,
+    attribute_sections: buildAttributeSections(ctx),
     materials: ctx.materialsTree,
     aggregated: ctx.aggregated,
     marketing: ctx.marketing || [],

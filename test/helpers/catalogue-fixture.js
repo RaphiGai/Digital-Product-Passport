@@ -65,6 +65,7 @@ function catalogueFixture(categoryCode = 'textiles') {
       key: d.key,
       level: d.level,
       storage: d.storage,
+      category: d.category_code || null,
       label: d.label,
       description: strOrNull(d.description),
       datatype: d.datatype,

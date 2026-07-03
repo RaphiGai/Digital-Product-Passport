@@ -73,6 +73,11 @@ entity Products : identified, audited {
   // null/absent ⇒ the field catalogue default applies. Enforced in srv/handlers/public-handler.js
   // via srv/lib/field-visibility.js; regulatory-locked fields are never hidden.
   field_visibility      : LargeString;
+  // Category-specific attribute values as a JSON map {key: value} (Epic 12). Which keys
+  // are allowed, their types/constraints, mandatory status and consumer visibility come
+  // from the AttributeDefinitions catalogue (storage='json' rows for the product's
+  // category); validated on write in srv/lib/attribute-validate.js.
+  attributes            : LargeString;
 
   variants : Association to many ProductVariants on variants.product = $self;
 }
@@ -91,6 +96,7 @@ entity ProductVariants : identified, audited {
   image_data : LargeString;                   // uploaded product image as a base64 data URL (preferred over image_url)
   status   : VariantStatus default 'active';
   field_visibility : LargeString;             // per-field consumer visibility map (see Products.field_visibility)
+  attributes       : LargeString;             // category-specific attribute values (see Products.attributes)
 
   batches : Association to many Batches    on batches.variant = $self;
   bom     : Composition of many ProductBOMs on bom.parent     = $self;
@@ -114,6 +120,7 @@ entity Batches : identified, audited {
   recycled_content_pct : Decimal(5, 2);
   status               : BatchStatus default 'draft';
   field_visibility     : LargeString;          // per-field consumer visibility map (see Products.field_visibility)
+  attributes           : LargeString;          // category-specific attribute values (see Products.attributes)
 
   items : Association to many ProductItems on items.batch = $self;
 }
