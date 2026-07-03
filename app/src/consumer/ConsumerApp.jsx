@@ -63,6 +63,17 @@ const deDate = (v) => {
 const fmtSize = (b) =>
   b == null ? '' : b < 1024 ? `${b} B` : b < 1048576 ? `${Math.round(b / 1024)} KB` : `${(b / 1048576).toFixed(1)} MB`;
 
+/**
+ * Only allow http(s) or site-relative hrefs on this PUBLIC page. Returns undefined for
+ * anything else (e.g. a stored `javascript:` / `data:` value), so it renders as a
+ * non-clickable link. Defense-in-depth alongside the server-side http(s) validation.
+ */
+const safeHref = (url) => {
+  if (!url) return undefined;
+  const s = String(url).trim();
+  return /^https?:\/\//i.test(s) || s.startsWith('/') ? s : undefined;
+};
+
 const DOC_TYPE_LABEL = {
   certificate: 'Certificate',
   test_report: 'Test report',
@@ -445,7 +456,7 @@ function MarketingCard({ link, flip }) {
   if (!image) {
     return (
       <a
-        href={link.url}
+        href={safeHref(link.url)}
         target="_blank"
         rel="noreferrer"
         className="flex items-center justify-between gap-2 rounded-lg border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-gray-50"
@@ -461,7 +472,7 @@ function MarketingCard({ link, flip }) {
 
   return (
     <a
-      href={link.url}
+      href={safeHref(link.url)}
       target="_blank"
       rel="noreferrer"
       className={`flex items-stretch gap-4 overflow-hidden rounded-xl border border-black/5 transition-colors hover:bg-gray-50 ${flip ? 'flex-row-reverse' : 'flex-row'}`}
@@ -519,7 +530,7 @@ function CareBlock({ icon: Icon, label, text, videoUrl, productsUrl }) {
           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
             {videoUrl && (
               <a
-                href={videoUrl}
+                href={safeHref(videoUrl)}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
@@ -529,7 +540,7 @@ function CareBlock({ icon: Icon, label, text, videoUrl, productsUrl }) {
             )}
             {productsUrl && (
               <a
-                href={productsUrl}
+                href={safeHref(productsUrl)}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
@@ -582,7 +593,7 @@ function Materials({ items, depth = 0 }) {
               <div className="shrink-0 text-right text-xs">
                 {m.external_dpp_url ? (
                   <a
-                    href={m.external_dpp_url}
+                    href={safeHref(m.external_dpp_url)}
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center gap-1 text-brand-700 hover:underline"

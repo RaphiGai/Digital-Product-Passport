@@ -239,6 +239,17 @@ export function callFunction(fn) {
 }
 
 /**
+ * Unwrap a CAP function result that returns JSON as a LargeString — e.g.
+ * validationStatus() / validationOverview(). OData wraps the string in
+ * `{ value: "..." }`; parse it into the actual object.
+ * @param {unknown} raw
+ */
+export function parseJsonFunctionResult(raw) {
+  const j = raw?.value ?? raw;
+  return typeof j === 'string' ? JSON.parse(j) : j;
+}
+
+/**
  * Invoke an unbound action, e.g. callUnboundAction('createUser', { username, … }).
  * Unbound actions POST to `${ODATA_BASE}/${action}` (no DPPService. prefix, no key).
  * @param {string} action

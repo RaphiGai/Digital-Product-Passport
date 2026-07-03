@@ -1,19 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { odataList, odataUpdate, ApiError } from '@/api/client';
+import { callFunction, callAction, odataUpdate, parseJsonFunctionResult } from '@/api/client';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Banner } from '@/ui/Breadcrumb';
 import { StatusBadge } from '@/ui/Badge';
 import { PageHeader } from './ComingSoon';
-import {
-  validateDppContext,
-  groupChecksBySection
-} from '@/lib/ValidationRules';
+import { ValidationReport } from '@/ui/ValidationReport';
 import { RequireRole } from '@/auth/RequireRole';
-
-
 
 const FILTERS = [
   { value: 'all', label: 'All' },
@@ -35,146 +30,44 @@ function text(v) {
   return String(v ?? '').toLowerCase();
 }
 
-function ValidationReport({ row }) {
-  const grouped = groupChecksBySection(row.validation.checks);
-
-  const productId = row.product?.ID || row.dpp.product_ID;
-  const variantId = row.variant?.ID || row.dpp.variant_ID;
-  const batchId = row.batch?.ID || row.dpp.batch_ID;
-  const itemId = row.item?.ID || row.dpp.item_ID;
-
-  const linkClass = 'font-mono text-xs text-brand hover:underline break-all';
-
-  const sectionDescription = {
-    Product: (
-      <div className="mb-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-ink-muted">
-        Product:{' '}
-        {productId ? (
-          <Link to={`/products/${productId}`} className={linkClass}>
-            {productId}
-          </Link>
-        ) : (
-          '—'
-        )}
-        {row.product?.name && <span> · {row.product.name}</span>}
-      </div>
-    ),
-    Variant: (
-      <div className="mb-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-ink-muted">
-        Variant:{' '}
-        {productId && variantId ? (
-          <Link
-            to={`/products/${productId}/variants/${variantId}/view`}
-            className={linkClass}
-          >
-            {variantId}
-          </Link>
-        ) : (
-          '—'
-        )}
-        <span> · {labelVariant(row.variant)}</span>
-      </div>
-    ),
-    Batch: (
-      <div className="mb-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-ink-muted">
-        Batch:{' '}
-        {productId && variantId && batchId ? (
-          <Link
-            to={`/products/${productId}/variants/${variantId}/batches/${batchId}`}
-            className={linkClass}
-          >
-            {batchId}
-          </Link>
-        ) : (
-          '—'
-        )}
-        {row.batch?.batch_number && <span> · {row.batch.batch_number}</span>}
-      </div>
-    ),
-    Item: (
-      <div className="mb-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-ink-muted">
-        Item:{' '}
-        {productId && variantId && batchId && itemId ? (
-          <Link
-            to={`/products/${productId}/variants/${variantId}/batches/${batchId}`}
-            className={linkClass}
-          >
-            {itemId}
-          </Link>
-        ) : (
-          '—'
-        )}
-        {(row.item?.serial_number || row.item?.upi) && (
-          <span> · {[row.item?.serial_number, row.item?.upi].filter(Boolean).join(' · ')}</span>
-        )}
-      </div>
-    )
+/**
+ * Map one validationOverview() entry onto the row shape the table/report render.
+ * Single choke point for the backend contract — adjust here if the payload evolves.
+ */
+function normalizeOverviewEntry(e) {
+  const v = e.validation || {};
+  return {
+    dpp: e.dpp || {},
+    product: e.product || null,
+    variant: e.variant || null,
+    batch: e.batch || null,
+    item: e.item || null,
+    validation: {
+      checks: v.checks ?? [],
+      readyToPublish: v.can_approve === true,
+      // count of checks that actually block approve/publish (the backend gate)
+      blocking: Array.isArray(v.missing_mandatory) ? v.missing_mandatory.length : 0,
+      score: v.score ?? ''
+    }
   };
+}
 
-  return (
-    <div className="border-t border-black/5 bg-gray-50/70 px-5 py-4">
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <span className="text-sm font-medium text-ink">Validation report</span>
-
-        <span className="text-xs text-ink-muted">
-          {row.validation.score} checks passed
-        </span>
-
-        {row.validation.readyToPublish ? (
-          <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700">
-            Ready to publish
-          </span>
-        ) : (
-          <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-medium text-red-700">
-            {row.validation.mandatoryFailed.length} mandatory issue(s)
-          </span>
-        )}
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {Object.entries(grouped).map(([section, checks]) => (
-          <div key={section} className="rounded-lg border border-black/5 bg-white p-4">
-            <h3 className="mb-2 text-sm font-semibold text-ink">{section}</h3>
-
-            {sectionDescription[section]}
-
-            <div className="space-y-2">
-              {checks.map((c) => (
-                <div key={c.key} className="flex items-start gap-2 text-sm">
-                  <span
-                    className={
-                      c.passed
-                        ? 'text-green-600'
-                        : c.mandatory
-                          ? 'text-red-600'
-                          : 'text-amber-600'
-                    }
-                  >
-                    {c.passed ? '✓' : c.mandatory ? '✕' : '!'}
-                  </span>
-
-                  <div>
-                    <p className="text-ink">
-                      {c.label}
-                      {c.mandatory && (
-                        <span className="ml-1 text-xs text-red-600">
-                          mandatory
-                        </span>
-                      )}
-                    </p>
-
-                    {!c.passed && c.fixHint && (
-                      <p className="text-xs text-ink-muted">{c.fixHint}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+/**
+ * Approve/publish one DPP through the backend workflow actions. Publishing is the
+ * same two-step as the DPP-detail page: make it public, then run publishDPP (which
+ * enforces the validation gate, freezes a version and issues the QR token).
+ */
+async function applyStatus(row, status) {
+  if (!row.validation.readyToPublish) {
+    throw new Error(
+      'This DPP cannot be approved or published because mandatory validation checks failed.'
+    );
+  }
+  if (status === 'approved') {
+    return callAction('DPPs', row.dpp.ID, 'approveDPP');
+  }
+  await odataUpdate('DPPs', row.dpp.ID, { visibility: 'public' });
+  return callAction('DPPs', row.dpp.ID, 'publishDPP', { change_reason: null });
 }
 
 function StatCard({ label, value, active, onClick, tone = 'default' }) {
@@ -210,59 +103,18 @@ export function Validation() {
   const [openReport, setOpenReport] = useState(null);
   const [selected, setSelected] = useState([]);
 
-
-  const dppsQ = useQuery({
-    queryKey: ['Validation', 'DPPs'],
-    queryFn: () =>
-      odataList('DPPs', {
-        expand: ['product', 'variant', 'batch', 'item'],
-        orderby: 'createdAt desc',
-        top: 1000
-      })
+  // Org-wide readiness, evaluated server-side against the unified check catalogue —
+  // the same evaluation the approveDPP/publishDPP gate runs.
+  const overviewQ = useQuery({
+    queryKey: ['Validation', 'overview'],
+    queryFn: () => callFunction('validationOverview()'),
+    select: parseJsonFunctionResult
   });
 
-  const bomsQ = useQuery({
-    queryKey: ['Validation', 'ProductBOMs'],
-    queryFn: () => odataList('ProductBOMs', { top: 2000 })
-  });
-
-  const batchComponentsQ = useQuery({
-    queryKey: ['Validation', 'BatchComponents'],
-    queryFn: () => odataList('BatchComponents', { top: 2000 })
-  });
-
-  const rows = useMemo(() => {
-    const dpps = dppsQ.data ?? [];
-    const boms = bomsQ.data ?? [];
-    const batchComponents = batchComponentsQ.data ?? [];
-
-    return dpps.map((dpp) => {
-      const product = dpp.product;
-      const variant = dpp.variant || dpp.batch?.variant;
-      const batch = dpp.batch;
-      const item = dpp.item;
-
-      const bomForVariant = boms.filter(
-        (b) => b.parent_ID === variant?.ID || b.variant_ID === variant?.ID
-      );
-
-      const batchComponentsForBatch = batchComponents.filter(
-        (bc) => bc.batch_ID === batch?.ID
-      );
-
-      const validation = validateDppContext({
-        product,
-        variant,
-        batch,
-        item,
-        dpp,
-        bom: bomForVariant,
-        batchComponents: batchComponentsForBatch
-      });
-
-      return { dpp, product, variant, batch, item, validation };
-    });
-  }, [dppsQ.data, bomsQ.data, batchComponentsQ.data]);
+  const rows = useMemo(
+    () => (overviewQ.data?.dpps ?? []).map(normalizeOverviewEntry),
+    [overviewQ.data]
+  );
 
   const counts = useMemo(() => {
     return {
@@ -290,8 +142,8 @@ export function Validation() {
         r.dpp.ID,
         r.dpp.status,
         r.dpp.visibility,
-        r.dpp.type,
-        r.dpp.version,
+        r.dpp.dpp_type,
+        r.dpp.current_version,
         r.product?.ID,
         r.product?.name,
         r.variant?.ID,
@@ -321,74 +173,65 @@ export function Validation() {
 
   const toggleAll = (on) => {
     setSelected(on ? filteredRows.map((r) => r.dpp.ID) : []);
-  }; 
+  };
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['Validation'] });
+    qc.invalidateQueries({ queryKey: ['DPPs'] });
+  };
 
   const updateDppStatus = useMutation({
-    mutationFn: async ({ row, status }) => {
-      if ((status === 'approved' || status === 'published') && !row.validation.readyToPublish) {
-        throw new Error(
-          'This DPP cannot be approved or published because mandatory validation checks failed.'
-        );
-      }
-
-      return odataUpdate('DPPs', row.dpp.ID, {
-        status,
-        ...(status === 'published' ? { visibility: 'public' } : {})
-      });
-    },
+    mutationFn: ({ row, status }) => applyStatus(row, status),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['Validation', 'DPPs'] });
+      invalidate();
       setMsg({ kind: 'success', text: 'DPP status updated.' });
     },
     onError: (err) =>
       setMsg({
         kind: 'error',
-        text:
-          err instanceof ApiError || err instanceof Error
-            ? err.message
-            : 'Could not update DPP status.'
+        text: err instanceof Error ? err.message : 'Could not update DPP status.'
       })
   });
 
   const bulkUpdateDppStatus = useMutation({
-  mutationFn: async (status) => {
-    const rowsToUpdate = selectedRows;
-
-    if (status === 'approved' || status === 'published') {
-      const blocked = rowsToUpdate.filter((r) => !r.validation.readyToPublish);
-      if (blocked.length > 0) {
-        throw new Error(`${blocked.length} selected DPP(s) cannot be approved or published because mandatory checks failed.`);
+    mutationFn: async (status) => {
+      // Sequential on purpose: publish creates version snapshots + rotates QR codes,
+      // and per-DPP errors need to be collected instead of failing the whole batch.
+      const failed = [];
+      let ok = 0;
+      for (const row of selectedRows) {
+        try {
+          await applyStatus(row, status);
+          ok += 1;
+        } catch (err) {
+          failed.push({ id: row.dpp.ID, message: err instanceof Error ? err.message : 'Failed.' });
+        }
       }
-    }
+      return { ok, failed, status };
+    },
+    onSuccess: ({ ok, failed, status }) => {
+      invalidate();
+      // keep the failed rows selected so they can be fixed and retried
+      setSelected(failed.map((f) => f.id));
+      const verb = status === 'published' ? 'published' : 'approved';
+      if (failed.length === 0) {
+        setMsg({ kind: 'success', text: `${ok} DPP(s) ${verb}.` });
+      } else {
+        setMsg({
+          kind: 'error',
+          text: `${ok} DPP(s) ${verb}, ${failed.length} failed: ${failed[0].message}`
+        });
+      }
+    },
+    onError: (err) =>
+      setMsg({
+        kind: 'error',
+        text: err instanceof Error ? err.message : 'Could not update selected DPPs.'
+      })
+  });
 
-    await Promise.all(
-      rowsToUpdate.map((row) =>
-        odataUpdate('DPPs', row.dpp.ID, {
-          status,
-          ...(status === 'published' ? { visibility: 'public' } : {})
-        })
-      )
-    );
-
-    return { count: rowsToUpdate.length, status };
-  },
-  onSuccess: ({ count, status }) => {
-    qc.invalidateQueries({ queryKey: ['Validation', 'DPPs'] });
-    setSelected([]);
-    setMsg({
-      kind: 'success',
-      text: `${count} DPP(s) ${status === 'published' ? 'published' : 'approved'}.`
-    });
-  },
-  onError: (err) =>
-    setMsg({
-      kind: 'error',
-      text: err instanceof Error ? err.message : 'Could not update selected DPPs.'
-    })
-});
-
-  const loading =
-    dppsQ.isLoading || bomsQ.isLoading || batchComponentsQ.isLoading;
+  const loading = overviewQ.isLoading;
+  const busy = updateDppStatus.isPending || bulkUpdateDppStatus.isPending;
 
   return (
     <div className="space-y-6">
@@ -398,6 +241,17 @@ export function Validation() {
       />
 
       {msg && <Banner kind={msg.kind}>{msg.text}</Banner>}
+
+      {overviewQ.isError && (
+        <Banner kind="error">
+          {overviewQ.error instanceof Error
+            ? overviewQ.error.message
+            : 'Could not load validation data.'}{' '}
+          <button type="button" className="underline" onClick={() => overviewQ.refetch()}>
+            Retry
+          </button>
+        </Banner>
+      )}
 
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard
@@ -479,14 +333,14 @@ export function Validation() {
 
           <div className="flex gap-2">
             <Button
-              disabled={selected.length === 0 || bulkUpdateDppStatus.isPending}
+              disabled={selected.length === 0 || busy}
               onClick={() => bulkUpdateDppStatus.mutate('approved')}
             >
               Approve selected
             </Button>
 
             <Button
-              disabled={selected.length === 0 || bulkUpdateDppStatus.isPending}
+              disabled={selected.length === 0 || busy}
               onClick={() => bulkUpdateDppStatus.mutate('published')}
             >
               Publish selected
@@ -496,7 +350,7 @@ export function Validation() {
       </RequireRole>
 
         {!loading && filteredRows.length > 0 && (
-          
+
       <div className="overflow-x-auto">
         <div className="min-w-[1580px]">
           <div className="grid grid-cols-[48px_180px_220px_220px_220px_220px_140px_160px_220px]">
@@ -545,7 +399,7 @@ export function Validation() {
                       {row.dpp.ID}
                     </Link>
                     <p className="text-xs text-ink-muted">
-                      v{row.dpp.version ?? '—'} · {row.dpp.type ?? '—'}
+                      v{row.dpp.current_version ?? '—'} · {row.dpp.dpp_type ?? '—'}
                     </p>
                   </div>
 
@@ -620,7 +474,7 @@ export function Validation() {
                       </span>
                     ) : (
                       <span className="text-xs font-medium text-red-700">
-                        {row.validation.mandatoryFailed.length} issue(s) · {row.validation.score}
+                        {row.validation.blocking} issue(s) · {row.validation.score}
                       </span>
                     )}
                   </div>
@@ -638,7 +492,7 @@ export function Validation() {
                       {row.dpp.status !== 'published' && (
                       <Button
                         size="sm"
-                        disabled={updateDppStatus.isPending || !row.validation.readyToPublish}
+                        disabled={busy || !row.validation.readyToPublish}
                         className={
                           !row.validation.readyToPublish
                             ? 'cursor-not-allowed bg-gray-300 text-gray-500 opacity-70'
@@ -654,7 +508,7 @@ export function Validation() {
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={updateDppStatus.isPending || !row.validation.readyToPublish}
+                        disabled={busy || !row.validation.readyToPublish}
                         className={
                           !row.validation.readyToPublish
                             ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 opacity-70'
@@ -669,7 +523,19 @@ export function Validation() {
                   </div>
                 </div>
 
-                {isOpen && <ValidationReport row={row} />}
+                {isOpen && (
+                  <div className="border-t border-black/5 bg-gray-50/70 px-5 py-4">
+                    <ValidationReport
+                      checks={row.validation.checks}
+                      entities={row}
+                      summary={{
+                        score: row.validation.score,
+                        readyToPublish: row.validation.readyToPublish,
+                        mandatoryFailed: row.validation.blocking
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}

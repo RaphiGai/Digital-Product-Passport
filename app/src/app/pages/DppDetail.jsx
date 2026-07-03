@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import { odataGet, odataList, callFunction } from '@/api/client';
+import { odataGet, odataList, callFunction, parseJsonFunctionResult } from '@/api/client';
 import { useAction, useUpdate } from '@/api/hooks';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
@@ -14,7 +14,7 @@ import { MarketingLinksManager } from '@/ui/MarketingLinksManager';
 import { printLabels } from '@/lib/printLabels';
 import { exportData } from '@/lib/exportExcel';
 import { ExportDropdown } from '@/ui/ExportDropdown';
-import { validateDppContext } from '@/lib/ValidationRules';
+import { ValidationReport } from '@/ui/ValidationReport';
 import { ChevronRight, Printer, AlertTriangle } from 'lucide-react';
 
 /** @param {{ label: string, value: React.ReactNode }} props */
@@ -318,12 +318,15 @@ function SnapshotDocumentList({ docs }) {
  * Validation & readiness panel (live view): the live consumer version, whether there
  * are unpublished changes (and which version a publish would create), the missing
  * mandatory fields that block approval, and the field-level diff vs the live version.
- * Driven by the backend validationStatus() function.
+ * Driven by the backend validationStatus() function — the same unified check
+ * catalogue the approve/publish gate evaluates; the full report is rendered below.
  * @param {{ v: { status: string, live_version: number|null, next_version: number,
- *   can_approve: boolean, missing_mandatory: {label:string}[], pending_changes: boolean,
- *   changed_fields: {label:string, old:string, new:string}[] } }} props
+ *   can_approve: boolean, missing_mandatory: {key:string,label:string,message?:string}[],
+ *   checks?: object[], score?: string, pending_changes: boolean,
+ *   changed_fields: {label:string, old:string, new:string}[] },
+ *   entities?: object }} props
  */
-function ReadinessCard({ v }) {
+function ReadinessCard({ v, entities }) {
   const blocking = v.missing_mandatory || [];
   const changed = v.changed_fields || [];
   return (
@@ -343,24 +346,37 @@ function ReadinessCard({ v }) {
           }
         />
         <Row
-          label="Mandatory fields"
+          label="Mandatory checks"
           value={
             v.can_approve
               ? <Badge tone="green">Complete</Badge>
-              : <Badge tone="red">{blocking.length} missing</Badge>
+              : <Badge tone="red">{blocking.length} blocking</Badge>
           }
         />
       </div>
 
       {blocking.length > 0 && (
         <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <p className="font-medium">Missing mandatory fields — required before approval:</p>
+          <p className="font-medium">Blocking checks — required before approval:</p>
           <ul className="mt-1.5 list-disc pl-5 text-xs">
             {blocking.map((m, i) => (
-              <li key={i}>{m.label}</li>
+              <li key={i}>{m.message || m.label}</li>
             ))}
           </ul>
         </div>
+      )}
+
+      {Array.isArray(v.checks) && v.checks.length > 0 && (
+        <ValidationReport
+          className="mt-4"
+          checks={v.checks}
+          entities={entities}
+          summary={{
+            score: v.score,
+            readyToPublish: v.can_approve,
+            mandatoryFailed: blocking.length
+          }}
+        />
       )}
 
       {changed.length > 0 && (
@@ -417,25 +433,6 @@ export function DppDetail() {
     enabled: !!dpp?.item_ID
   });
 
-  const bomsQ = useQuery({
-  queryKey: ['ProductBOMs', 'dpp', variantId],
-  queryFn: () =>
-    odataList('ProductBOMs', {
-      filter: `parent_ID eq '${variantId}' or variant_ID eq '${variantId}'`,
-      top: 2000
-    }),
-  enabled: !!variantId
-});
-
-const batchComponentsQ = useQuery({
-  queryKey: ['BatchComponents', 'dpp', dpp?.batch_ID],
-  queryFn: () =>
-    odataList('BatchComponents', {
-      filter: `batch_ID eq '${dpp.batch_ID}'`,
-      top: 2000
-    }),
-  enabled: !!dpp?.batch_ID
-});
 
   // Live BOM rollup for review before publishing.
   const aggQ = useQuery({
@@ -477,13 +474,10 @@ const batchComponentsQ = useQuery({
     queryKey: ['DPPs', id, 'validation'],
     queryFn: () => callFunction(`DPPs('${id}')/DPPService.validationStatus`),
     enabled: !!dpp,
-    select: (raw) => {
-      const j = raw?.value ?? raw;
-      return typeof j === 'string' ? JSON.parse(j) : j;
-    }
+    select: parseJsonFunctionResult
   });
 
-  const invalidate = [['DPPs', id], ['DPPs'], ['DPPVersions', id], ['DPPs', id, 'validation']];
+  const invalidate = [['DPPs', id], ['DPPs'], ['DPPVersions', id], ['DPPs', id, 'validation'], ['Validation']];
   const act = useAction('DPPs', { invalidate });
   const update = useUpdate('DPPs', { invalidate });
 
@@ -574,17 +568,9 @@ const batchComponentsQ = useQuery({
   const batch = isSnapshot ? snap.batch : batchQ.data;
   const item = isSnapshot ? snap.item : itemQ.data;
 
-  const localValidation = validateDppContext({
-    product,
-    variant,
-    batch,
-    item,
-    dpp,
-    bom: bomsQ.data ?? [],
-    batchComponents: batchComponentsQ.data ?? []
-  });
-
-  const canApproveOrPublish = localValidation.readyToPublish;
+  // Approve/publish gate — the backend's unified validation (validationStatus) is
+  // authoritative; fail-closed while it is still loading.
+  const canApproveOrPublish = readiness?.can_approve === true;
 
   // Deep-link targets for the source records — live view only. A frozen snapshot
   // shows historical data, so navigation to the live, editable pages is disabled
@@ -646,6 +632,8 @@ const batchComponentsQ = useQuery({
       fv('Category',              product.category),
       fv('Model',                 product.model),
       fv('GTIN',                  product.gtin),
+      fv('UPC',                   product.upc),
+      fv('EIN',                   product.ein),
       fv('Fibre composition',     product.fibre_composition),
       fv('Country of origin',     product.country_of_origin),
       fv('Substances of concern', product.substances_of_concern),
@@ -770,7 +758,9 @@ const batchComponentsQ = useQuery({
                     }
                     title={
                       !canApproveOrPublish
-                        ? 'Fill all mandatory fields first.'
+                        ? validationQ.isLoading
+                          ? 'Checking validation…'
+                          : 'Fill all mandatory fields first.'
                         : undefined
                     }
                     onClick={() => run('approveDPP', undefined, 'Passport approved.')}
@@ -877,8 +867,10 @@ const batchComponentsQ = useQuery({
         </Card>
       )}
 
-      {/* ── Validation & readiness (live only): missing mandatory fields + pending changes vs the live version ── */}
-      {!isSnapshot && readiness && <ReadinessCard v={readiness} />}
+      {/* ── Validation & readiness (live only): full check report + pending changes vs the live version ── */}
+      {!isSnapshot && readiness && (
+        <ReadinessCard v={readiness} entities={{ dpp, product, variant, batch, item }} />
+      )}
 
       {/* ── Aggregated footprint — live preview, or the frozen figures of a snapshot ── */}
       <Card>
@@ -987,6 +979,8 @@ const batchComponentsQ = useQuery({
               <Row label="Category" value={categoryLabel} />
               <Row label="Model" value={product?.model} />
               <Row label="GTIN" value={product?.gtin} />
+              <Row label="UPC" value={product?.upc} />
+              <Row label="EIN" value={product?.ein} />
               <Row label="Fibre composition" value={product?.fibre_composition} />
               <Row label="Country of origin" value={product?.country_of_origin} />
               <Row label="Substances of concern" value={product?.substances_of_concern} />

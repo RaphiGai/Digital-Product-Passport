@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import { odataGet, odataList, odataUpdate, ApiError } from '@/api/client';
+import { odataGet, odataList, odataUpdate, callAction, ApiError } from '@/api/client';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
@@ -298,6 +298,7 @@ function BatchRow({ batch, pid, vid, onMsg }) {
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['ProductItems', batch.ID] });
     qc.invalidateQueries({ queryKey: ['DPPs', 'batch', batch.ID] });
+    qc.invalidateQueries({ queryKey: ['Validation'] });
   };
 
   const updateItemStatus = useMutation({
@@ -318,19 +319,38 @@ function BatchRow({ batch, pid, vid, onMsg }) {
 
   const updateDppStatus = useMutation({
     mutationFn: async ({ dppIds, status }) => {
-      await Promise.all(
-        dppIds.map((id) =>
-          odataUpdate('DPPs', id, {
-            status,
-            ...(status === 'published' ? { visibility: 'public' } : {})
-          })
-        )
-      );
+      // Approved/published are reached through the workflow actions (the backend
+      // rejects direct status PATCHes there); other statuses stay plain updates.
+      // Sequential so per-DPP validation errors can be collected instead of
+      // failing the whole selection.
+      const failed = [];
+      for (const id of dppIds) {
+        try {
+          if (status === 'approved') {
+            await callAction('DPPs', id, 'approveDPP');
+          } else if (status === 'published') {
+            await odataUpdate('DPPs', id, { visibility: 'public' });
+            await callAction('DPPs', id, 'publishDPP', { change_reason: null });
+          } else {
+            await odataUpdate('DPPs', id, { status });
+          }
+        } catch (err) {
+          failed.push({ id, message: err instanceof Error ? err.message : 'Failed.' });
+        }
+      }
+      return { ok: dppIds.length - failed.length, failed };
     },
-    onSuccess: () => {
+    onSuccess: ({ ok, failed }) => {
       invalidateAll();
       setSelected([]);
-      onMsg({ kind: 'success', text: 'DPP status updated.' });
+      if (failed.length === 0) {
+        onMsg({ kind: 'success', text: 'DPP status updated.' });
+      } else {
+        onMsg({
+          kind: 'error',
+          text: `${ok} DPP(s) updated, ${failed.length} failed: ${failed[0].message}`
+        });
+      }
     },
     onError: (err) =>
       onMsg({
