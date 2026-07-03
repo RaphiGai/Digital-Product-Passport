@@ -39,3 +39,8 @@ attr-batch-production-date;;batch;production_date;column;Production date;date;da
 attr-batch-country-of-origin;;batch;country_of_origin;column;Batch country of origin;string;country;sec-production;;30;;;;;;;true;Add production country.;Production;public;true;true
 attr-batch-co2;;batch;co2_footprint_kg;column;CO₂ footprint;number;input;sec-sustainability;;10;kg;0;;;;;false;Add CO₂ footprint.;Sustainability;public;false;true
 attr-batch-recycled;;batch;recycled_content_pct;column;Recycled content;number;input;sec-sustainability;;20;%;0;100;;;;false;Add recycled content percentage.;Sustainability;public;false;true
+attr-elec-energy-class;electronics;product;energy_class;json;Energy efficiency class;enum;select;sec-elec-energy;;10;;;;;;"[{""value"":""A"",""label"":""A""},{""value"":""B"",""label"":""B""},{""value"":""C"",""label"":""C""},{""value"":""D"",""label"":""D""},{""value"":""E"",""label"":""E""},{""value"":""F"",""label"":""F""},{""value"":""G"",""label"":""G""}]";true;Select the energy efficiency class.;Product;public;true;true
+attr-elec-battery-removable;electronics;product;battery_removable;json;Battery removable by user;boolean;select;sec-elec-energy;;20;;;;;;;false;;Product;public;false;true
+attr-elec-spare-parts;electronics;product;spare_parts_available_until;json;Spare parts available until;date;date;sec-elec-service;;10;;;;;;;true;Add the spare-parts availability end date.;Product;public;true;true
+attr-elec-sw-updates;electronics;product;software_update_until;json;Software updates until;date;date;sec-elec-service;;20;;;;;;;false;;Product;public;false;true
+attr-elec-repair-manual;electronics;product;repair_manual_url;json;Repair manual link;url;shop_link;sec-elec-service;;30;;;;500;;;false;;Product;public;false;true

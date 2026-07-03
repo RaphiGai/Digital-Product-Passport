@@ -7,3 +7,5 @@ sec-production;;production;Batch & production;factory;60;false
 sec-sustainability;;sustainability;Sustainability;leaf;70;false
 sec-materials;textiles;materials;Material & composition;shirt;25;true
 sec-care;textiles;care;Care, repair, reuse & end-of-life;heart-handshake;30;true
+sec-elec-energy;electronics;energy;Energy & efficiency;zap;25;true
+sec-elec-service;electronics;service;Service, spare parts & updates;battery;30;true
