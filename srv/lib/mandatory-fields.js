@@ -1,9 +1,19 @@
 'use strict';
 
+const { getAttrValue } = require('./catalogue');
+
 /**
- * Mandatory-field catalogue — the field-presence core of the unified DPP
- * validation (srv/lib/dpp-validation.js builds the full check catalogue on top
- * of these lists; add/remove FIELDS here, add/remove CHECKS there).
+ * Mandatory-field gate — the field-presence core of the unified DPP validation
+ * (srv/lib/dpp-validation.js builds the full check catalogue on top of this;
+ * add/remove FIELDS in the AttributeDefinitions master data, add/remove CHECKS
+ * there).
+ *
+ * Since Epic 12 the mandatory field set comes from the DB attribute catalogue
+ * (srv/lib/catalogue.js): callers pass the loaded catalogue and the gate
+ * evaluates its `mandatory` definitions for the product's category (core ∪
+ * category fields). The legacy MANDATORY constant below is kept ONLY as the
+ * parity reference pinned by test/unit/catalogue-parity.test.js against the
+ * seed data — runtime code must not read it.
  *
  * Consumers:
  *  - srv/lib/dpp-validation.js → approve/publish gate + validationStatus/validationOverview
@@ -20,6 +30,7 @@
  * non_compliant) blocks approval; see isSatisfied below.
  */
 
+// LEGACY PARITY REFERENCE — do not consume at runtime (see header).
 const MANDATORY = {
   product: [
     { key: 'product_type', label: 'Product type' },
@@ -41,6 +52,22 @@ const MANDATORY = {
   ]
 };
 
+/**
+ * The key a catalogue field has on the RAW entity row / in legacy reports.
+ * Association-backed catalogue fields are modelled once under their display key
+ * (`category`) while the raw row carries the FK (`category_code`) — reports and
+ * check keys stay on the raw key so existing consumers see unchanged shapes.
+ */
+function rawKey(field) {
+  return field.key === 'category' ? 'category_code' : field.key;
+}
+
+/** Mandatory catalogue fields of one level ('product' | 'variant' | 'batch'). */
+function mandatoryFieldsFor(catalogue, level) {
+  const fields = catalogue.byLevel ? catalogue.byLevel[level] : catalogue.fields.filter((f) => f.level === level);
+  return (fields || []).filter((f) => f.mandatory);
+}
+
 /** A value is "present" when it is neither null/undefined nor an empty/whitespace string. */
 function isPresent(value) {
   return value != null && String(value).trim() !== '';
@@ -57,25 +84,32 @@ function isSatisfied(key, value) {
 
 /**
  * Compute the missing mandatory fields for a DPP given its resolved product (and
- * optional batch). Returns `[{ scope, key, label }]` — empty means ready to approve.
+ * optional batch) against the product's category catalogue (srv/lib/catalogue.js).
+ * Returns `[{ scope, key, label }]` — empty means ready to approve.
  * @param {object|null} product
  * @param {object|null} batch
+ * @param {{byLevel: object, fields: object[]}} catalogue
  */
-function missingMandatory(product, batch) {
+function missingMandatory(product, batch, catalogue) {
+  if (!catalogue) throw new Error('missingMandatory requires the loaded attribute catalogue.');
   const missing = [];
   if (!product) {
     missing.push({ scope: 'product', key: '_product', label: 'Product' });
   } else {
-    for (const f of MANDATORY.product) {
-      if (!isSatisfied(f.key, product[f.key])) missing.push({ scope: 'product', key: f.key, label: f.label });
+    for (const f of mandatoryFieldsFor(catalogue, 'product')) {
+      if (!isSatisfied(f.key, getAttrValue(product, f))) {
+        missing.push({ scope: 'product', key: rawKey(f), label: f.label });
+      }
     }
   }
   if (batch) {
-    for (const f of MANDATORY.batch) {
-      if (!isSatisfied(f.key, batch[f.key])) missing.push({ scope: 'batch', key: f.key, label: f.label });
+    for (const f of mandatoryFieldsFor(catalogue, 'batch')) {
+      if (!isSatisfied(f.key, getAttrValue(batch, f))) {
+        missing.push({ scope: 'batch', key: rawKey(f), label: f.label });
+      }
     }
   }
   return missing;
 }
 
-module.exports = { MANDATORY, isPresent, isSatisfied, missingMandatory };
+module.exports = { MANDATORY, isPresent, isSatisfied, missingMandatory, mandatoryFieldsFor, rawKey };

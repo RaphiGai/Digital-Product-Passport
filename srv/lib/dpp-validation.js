@@ -1,7 +1,8 @@
 'use strict';
 
 const cds = require('@sap/cds');
-const { MANDATORY, isPresent } = require('./mandatory-fields');
+const { isPresent, isSatisfied, mandatoryFieldsFor, rawKey } = require('./mandatory-fields');
+const { loadCatalogue, getAttrValue } = require('./catalogue');
 
 /**
  * Unified DPP validation catalogue — the single source of truth for every
@@ -14,6 +15,15 @@ const { MANDATORY, isPresent } = require('./mandatory-fields');
  *  - `message` is the clean, user-facing sentence used in the gate rejection
  *    (`DPP cannot be approved: <message> | …`) — no internal IDs or column names.
  *
+ * Since Epic 12 the FIELD-presence checks (which product/batch fields must be
+ * filled, their report section and fix hint) come from the DB attribute
+ * catalogue (srv/lib/catalogue.js — AttributeDefinitions master data) for the
+ * product's category: `ctx.catalogue` is REQUIRED. Structural checks (workflow
+ * status, variant/batch/item linkage, BOM completeness) are category-agnostic
+ * and stay here. Optional informational field checks (reuse instructions,
+ * variant size/color, CO₂/recycled) only appear when the category's catalogue
+ * defines the field — values are read storage-aware (column or attributes bag).
+ *
  * Deliberately NOT gate-blocking:
  *  - `qr_available` / `visibility_ready` — publishDPP generates the QR token
  *    itself and visibility is set as part of the publish flow; gating on them
@@ -22,32 +32,7 @@ const { MANDATORY, isPresent } = require('./mandatory-fields');
  *    passports have no item by design.
  *  - BOM checks gate only for finished products; materials, components and
  *    packaging legitimately have no bill of materials.
- *
- * The field-presence core (which product/batch fields must be filled) comes
- * from srv/lib/mandatory-fields.js — keep field additions there, not here.
  */
-
-/** Sections + fix hints for the field-presence checks defined in MANDATORY. */
-const FIELD_META = {
-  product: {
-    product_type:          { section: 'Product',     fixHint: 'Add product type.' },
-    name:                  { section: 'Product',     fixHint: 'Add product name.' },
-    brand:                 { section: 'Product',     fixHint: 'Add brand.' },
-    category_code:         { section: 'Product',     fixHint: 'Select a product category.' },
-    fibre_composition:     { section: 'Product',     fixHint: 'Add fibre composition.' },
-    care_instructions:     { section: 'Circularity', fixHint: 'Add washing/care instructions.' },
-    repair_instructions:   { section: 'Circularity', fixHint: 'Add repair information.' },
-    disposal_instructions: { section: 'Circularity', fixHint: 'Add disposal or recycling information.' },
-    country_of_origin:     { section: 'Product',     fixHint: 'Add country of origin.' },
-    substances_of_concern: { section: 'Product',     fixHint: 'Add substances of concern, REACH status or SCIP reference.' },
-    espr_compliance:       { section: 'Product',     fixHint: 'Set ESPR compliance status to Compliant in Product information.' }
-  },
-  batch: {
-    batch_number:      { section: 'Production', fixHint: 'Add supplier/production batch number.' },
-    production_date:   { section: 'Production', fixHint: 'Add production date.' },
-    country_of_origin: { section: 'Production', fixHint: 'Add production country.' }
-  }
-};
 
 const hasNumber = (v) => {
   if (!isPresent(v)) return false;
@@ -69,18 +54,26 @@ function check(key, label, passed, { mandatory = true, gate, section = 'General'
   };
 }
 
+/** Catalogue field lookup by level+key (returns undefined when the category does not define it). */
+function defOf(catalogue, level, key) {
+  const fields = catalogue.byLevel ? catalogue.byLevel[level] : catalogue.fields.filter((f) => f.level === level);
+  return (fields || []).find((f) => f.key === key);
+}
+
 /**
  * Evaluate the full check catalogue for one DPP. Pure — takes pre-loaded records
- * (see loadDppValidationContext for the single-DPP loader; validationOverview
- * bulk-loads and calls this per DPP).
+ * plus the loaded attribute catalogue (see loadDppValidationContext for the
+ * single-DPP loader; validationOverview bulk-loads and calls this per DPP).
  *
  * @param {{ dpp: object, product?: object|null, variant?: object|null,
- *   batch?: object|null, item?: object|null, bom?: object[], batchComponents?: object[] }} ctx
+ *   batch?: object|null, item?: object|null, bom?: object[], batchComponents?: object[],
+ *   catalogue: { byLevel: object, fields: object[] } }} ctx
  * @returns {{ checks: object[], can_approve: boolean, gate_errors: string[],
  *   missing_mandatory: {key:string,label:string,message:string}[],
  *   mandatory_failed: number, passed: number, total: number, score: string, percent: number }}
  */
-function evaluateDppChecks({ dpp, product, variant, batch, item, bom = [], batchComponents = [] }) {
+function evaluateDppChecks({ dpp, product, variant, batch, item, bom = [], batchComponents = [], catalogue }) {
+  if (!catalogue) throw new Error('evaluateDppChecks requires ctx.catalogue (see srv/lib/catalogue.js).');
   const itemGate = dpp?.dpp_type === 'item';
   const bomGate = product?.product_type === 'finished';
   const checks = [];
@@ -101,32 +94,34 @@ function evaluateDppChecks({ dpp, product, variant, batch, item, bom = [], batch
       fixHint: 'A QR/public access token is generated automatically on publish.'
     }));
 
-  // ── Product + Circularity: field presence from the shared MANDATORY catalogue ──
+  // ── Product + Circularity: field presence from the attribute catalogue ──
   checks.push(check('product_exists', 'Product assigned', !!product, {
     section: 'Product', fixHint: 'Assign a product to the DPP.',
     message: 'The DPP must reference a product.'
   }));
-  for (const f of MANDATORY.product) {
-    const meta = FIELD_META.product[f.key] || {};
+  for (const f of mandatoryFieldsFor(catalogue, 'product')) {
     if (f.key === 'espr_compliance') {
       checks.push(check('espr_compliance', 'ESPR compliance status is Compliant',
         product?.espr_compliance === 'compliant', {
-          section: meta.section || 'Product', fixHint: meta.fixHint,
+          section: f.validation_section || 'Product', fixHint: f.fix_hint || '',
           message: 'ESPR compliance status must be Compliant.'
         }));
     } else {
-      const key = f.key === 'product_type' ? 'product_type' : `product_${f.key}`;
-      checks.push(check(key, `${f.label} filled`, !!product && isPresent(product[f.key]), {
-        section: meta.section || 'Product',
-        fixHint: meta.fixHint || `Add ${f.label.toLowerCase()}.`,
+      const key = f.key === 'product_type' ? 'product_type' : `product_${rawKey(f)}`;
+      checks.push(check(key, `${f.label} filled`, !!product && isSatisfied(f.key, getAttrValue(product, f)), {
+        section: f.validation_section || 'Product',
+        fixHint: f.fix_hint || `Add ${f.label.toLowerCase()}.`,
         message: `${f.label} is required.`
       }));
     }
   }
-  checks.push(check('reuse_instructions', 'Reuse instructions filled', isPresent(product?.reuse_instructions), {
-    mandatory: false, gate: false, section: 'Circularity',
-    fixHint: 'Add reuse or second-life information.'
-  }));
+  const reuseDef = defOf(catalogue, 'product', 'reuse_instructions');
+  if (reuseDef && !reuseDef.mandatory) {
+    checks.push(check('reuse_instructions', 'Reuse instructions filled', isPresent(getAttrValue(product, reuseDef)), {
+      mandatory: false, gate: false, section: reuseDef.validation_section || 'Circularity',
+      fixHint: reuseDef.fix_hint || ''
+    }));
+  }
 
   // ── Variant (resolved directly or via the batch) ──
   checks.push(check('variant_exists', 'Variant assigned', !!variant, {
@@ -142,12 +137,18 @@ function evaluateDppChecks({ dpp, product, variant, batch, item, bom = [], batch
       section: 'Variant', fixHint: 'Add SKU, GTIN or variant ID.',
       message: 'Variant identification (SKU, GTIN or ID) is required.'
     }));
-  checks.push(check('variant_size', 'Size filled', isPresent(variant?.size), {
-    mandatory: false, gate: false, section: 'Variant', fixHint: 'Add size if relevant.'
-  }));
-  checks.push(check('variant_color', 'Color filled', isPresent(variant?.color), {
-    mandatory: false, gate: false, section: 'Variant', fixHint: 'Add color if relevant.'
-  }));
+  const sizeDef = defOf(catalogue, 'variant', 'size');
+  if (sizeDef && !sizeDef.mandatory) {
+    checks.push(check('variant_size', 'Size filled', isPresent(getAttrValue(variant, sizeDef)), {
+      mandatory: false, gate: false, section: 'Variant', fixHint: sizeDef.fix_hint || 'Add size if relevant.'
+    }));
+  }
+  const colorDef = defOf(catalogue, 'variant', 'color');
+  if (colorDef && !colorDef.mandatory) {
+    checks.push(check('variant_color', 'Color filled', isPresent(getAttrValue(variant, colorDef)), {
+      mandatory: false, gate: false, section: 'Variant', fixHint: colorDef.fix_hint || 'Add color if relevant.'
+    }));
+  }
 
   // ── Production: batch + (for item passports) item ──
   checks.push(check('batch_exists', 'Batch assigned', !!batch, {
@@ -158,11 +159,10 @@ function evaluateDppChecks({ dpp, product, variant, batch, item, bom = [], batch
     section: 'Production', fixHint: 'Set batch status to Approved.',
     message: 'Batch must be approved.'
   }));
-  for (const f of MANDATORY.batch) {
-    const meta = FIELD_META.batch[f.key] || {};
-    const key = f.key === 'batch_number' ? 'batch_number' : `batch_${f.key}`;
-    checks.push(check(key, `${f.label} filled`, !!batch && isPresent(batch[f.key]), {
-      section: meta.section || 'Production', fixHint: meta.fixHint || '',
+  for (const f of mandatoryFieldsFor(catalogue, 'batch')) {
+    const key = f.key === 'batch_number' ? 'batch_number' : `batch_${rawKey(f)}`;
+    checks.push(check(key, `${f.label} filled`, !!batch && isSatisfied(f.key, getAttrValue(batch, f)), {
+      section: f.validation_section || 'Production', fixHint: f.fix_hint || '',
       message: `${f.label} is required.`
     }));
   }
@@ -211,12 +211,20 @@ function evaluateDppChecks({ dpp, product, variant, batch, item, bom = [], batch
   }));
 
   // ── Sustainability ──
-  checks.push(check('co2_footprint', 'CO₂ footprint filled', hasNumber(batch?.co2_footprint_kg), {
-    mandatory: false, gate: false, section: 'Sustainability', fixHint: 'Add CO₂ footprint.'
-  }));
-  checks.push(check('recycled_content', 'Recycled content filled', hasNumber(batch?.recycled_content_pct), {
-    mandatory: false, gate: false, section: 'Sustainability', fixHint: 'Add recycled content percentage.'
-  }));
+  const co2Def = defOf(catalogue, 'batch', 'co2_footprint_kg');
+  if (co2Def && !co2Def.mandatory) {
+    checks.push(check('co2_footprint', 'CO₂ footprint filled', hasNumber(getAttrValue(batch, co2Def)), {
+      mandatory: false, gate: false, section: co2Def.validation_section || 'Sustainability',
+      fixHint: co2Def.fix_hint || 'Add CO₂ footprint.'
+    }));
+  }
+  const recycledDef = defOf(catalogue, 'batch', 'recycled_content_pct');
+  if (recycledDef && !recycledDef.mandatory) {
+    checks.push(check('recycled_content', 'Recycled content filled', hasNumber(getAttrValue(batch, recycledDef)), {
+      mandatory: false, gate: false, section: recycledDef.validation_section || 'Sustainability',
+      fixHint: recycledDef.fix_hint || 'Add recycled content percentage.'
+    }));
+  }
 
   const gateFailed = checks.filter((c) => c.gate && !c.passed);
   const mandatoryFailed = checks.filter((c) => c.mandatory && !c.passed);
@@ -236,10 +244,11 @@ function evaluateDppChecks({ dpp, product, variant, batch, item, bom = [], batch
 }
 
 /**
- * Load the records evaluateDppChecks needs for ONE DPP. Resolution mirrors
- * buildSnapshot (dpp-handlers.js): variant via dpp.variant_ID, else via the
- * batch; BOM edges by parent variant. Reads the DB-level entities — callers
- * are expected to have done the tenant check (requireOwningOrg) already.
+ * Load the records evaluateDppChecks needs for ONE DPP, including the attribute
+ * catalogue for the product's category. Resolution mirrors buildSnapshot
+ * (dpp-handlers.js): variant via dpp.variant_ID, else via the batch; BOM edges
+ * by parent variant. Reads the DB-level entities — callers are expected to have
+ * done the tenant check (requireOwningOrg) already.
  */
 async function loadDppValidationContext(dpp) {
   const { Products, ProductVariants, Batches, ProductItems, ProductBOMs, BatchComponents } = cds.entities('dpp');
@@ -255,12 +264,13 @@ async function loadDppValidationContext(dpp) {
     ? await SELECT.one.from(ProductVariants).where({ ID: variantId })
     : null;
 
-  const [bom, batchComponents] = await Promise.all([
+  const [bom, batchComponents, catalogue] = await Promise.all([
     variant ? SELECT.from(ProductBOMs).where({ parent_ID: variant.ID }) : [],
-    batch ? SELECT.from(BatchComponents).where({ batch_ID: batch.ID }) : []
+    batch ? SELECT.from(BatchComponents).where({ batch_ID: batch.ID }) : [],
+    loadCatalogue(product ? product.category_code : null)
   ]);
 
-  return { dpp, product, variant, batch, item, bom, batchComponents };
+  return { dpp, product, variant, batch, item, bom, batchComponents, catalogue };
 }
 
 module.exports = { evaluateDppChecks, loadDppValidationContext };

@@ -10,8 +10,14 @@
 
 const { evaluateDppChecks } = require('../../srv/lib/dpp-validation');
 const { MANDATORY } = require('../../srv/lib/mandatory-fields');
+const { catalogueFixture } = require('../helpers/catalogue-fixture');
+
+// Field-presence checks are catalogue-driven since Epic 12 — evaluate against the
+// REAL textiles seed definitions (pinned to the legacy lists by catalogue-parity).
+const catalogue = catalogueFixture();
 
 const fullContext = () => ({
+  catalogue,
   dpp: {
     ID: 'd1', dpp_type: 'item', status: 'draft', visibility: 'internal',
     product_ID: 'p1', batch_ID: 'b1', item_ID: 'i1', qr_token: null, public_url: null

@@ -3,6 +3,7 @@
 const cds = require('@sap/cds');
 const { requireActiveUser, requireRole } = require('./auth-helpers');
 const { missingMandatory } = require('../lib/mandatory-fields');
+const { loadCatalogue, expectedDocTypes } = require('../lib/catalogue');
 
 /**
  * Compliance analytics (US9.x). One unbound action `complianceAnalytics` returning an
@@ -33,6 +34,9 @@ const { missingMandatory } = require('../lib/mandatory-fields');
  * columns only (the LargeBinary `content` stream is never read).
  */
 
+// Default expected-evidence set — used when a product's category has no
+// CategoryRequirements row (and as the payload's org-wide `expected_doc_types`
+// echo). Per-category sets are resolved from CategoryRequirements at runtime.
 const EXPECTED = ['certificate', 'test_report', 'declaration_of_conformity'];
 const ALL_DOC_TYPES = ['certificate', 'test_report', 'declaration_of_conformity', 'safety_data_sheet', 'manual', 'other'];
 
@@ -110,6 +114,18 @@ module.exports = (srv) => {
 
     const dpps = await SELECT.from(DPPs).where({ product_ID: { in: productIds } });
 
+    // Per-category configuration: attribute catalogue (mandatory-field gate) and
+    // expected evidence set (CategoryRequirements; falls back to the default trio).
+    const categoryCodes = [...new Set([null, ...products.map((p) => p.category_code || null)])];
+    const catalogueByCode = new Map();
+    const expectedByCode = new Map();
+    for (const code of categoryCodes) {
+      catalogueByCode.set(code, await loadCatalogue(code));
+      expectedByCode.set(code, await expectedDocTypes(code, EXPECTED));
+    }
+    const catalogueOf = (p) => catalogueByCode.get((p && p.category_code) || null);
+    const expectedOf = (p) => expectedByCode.get((p && p.category_code) || null) || EXPECTED;
+
     // Documents — metadata columns ONLY (never the LargeBinary content stream). Tenant
     // safety is transitive via the org-scoped product/batch IN-lists.
     const productDocs = await SELECT.from(Documents)
@@ -154,12 +170,12 @@ module.exports = (srv) => {
     const isExpiringSoon = (doc) =>
       doc.valid_until != null && day(doc.valid_until) >= TODAY && day(doc.valid_until) <= PLUS90;
 
-    // Evidence over an effective document set against the expected-type set.
-    const evidenceOf = (effectiveDocs) => {
+    // Evidence over an effective document set against the category's expected-type set.
+    const evidenceOf = (effectiveDocs, expected = EXPECTED) => {
       const validDocs = effectiveDocs.filter(nonExpired);
-      const covered = EXPECTED.filter((t) => validDocs.some((d) => d.doc_type === t));
-      const missing = EXPECTED.filter((t) => !covered.includes(t));
-      const score = r3(covered.length / EXPECTED.length);
+      const covered = expected.filter((t) => validDocs.some((d) => d.doc_type === t));
+      const missing = expected.filter((t) => !covered.includes(t));
+      const score = r3(covered.length / expected.length);
       const cls =
         effectiveDocs.length === 0
           ? 'none'
@@ -191,15 +207,15 @@ module.exports = (srv) => {
       const ownDocs = docsByProduct.get(p.ID) || [];
       const inheritedDocs = (productToBatches.get(p.ID) || []).flatMap((bid) => docsByBatch.get(bid) || []);
       const effectiveDocs = ownDocs.concat(inheritedDocs);
-      const ev = evidenceOf(effectiveDocs);
+      const ev = evidenceOf(effectiveDocs, expectedOf(p));
 
       const hasType = (t) => ev.validDocs.some((d) => d.doc_type === t);
       const expiredOnlyType = (t) => !hasType(t) && effectiveDocs.some((d) => d.doc_type === t);
 
       const published = prodDpps.some((d) => d.status === 'published');
-      // Mandatory-field readiness (the approve gate, product-level fields). Batch-level
-      // country_of_origin is surfaced per-batch (country_of_origin_set) below.
-      const miss = missingMandatory(p, null);
+      // Mandatory-field readiness (the approve gate, product-level fields per the
+      // category's attribute catalogue). Batch-level fields are surfaced per-batch below.
+      const miss = missingMandatory(p, null, catalogueOf(p));
       // Pending changes: a DPP that was published (published_at set) but is now back to
       // 'draft' was reverted by drift detection → its live consumer version is stale.
       const pendingChanges = prodDpps.some((d) => d.published_at != null && d.status === 'draft');
@@ -259,7 +275,7 @@ module.exports = (srv) => {
       const ownDocs = docsByBatch.get(b.ID) || [];
       const inheritedDocs = docsByProduct.get(p.ID) || [];
       const effectiveDocs = ownDocs.concat(inheritedDocs);
-      const ev = evidenceOf(effectiveDocs);
+      const ev = evidenceOf(effectiveDocs, expectedOf(p));
 
       by_batch.push({
         batch_id: b.ID,

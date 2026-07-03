@@ -565,6 +565,14 @@ module.exports = (srv) => {
     const productIds = products.map((p) => p.ID);
     const pById = Object.fromEntries(products.map((p) => [p.ID, p]));
 
+    // Attribute catalogues per category present in the census (loader is cached;
+    // null/unknown codes resolve to the default category — legacy behavior).
+    const { loadCatalogue } = require('../lib/catalogue');
+    const categoryCodes = [...new Set([null, ...products.map((p) => p.category_code || null)])];
+    const catalogueByCode = new Map(
+      await Promise.all(categoryCodes.map(async (code) => [code, await loadCatalogue(code)]))
+    );
+
     const dpps = await SELECT.from(DPPdb).where({ product_ID: { in: productIds } });
     if (!dpps.length) return empty();
 
@@ -613,7 +621,9 @@ module.exports = (srv) => {
         const bom = variant ? bomsByVariant.get(variant.ID) || [] : [];
         const batchComponents = batch ? compsByBatch.get(batch.ID) || [] : [];
 
-        const validation = evaluateDppChecks({ dpp, product, variant, batch, item, bom, batchComponents });
+        const catalogue = catalogueByCode.get(product ? product.category_code || null : null)
+          || catalogueByCode.get(null);
+        const validation = evaluateDppChecks({ dpp, product, variant, batch, item, bom, batchComponents, catalogue });
 
         return {
           dpp: {

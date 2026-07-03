@@ -5,6 +5,7 @@ const QRCode = require('qrcode');
 const tokens = require('../lib/token');
 const { aggregate, firstItemDpp } = require('../lib/aggregator');
 const { applyFieldVisibility, isFieldPublic } = require('../lib/field-visibility');
+const { loadCatalogue } = require('../lib/catalogue');
 
 const MAX_DEPTH = 8;
 
@@ -117,6 +118,8 @@ function toConsumerDTO(dpp, ctx) {
   // Per-field consumer visibility: a company_advanced user can mark individual fields
   // 'internal' (stored per entity in field_visibility). Such fields are dropped from
   // the section; regulatory-locked fields are always kept (see srv/lib/field-visibility.js).
+  // Visibility defaults come from the product category's attribute catalogue (ctx.catalogue).
+  const defs = ctx.catalogue.byLevel;
   const product = ctx.product
     ? applyFieldVisibility(
         {
@@ -145,7 +148,7 @@ function toConsumerDTO(dpp, ctx) {
           espr_compliance: ctx.product.espr_compliance,
           storytelling,
         },
-        'product',
+        defs.product,
         ctx.product.field_visibility,
       )
     : null;
@@ -160,7 +163,7 @@ function toConsumerDTO(dpp, ctx) {
           image_url: ctx.variant.image_url,
           image_data: ctx.variant.image_data,
         },
-        'variant',
+        defs.variant,
         ctx.variant.field_visibility,
       )
     : null;
@@ -174,7 +177,7 @@ function toConsumerDTO(dpp, ctx) {
           co2_footprint_kg: ctx.batch.co2_footprint_kg,
           recycled_content_pct: ctx.batch.recycled_content_pct,
         },
-        'batch',
+        defs.batch,
         ctx.batch.field_visibility,
       )
     : null;
@@ -184,7 +187,7 @@ function toConsumerDTO(dpp, ctx) {
   // (single source — no separate DPP-level control). The Identification consumer
   // component drops null fields.
   const showBatchNumber = ctx.batch
-    ? isFieldPublic('batch', 'batch_number', ctx.batch.field_visibility)
+    ? isFieldPublic(defs.batch, 'batch_number', ctx.batch.field_visibility)
     : false;
   const identification = {
     dpp_id: dpp.ID,
@@ -341,8 +344,11 @@ async function loadDPPContext(dpp) {
   const aggregated = await aggregate(dpp.ID);
   const marketing = await loadMarketingLinks(owningOrgId, dpp.ID);
   const documents = await loadPublicDocuments(dpp);
+  // Attribute catalogue of the product's category — drives the per-field
+  // visibility defaults (and, later, the self-describing attribute sections).
+  const catalogue = await loadCatalogue(product ? product.category_code : null);
 
-  return { product, variant, batch, item, materialsTree, aggregated, marketing, documents };
+  return { product, variant, batch, item, materialsTree, aggregated, marketing, documents, catalogue };
 }
 
 /**

@@ -55,6 +55,11 @@ describe('snapshot-hash — drift hashing', () => {
 });
 
 describe('mandatory-fields — approve gate', () => {
+  // Mandatory set comes from the attribute catalogue since Epic 12 — evaluate
+  // against the REAL textiles seeds (pinned to the legacy list by catalogue-parity).
+  const { catalogueFixture } = require('../helpers/catalogue-fixture');
+  const catalogue = catalogueFixture();
+
   const fullProduct = {
     product_type: 'finished', name: 'Tee', brand: 'Greenline', category_code: 'tops',
     fibre_composition: '100% Cotton', care_instructions: 'Wash 30', repair_instructions: 'Sew',
@@ -63,30 +68,30 @@ describe('mandatory-fields — approve gate', () => {
   };
 
   test('a fully-populated product (no batch) has no missing fields', () => {
-    expect(missingMandatory(fullProduct, null)).toEqual([]);
+    expect(missingMandatory(fullProduct, null, catalogue)).toEqual([]);
   });
 
   test('lists every missing product field by friendly label', () => {
     const p = { ...fullProduct, care_instructions: '', repair_instructions: null };
-    const labels = missingMandatory(p, null).map((m) => m.label);
+    const labels = missingMandatory(p, null, catalogue).map((m) => m.label);
     expect(labels).toContain('Care instructions');
     expect(labels).toContain('Repair instructions');
     expect(labels).not.toContain('Name');
   });
 
   test('a referenced batch must carry country_of_origin', () => {
-    const labels = missingMandatory(fullProduct, { country_of_origin: '' }).map((m) => m.label);
+    const labels = missingMandatory(fullProduct, { country_of_origin: '' }, catalogue).map((m) => m.label);
     expect(labels).toContain('Batch country of origin');
   });
 
   test('espr_compliance below "compliant" blocks approval (strict check)', () => {
-    const labels = missingMandatory({ ...fullProduct, espr_compliance: 'draft' }, null).map((m) => m.label);
+    const labels = missingMandatory({ ...fullProduct, espr_compliance: 'draft' }, null, catalogue).map((m) => m.label);
     expect(labels).toContain('ESPR compliance status');
     // 'compliant' satisfies the check
-    expect(missingMandatory(fullProduct, null)).toEqual([]);
+    expect(missingMandatory(fullProduct, null, catalogue)).toEqual([]);
   });
 
   test('a missing product is reported', () => {
-    expect(missingMandatory(null, null).length).toBeGreaterThan(0);
+    expect(missingMandatory(null, null, catalogue).length).toBeGreaterThan(0);
   });
 });

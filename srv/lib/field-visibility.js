@@ -15,10 +15,15 @@
  * from the project field catalogue's `mandatory` flag + the ESPR / EU textile-labelling
  * context; it is NOT legal advice and must be confirmed with a compliance advisor.
  *
- * KEEP IN SYNC with the frontend catalogue: dpp_frontend/app/src/lib/fieldCatalogue.js
- * (same field keys, default visibility and `locked` flags).
+ * Since Epic 12 the defaults come from the DB attribute catalogue
+ * (srv/lib/catalogue.js — AttributeDefinitions master data): callers pass the
+ * catalogue fields of the matching level (`catalogue.byLevel.product|variant|batch`).
+ * The legacy hardcoded CATALOGUES below is kept ONLY as the parity reference pinned
+ * by test/unit/catalogue-parity.test.js against the seed data — runtime code must
+ * not read it.
  */
 
+// LEGACY PARITY REFERENCE — do not consume at runtime (see header).
 // { vis: default visibility, locked: regulatory-public (never hidden) }
 const CATALOGUES = {
   product: {
@@ -78,13 +83,29 @@ function parseMap(json) {
   }
 }
 
+// Normalize the defs argument (array of catalogue fields for one level) into a
+// key → {vis, locked} lookup. Memoized per array identity — the catalogue loader
+// caches its result, so the same array instance is passed on every request.
+const defsMapCache = new WeakMap();
+function toDefsMap(defs) {
+  if (!Array.isArray(defs)) return defs || {};
+  let map = defsMapCache.get(defs);
+  if (!map) {
+    map = {};
+    for (const f of defs) map[f.key] = { vis: f.visibility, locked: !!f.locked };
+    defsMapCache.set(defs, map);
+  }
+  return map;
+}
+
 /**
  * Effective visibility of a single field: locked → always 'public'; otherwise a valid
  * stored override wins; otherwise the catalogue default. Unknown fields default to
  * 'public' (never silently hide something not in the catalogue).
+ * `defs` = catalogue fields of the matching level (catalogue.byLevel.<level>).
  */
-function resolve(kind, field, map) {
-  const def = CATALOGUES[kind] && CATALOGUES[kind][field];
+function resolve(defs, field, map) {
+  const def = toDefsMap(defs)[field];
   if (!def) return 'public';
   if (def.locked) return 'public';
   const s = map[field];
@@ -96,20 +117,20 @@ function resolve(kind, field, map) {
  * removed. `storedJson` is the entity's `field_visibility` column (JSON string or null).
  * Never removes locked fields. Returns the input unchanged when it is null/undefined.
  */
-function applyFieldVisibility(section, kind, storedJson) {
+function applyFieldVisibility(section, defs, storedJson) {
   if (!section || typeof section !== 'object') return section;
   const map = parseMap(storedJson);
   const out = {};
   for (const [k, v] of Object.entries(section)) {
-    if (resolve(kind, k, map) === 'internal') continue;
+    if (resolve(defs, k, map) === 'internal') continue;
     out[k] = v;
   }
   return out;
 }
 
 /** True when a field's effective visibility (stored override → catalogue default, locked → public) is public. */
-function isFieldPublic(kind, field, storedJson) {
-  return resolve(kind, field, parseMap(storedJson)) === 'public';
+function isFieldPublic(defs, field, storedJson) {
+  return resolve(defs, field, parseMap(storedJson)) === 'public';
 }
 
 module.exports = { applyFieldVisibility, isFieldPublic, resolve, CATALOGUES };
