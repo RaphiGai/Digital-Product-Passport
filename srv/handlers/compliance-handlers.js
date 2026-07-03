@@ -48,7 +48,7 @@ const avg = (xs) => {
 };
 const pct = (part, total, d = 1) => (total ? Number(((100 * part) / total).toFixed(d)) : null);
 const day = (v) => (v == null ? null : String(v).slice(0, 10));
-const variantLabel = (v) => (v ? [v.color, v.size].filter(Boolean).join(' / ') || v.sku || v.ID : null);
+const { variantLabel } = require('../lib/catalogue'); // colour/size live in the attributes bag (Epic 12)
 const maxDate = (arr) => {
   const xs = arr.filter(Boolean).map(day).filter(Boolean);
   return xs.length ? xs.sort()[xs.length - 1] : null;

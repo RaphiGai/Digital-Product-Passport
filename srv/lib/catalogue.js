@@ -203,6 +203,17 @@ async function expectedDocTypes(categoryCode, fallback = []) {
   return list.length ? list : fallback;
 }
 
+/**
+ * Human label for a variant row: "colour / size" (from the attributes bag,
+ * where category-specific variant fields live) → SKU → ID. Shared by the
+ * analytics/compliance/validation payload builders.
+ */
+function variantLabel(v) {
+  if (!v) return null;
+  const bag = parseBag(v.attributes);
+  return [bag.color, bag.size].filter(Boolean).join(' / ') || v.sku || v.ID || null;
+}
+
 /** Drop the cached catalogues (tests / after definition maintenance). */
 function clearCache() {
   cache.clear();
@@ -213,6 +224,7 @@ module.exports = {
   expectedDocTypes,
   getAttrValue,
   parseBag,
+  variantLabel,
   clearCache,
   DEFAULT_CATEGORY,
   RESERVED_KEYS,

@@ -28,8 +28,8 @@ const sum = (xs) => {
   const v = xs.filter((x) => x != null).map(Number);
   return v.length ? Number(v.reduce((a, b) => a + b, 0).toFixed(3)) : null;
 };
-const variantLabel = (v) =>
-  v ? [v.color, v.size].filter(Boolean).join(' / ') || v.sku || v.ID : null;
+// variant colour/size live in the attributes bag (Epic 12) — shared bag-aware label.
+const { variantLabel } = require('../lib/catalogue');
 
 function emptyPayload(dateFrom, dateTo) {
   return {

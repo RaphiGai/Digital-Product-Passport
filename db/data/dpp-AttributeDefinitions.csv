@@ -15,21 +15,21 @@ attr-prod-substances;;product;substances_of_concern;column;Substances of concern
 attr-prod-espr-compliance;;product;espr_compliance;column;ESPR compliance status;enum;select;sec-compliance;;30;;;;;;;true;Set ESPR compliance status to Compliant in Product information.;Product;public;true;true
 attr-prod-durability;;product;durability_score;column;Durability score;number;score;sec-scores;;10;;0;10;;;;false;;Product;public;false;true
 attr-prod-repairability;;product;repairability_score;column;Repairability score;number;score;sec-scores;;20;;0;10;;;;false;;Product;public;false;true
-attr-tex-fibre-composition;textiles;product;fibre_composition;column;Fibre composition;text;textarea;sec-materials;;10;;;;500;;;true;Add fibre composition.;Product;public;true;true
-attr-tex-care-instructions;textiles;product;care_instructions;column;Care instructions;text;textarea;sec-care;care;10;;;;500;;;true;Add washing/care instructions.;Circularity;public;true;true
-attr-tex-care-video;textiles;product;care_video_url;column;Care video link;url;video_link;sec-care;care;11;;;;500;;;false;;Circularity;public;false;true
-attr-tex-care-products;textiles;product;care_products_url;column;Care products link;url;shop_link;sec-care;care;12;;;;500;;;false;;Circularity;public;false;true
-attr-tex-repair-instructions;textiles;product;repair_instructions;column;Repair instructions;text;textarea;sec-care;repair;20;;;;500;;;true;Add repair information.;Circularity;public;true;true
-attr-tex-repair-video;textiles;product;repair_video_url;column;Repair video link;url;video_link;sec-care;repair;21;;;;500;;;false;;Circularity;public;false;true
-attr-tex-repair-products;textiles;product;repair_products_url;column;Repair products link;url;shop_link;sec-care;repair;22;;;;500;;;false;;Circularity;public;false;true
-attr-tex-reuse-instructions;textiles;product;reuse_instructions;column;Reuse instructions;text;textarea;sec-care;reuse;30;;;;500;;;false;Add reuse or second-life information.;Circularity;public;false;true
-attr-tex-reuse-video;textiles;product;reuse_video_url;column;Reuse video link;url;video_link;sec-care;reuse;31;;;;500;;;false;;Circularity;public;false;true
-attr-tex-reuse-products;textiles;product;reuse_products_url;column;Reuse products link;url;shop_link;sec-care;reuse;32;;;;500;;;false;;Circularity;public;false;true
-attr-tex-disposal-instructions;textiles;product;disposal_instructions;column;Disposal instructions;text;textarea;sec-care;disposal;40;;;;500;;;true;Add disposal or recycling information.;Circularity;public;true;true
-attr-tex-disposal-video;textiles;product;disposal_video_url;column;Disposal video link;url;video_link;sec-care;disposal;41;;;;500;;;false;;Circularity;public;false;true
-attr-tex-disposal-products;textiles;product;disposal_products_url;column;Disposal products link;url;shop_link;sec-care;disposal;42;;;;500;;;false;;Circularity;public;false;true
-attr-tex-var-color;textiles;variant;color;column;Colour;string;input;sec-variant;;10;;;;40;;;false;Add color if relevant.;Variant;public;false;true
-attr-tex-var-size;textiles;variant;size;column;Size;string;input;sec-variant;;20;;;;20;;;false;Add size if relevant.;Variant;public;false;true
+attr-tex-fibre-composition;textiles;product;fibre_composition;json;Fibre composition;text;textarea;sec-materials;;10;;;;500;;;true;Add fibre composition.;Product;public;true;true
+attr-tex-care-instructions;textiles;product;care_instructions;json;Care instructions;text;textarea;sec-care;care;10;;;;500;;;true;Add washing/care instructions.;Circularity;public;true;true
+attr-tex-care-video;textiles;product;care_video_url;json;Care video link;url;video_link;sec-care;care;11;;;;500;;;false;;Circularity;public;false;true
+attr-tex-care-products;textiles;product;care_products_url;json;Care products link;url;shop_link;sec-care;care;12;;;;500;;;false;;Circularity;public;false;true
+attr-tex-repair-instructions;textiles;product;repair_instructions;json;Repair instructions;text;textarea;sec-care;repair;20;;;;500;;;true;Add repair information.;Circularity;public;true;true
+attr-tex-repair-video;textiles;product;repair_video_url;json;Repair video link;url;video_link;sec-care;repair;21;;;;500;;;false;;Circularity;public;false;true
+attr-tex-repair-products;textiles;product;repair_products_url;json;Repair products link;url;shop_link;sec-care;repair;22;;;;500;;;false;;Circularity;public;false;true
+attr-tex-reuse-instructions;textiles;product;reuse_instructions;json;Reuse instructions;text;textarea;sec-care;reuse;30;;;;500;;;false;Add reuse or second-life information.;Circularity;public;false;true
+attr-tex-reuse-video;textiles;product;reuse_video_url;json;Reuse video link;url;video_link;sec-care;reuse;31;;;;500;;;false;;Circularity;public;false;true
+attr-tex-reuse-products;textiles;product;reuse_products_url;json;Reuse products link;url;shop_link;sec-care;reuse;32;;;;500;;;false;;Circularity;public;false;true
+attr-tex-disposal-instructions;textiles;product;disposal_instructions;json;Disposal instructions;text;textarea;sec-care;disposal;40;;;;500;;;true;Add disposal or recycling information.;Circularity;public;true;true
+attr-tex-disposal-video;textiles;product;disposal_video_url;json;Disposal video link;url;video_link;sec-care;disposal;41;;;;500;;;false;;Circularity;public;false;true
+attr-tex-disposal-products;textiles;product;disposal_products_url;json;Disposal products link;url;shop_link;sec-care;disposal;42;;;;500;;;false;;Circularity;public;false;true
+attr-tex-var-color;textiles;variant;color;json;Colour;string;input;sec-variant;;10;;;;40;;;false;Add color if relevant.;Variant;public;false;true
+attr-tex-var-size;textiles;variant;size;json;Size;string;input;sec-variant;;20;;;;20;;;false;Add size if relevant.;Variant;public;false;true
 attr-var-sku;;variant;sku;column;SKU;string;input;sec-variant;;30;;;;40;;;false;;Variant;internal;false;true
 attr-var-gtin;;variant;gtin;column;GTIN;string;input;sec-variant;;40;;;;14;;;false;;Variant;internal;false;true
 attr-var-image-url;;variant;image_url;column;Product image;url;image;sec-variant;;50;;;;500;;;false;;Variant;public;false;true

@@ -1,4 +1,4 @@
-ID;parent_ID;component_ID;component_name;component_category;component_fibre_composition;quantity;unit;component_role;is_mandatory;sub_dpp_ID;external_dpp_url;ext_co2_footprint;ext_recycled_content_pct;status
+ID;parent_ID;component_ID;component_name;component_category;component_composition;quantity;unit;component_role;is_mandatory;sub_dpp_ID;external_dpp_url;ext_co2_footprint;ext_recycled_content_pct;status
 bom-tshirt-cotton;var-tshirt-blue-m;prod-mat-cotton;;;;171.000;g;Main fabric;true;dpp-cotton;;;;active
 bom-tshirt-elastane;var-tshirt-blue-m;prod-mat-elastane;;;;9.000;g;Stretch yarn;false;;https://supplier.example/dpp/elastane-2026;20.0000;0.00;active
 bom-tshirt-polybag;var-tshirt-blue-m;;Compostable Polybag;Packaging;Compostable bioplastic (PLA);1.000;pcs;Polybag;false;;https://supplier.example/dpp/polybag-2026;0.0100;0.00;active

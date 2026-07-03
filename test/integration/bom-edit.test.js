@@ -56,7 +56,7 @@ describe('External BOM component without an internal product', () => {
         component_ID: null,
         component_name: 'Recycled polyester thread',
         component_category: 'Trim',
-        component_fibre_composition: '100% rPET',
+        component_composition: '100% rPET',
         quantity: 3,
         unit: 'g',
         external_dpp_url: 'https://supplier.example/dpp/thread',
@@ -88,8 +88,7 @@ describe('ProductVariant edit (PATCH) — image_url', () => {
     const res = await PATCH(
       "/odata/v4/dpp/ProductVariants('var-tshirt-blue-m')",
       {
-        color: 'Blue',
-        size: 'M',
+        attributes: JSON.stringify({ color: 'Blue', size: 'M' }), // colour/size are bag-backed (Epic 12)
         sku: 'TSHIRT-BLUE-M',
         weight_g: 180,
         image_url: 'https://example.com/tshirt-blue.jpg',

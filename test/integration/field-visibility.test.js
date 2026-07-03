@@ -23,10 +23,25 @@ async function attachToken(dppId) {
 
 const getPublic = (token) => axios.get(`/public/dpp/${token}`, { validateStatus: () => true });
 
+// Category-specific fields (fibre, care blocks…) are served via the
+// self-describing attribute_sections since the Epic 12 migration.
+const sectionValue = (data, key) => {
+  for (const s of data.attribute_sections || []) {
+    const f = s.fields.find((x) => x.key === key);
+    if (f) return f.value;
+  }
+  return undefined;
+};
+
 // Keep tests order-independent — clear everything this suite writes.
+let originalBag = null;
 async function reset() {
   const { Products, ProductVariants, Batches, ProductBOMs } = cds.entities('dpp');
-  await UPDATE(Products).set({ field_visibility: null, care_products_url: null }).where({ ID: 'prod-tshirt-classic' });
+  if (originalBag === null) {
+    const row = await SELECT.one.from(Products).columns('attributes').where({ ID: 'prod-tshirt-classic' });
+    originalBag = row.attributes ?? null;
+  }
+  await UPDATE(Products).set({ field_visibility: null, attributes: originalBag }).where({ ID: 'prod-tshirt-classic' });
   await UPDATE(ProductVariants).set({ field_visibility: null }).where({ ID: 'var-tshirt-blue-m' });
   await UPDATE(Batches).set({ field_visibility: null }).where({ ID: 'batch-2026-05-A' });
   await UPDATE(ProductBOMs).set({ visibility: 'public' }).where({ parent_ID: 'var-tshirt-blue-m' });
@@ -50,9 +65,9 @@ describe('Defaults follow the field catalogue', () => {
     expect(data.batch).not.toHaveProperty('production_date');
     expect(data.batch.country_of_origin).toBe('PT');
 
-    // product locked fields always present
+    // product locked fields always present (category fields via attribute_sections)
     expect(data.product.name).toBe('Classic T-Shirt');
-    expect(data.product.fibre_composition).toBeTruthy();
+    expect(sectionValue(data, 'fibre_composition')).toBeTruthy();
   });
 });
 
@@ -81,25 +96,28 @@ describe('Per-field overrides', () => {
       .where({ ID: 'prod-tshirt-classic' });
     const { data } = await getPublic(await attachToken('dpp-12345'));
     expect(data.product.name).toBe('Classic T-Shirt');
-    expect(data.product.fibre_composition).toBeTruthy();
+    expect(sectionValue(data, 'fibre_composition')).toBeTruthy();
     expect(data.product.country_of_origin).toBeTruthy();
   });
 
   test('a recommended-products URL is public by default and can be hidden', async () => {
     const { Products } = cds.entities('dpp');
-    // Default visibility → a set value is exposed in the consumer DTO.
+    // Category fields live in the attributes bag; a set value is exposed via
+    // the attribute_sections of the consumer DTO by default.
+    const bag = JSON.parse(originalBag ?? '{}');
+    bag.care_products_url = 'https://shop.example.com/care';
     await UPDATE(Products)
-      .set({ care_products_url: 'https://shop.example.com/care' })
+      .set({ attributes: JSON.stringify(bag) })
       .where({ ID: 'prod-tshirt-classic' });
     let { data } = await getPublic(await attachToken('dpp-12345'));
-    expect(data.product.care_products_url).toBe('https://shop.example.com/care');
+    expect(sectionValue(data, 'care_products_url')).toBe('https://shop.example.com/care');
 
     // Marked internal → dropped from the consumer DTO.
     await UPDATE(Products)
       .set({ field_visibility: JSON.stringify({ care_products_url: 'internal' }) })
       .where({ ID: 'prod-tshirt-classic' });
     ({ data } = await getPublic(await attachToken('dpp-12345')));
-    expect(data.product).not.toHaveProperty('care_products_url');
+    expect(sectionValue(data, 'care_products_url')).toBeUndefined();
   });
 
   test('an internal-default field can be revealed (sku → public)', async () => {

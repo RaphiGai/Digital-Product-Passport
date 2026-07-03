@@ -659,7 +659,15 @@ module.exports = (srv) => {
             createdAt: dpp.createdAt
           },
           product: product ? { ID: product.ID, name: product.name } : null,
-          variant: variant ? { ID: variant.ID, color: variant.color, size: variant.size, sku: variant.sku } : null,
+          // colour/size come from the variant's attributes bag (Epic 12 migration)
+          variant: variant
+            ? {
+                ID: variant.ID,
+                color: parseBag(variant.attributes).color ?? null,
+                size: parseBag(variant.attributes).size ?? null,
+                sku: variant.sku
+              }
+            : null,
           batch: batch ? { ID: batch.ID, batch_number: batch.batch_number } : null,
           item: item ? { ID: item.ID, serial_number: item.serial_number, upi: item.upi } : null,
           validation: {

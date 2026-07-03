@@ -3,12 +3,8 @@
 const { randomUUID } = require('crypto');
 const { getUserOrg } = require('./auth-helpers');
 const { isHttpUrl } = require('../lib/url-validate');
-
-// Product URL fields rendered as <a href> on the public consumer page — must be http(s).
-const PRODUCT_URL_FIELDS = [
-  'care_video_url', 'repair_video_url', 'disposal_video_url', 'reuse_video_url',
-  'care_products_url', 'repair_products_url', 'reuse_products_url', 'disposal_products_url'
-];
+const { loadCatalogue } = require('../lib/catalogue');
+const { validateAttributes } = require('../lib/attribute-validate');
 
 // ── Enum sets for validation ───────────────────────────────────────────────
 const PRODUCT_TYPES    = new Set(['finished', 'material', 'component', 'packaging']);
@@ -128,11 +124,22 @@ module.exports = (srv) => {
       requireField(allIssues, i, 'status',                r.status);
       requireEnum (allIssues, i, 'status',                r.status,        PRODUCT_STATUSES);
       requireField(allIssues, i, 'country_of_origin',     r.country_of_origin);
-      requireField(allIssues, i, 'fibre_composition',     r.fibre_composition);
-      requireField(allIssues, i, 'care_instructions',     r.care_instructions);
-      requireField(allIssues, i, 'repair_instructions',   r.repair_instructions);
-      requireField(allIssues, i, 'disposal_instructions', r.disposal_instructions);
       requireField(allIssues, i, 'substances_of_concern', r.substances_of_concern);
+
+      // Category-specific fields (Epic 12): the import row keeps FLAT columns
+      // (template headers unchanged), but the values live in the attributes bag,
+      // validated against the row's category catalogue — mandatory presence,
+      // datatypes and the http(s)-only URL guard all come from the definitions.
+      const catalogue = await loadCatalogue(categoryCode);
+      const jsonDefs = (catalogue.byLevel.product || []).filter((d) => d.storage === 'json');
+      const bag = {};
+      for (const def of jsonDefs) {
+        if (def.mandatory) requireField(allIssues, i, def.key, r[def.key]);
+        const v = str(r[def.key]);
+        if (v) bag[def.key] = v;
+      }
+      const attributes = validateAttributes(bag, catalogue, 'product', (msg) =>
+        err(allIssues, i, 'attributes', msg));
       requireField(allIssues, i, 'espr_compliance',       r.espr_compliance);
       requireEnum (allIssues, i, 'espr_compliance',       r.espr_compliance, ESPR_STATUSES);
 
@@ -147,11 +154,6 @@ module.exports = (srv) => {
       const name = str(r.name);
       if (name && existingNames.has(name.toLowerCase()))
         err(allIssues, i, 'name', `A product named "${name}" already exists — skipped.`);
-
-      // Consumer-facing URLs must be http(s) — block stored javascript:/data: XSS on import.
-      for (const key of PRODUCT_URL_FIELDS) {
-        if (!isHttpUrl(r[key])) err(allIssues, i, key, `"${key}" must start with https:// (or http://).`);
-      }
 
       if (countHardErrors(allIssues, issueBase) === 0) {
         toInsert.push({
@@ -168,24 +170,12 @@ module.exports = (srv) => {
           status:                str(r.status),
           country_of_origin:     str(r.country_of_origin).toUpperCase().slice(0, 2),
           description:           str(r.description)        || null,
-          fibre_composition:     str(r.fibre_composition),
-          care_instructions:     str(r.care_instructions),
-          repair_instructions:   str(r.repair_instructions),
-          disposal_instructions: str(r.disposal_instructions),
-          reuse_instructions:    str(r.reuse_instructions)  || null,
           substances_of_concern: str(r.substances_of_concern),
           espr_compliance:       str(r.espr_compliance),
           durability_score:      dur,
           repairability_score:   rep,
           storytelling:          str(r.storytelling)        || null,
-          care_video_url:        str(r.care_video_url)      || null,
-          repair_video_url:      str(r.repair_video_url)    || null,
-          disposal_video_url:    str(r.disposal_video_url)  || null,
-          reuse_video_url:       str(r.reuse_video_url)     || null,
-          care_products_url:     str(r.care_products_url)     || null,
-          repair_products_url:   str(r.repair_products_url)   || null,
-          reuse_products_url:    str(r.reuse_products_url)    || null,
-          disposal_products_url: str(r.disposal_products_url) || null,
+          attributes:            attributes ?? null,
           createdAt:    now,
           lastChange:   now,
           createdBy_ID: uid,
@@ -472,9 +462,9 @@ module.exports = (srv) => {
     const uid  = req.user._appUserId || null;
     const rows = parseRows(rawJson, req);
 
-    // Pre-load products for this org.
+    // Pre-load products for this org (category_code → variant attribute catalogue).
     const products = await SELECT.from(Products)
-      .columns(['ID', 'name'])
+      .columns(['ID', 'name', 'category_code'])
       .where({ owning_organization_ID: org.ID });
     const productByName = new Map(products.map((p) => [p.name?.toLowerCase(), p]));
 
@@ -515,16 +505,30 @@ module.exports = (srv) => {
       if (product && sku && existingSkuKeys.has(`${product.ID}:${sku.toLowerCase()}`))
         err(allIssues, i, 'sku', `Variant with SKU "${sku}" already exists for product "${productName}".`);
 
+      // Category-specific variant fields (flat template columns → attributes bag,
+      // validated against the parent product's category catalogue).
+      let attributes = null;
+      if (product && countHardErrors(allIssues, issueBase) === 0) {
+        const catalogue = await loadCatalogue(product.category_code);
+        const jsonDefs = (catalogue.byLevel.variant || []).filter((d) => d.storage === 'json');
+        const bag = {};
+        for (const def of jsonDefs) {
+          const v = str(r[def.key]);
+          if (v) bag[def.key] = v;
+        }
+        attributes = validateAttributes(bag, catalogue, 'variant', (msg) =>
+          err(allIssues, i, 'attributes', msg));
+      }
+
       if (countHardErrors(allIssues, issueBase) === 0 && product) {
         toInsert.push({
           ID:           randomUUID(),
           product_ID:   product.ID,
           sku,
-          color:        str(r.color)  || null,
-          size:         str(r.size)   || null,
           gtin:         str(r.gtin)   || null,
           weight_g:     weightG !== null ? Math.round(weightG) : null,
           status:       statusVal,
+          attributes:   attributes ?? null,
           createdAt:    now,
           lastChange:   now,
           createdBy_ID: uid,

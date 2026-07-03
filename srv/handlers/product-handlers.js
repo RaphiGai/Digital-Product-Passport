@@ -7,12 +7,6 @@ const { loadCatalogue } = require('../lib/catalogue');
 const { validateAttributes } = require('../lib/attribute-validate');
 const dppHandlers = require('./dpp-handlers'); // for reevaluateDrift (one-way require)
 
-// Product URL fields rendered as <a href> on the public consumer page — must be http(s).
-const PRODUCT_URL_FIELDS = [
-  'care_video_url', 'repair_video_url', 'disposal_video_url', 'reuse_video_url',
-  'care_products_url', 'repair_products_url', 'reuse_products_url', 'disposal_products_url'
-];
-
 function rejectCrossOrgWrite(req, fieldValue, callerOrgId) {
   if (fieldValue !== undefined && fieldValue !== callerOrgId) {
     req.reject(403, 'Cannot assign records to a different organization.');
@@ -93,7 +87,9 @@ module.exports = (srv) => {
     rejectCrossOrgWrite(req, req.data.owning_organization_ID, req.user._appOrgId);
   });
 
-  // ESPR durability / repairability scores are on a 0–10 scale.
+  // ESPR durability / repairability scores are on a 0–10 scale. (Category URL
+  // fields moved into the attributes bag — their http(s)-only XSS guard now runs
+  // in the bag validation below, srv/lib/attribute-validate.js.)
   srv.before(['CREATE', 'UPDATE'], Products, (req) => {
     for (const field of ['durability_score', 'repairability_score']) {
       const v = req.data[field];
@@ -101,8 +97,6 @@ module.exports = (srv) => {
         req.reject(400, 'Durability and repairability scores must be between 0 and 10.');
       }
     }
-    // Consumer-facing URLs must be http(s) — block stored javascript:/data: XSS.
-    assertHttpUrls(req, req.data, PRODUCT_URL_FIELDS);
   });
 
   // ----- Attribute-bag validation against the category catalogue (Epic 12) -----

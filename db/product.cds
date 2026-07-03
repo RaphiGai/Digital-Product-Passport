@@ -44,29 +44,16 @@ entity Products : identified, audited {
   gtin                  : GTIN;
   upc                   : String(20);                        // Universal Product Code — optional, internal by default
   ein                   : String(20);                        // EIN product number — optional, internal by default
-  fibre_composition     : String(500);
-  care_instructions     : String(500);
-  repair_instructions   : String(500);
-  disposal_instructions : String(500);
-  reuse_instructions    : String(500);                       // reuse / second-life guidance (ESPR)
+  // Category-specific fields (Epic 12 migration): the former textile columns
+  // (fibre_composition, the care/repair/reuse/disposal blocks incl. their video/
+  // shop links) now live in the `attributes` JSON bag below, described by the
+  // AttributeDefinitions master data (category 'textiles', storage 'json').
   country_of_origin     : CountryISO2;
   substances_of_concern : String(500);                       // catalogue Sheet 3 R37 (Text)
   espr_compliance       : ESPRComplianceStatus default 'draft';
   // ESPR durability & repairability scores, 0.0–10.0 (EU/FR repair-index scale).
   durability_score      : Decimal(3, 1);
   repairability_score   : Decimal(3, 1);
-  // Optional how-to video links — shown on the consumer DPP only when set.
-  care_video_url        : URL;
-  repair_video_url      : URL;
-  disposal_video_url    : URL;
-  reuse_video_url        : URL;
-  // Optional "recommended products" shop links per care category — advertise products
-  // (detergents, repair kits, second-life marketplaces, …) alongside the matching care
-  // block on the consumer DPP. Shown only when set.
-  care_products_url     : URL;
-  repair_products_url   : URL;
-  reuse_products_url    : URL;
-  disposal_products_url : URL;
   status                : ProductStatus        default 'draft';
   storytelling          : LargeString;                         // JSON array [{title, body}] — consumer story (per product)
   // Per-field consumer visibility overrides as a JSON map {fieldName: 'public'|'internal'}.
@@ -87,8 +74,7 @@ annotate Products with @assert.unique : { gtin_per_org : [gtin, owning_organizat
 // ----- Variant level (Sheet 2 R7) -----
 entity ProductVariants : identified, audited {
   product  : Association to Products not null;
-  color    : String(40);
-  size     : String(20);
+  // colour/size moved to the `attributes` bag (category-specific; Epic 12 migration)
   sku      : String(40);
   gtin     : GTIN;
   weight_g : Integer;
@@ -156,7 +142,7 @@ entity ProductBOMs : identified, audited {
   // entered on the line (used for the BOM table + consumer materials list).
   component_name              : String(120);
   component_category          : String(60);
-  component_fibre_composition : String(500);
+  component_composition       : String(500);   // material composition (was component_fibre_composition — generic since Epic 12)
   quantity         : Decimal(10, 3);
   unit             : String(8);
   component_role   : String(60);

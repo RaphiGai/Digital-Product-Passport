@@ -24,13 +24,15 @@ const fullContext = () => ({
   },
   product: {
     ID: 'p1', product_type: 'finished', name: 'Tee', brand: 'Greenline',
-    category_code: 'textiles', fibre_composition: '100% Cotton',
-    care_instructions: 'Wash 30', repair_instructions: 'Sew',
-    disposal_instructions: 'Recycle', country_of_origin: 'PT',
+    category_code: 'textiles', country_of_origin: 'PT',
     substances_of_concern: 'None', espr_compliance: 'compliant',
-    reuse_instructions: null
+    // category-specific fields live in the attributes bag (Epic 12 migration)
+    attributes: {
+      fibre_composition: '100% Cotton', care_instructions: 'Wash 30',
+      repair_instructions: 'Sew', disposal_instructions: 'Recycle'
+    }
   },
-  variant: { ID: 'v1', status: 'active', sku: 'SKU-1', gtin: null, size: 'M', color: 'Blue' },
+  variant: { ID: 'v1', status: 'active', sku: 'SKU-1', gtin: null, attributes: { size: 'M', color: 'Blue' } },
   batch: {
     ID: 'b1', status: 'approved', batch_number: 'B-1', production_date: '2026-05-01',
     country_of_origin: 'PT', factory_ID: 'f1', supplier_ID: null,
@@ -69,8 +71,8 @@ describe('dpp-validation — gate semantics', () => {
 
   test('field checks keep the "<label> is required." message format', () => {
     const ctx = fullContext();
-    ctx.product.care_instructions = '';
-    ctx.product.repair_instructions = null;
+    ctx.product.attributes.care_instructions = '';
+    ctx.product.attributes.repair_instructions = null;
     const v = evaluateDppChecks(ctx);
     expect(v.gate_errors).toContain('Care instructions is required.');
     expect(v.gate_errors).toContain('Repair instructions is required.');

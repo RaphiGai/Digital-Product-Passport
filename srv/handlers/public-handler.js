@@ -5,7 +5,7 @@ const QRCode = require('qrcode');
 const tokens = require('../lib/token');
 const { aggregate, firstItemDpp } = require('../lib/aggregator');
 const { applyFieldVisibility, isFieldPublic } = require('../lib/field-visibility');
-const { loadCatalogue, getAttrValue } = require('../lib/catalogue');
+const { loadCatalogue, getAttrValue, parseBag } = require('../lib/catalogue');
 
 /**
  * Self-describing, category-specific consumer sections (Epic 12): every
@@ -101,7 +101,11 @@ async function expandBomTree(variantId, productsById, bomsByParent, overrides = 
       product_type: componentProduct?.product_type || null,
       brand: componentProduct?.brand || null,
       category: componentProduct?.category || e.component_category || null,
-      fibre_composition: componentProduct?.fibre_composition || e.component_fibre_composition || null,
+      // Material composition: from the internal product's attribute bag (category-
+      // specific key) or the line's free-text column. Key kept as `composition`;
+      // legacy frozen snapshots still carry `fibre_composition` (FE reads both).
+      composition: parseBag(componentProduct?.attributes).fibre_composition
+        || e.component_composition || null,
       quantity: e.quantity,
       unit: e.unit,
       role: e.component_role,
@@ -162,6 +166,9 @@ function toConsumerDTO(dpp, ctx) {
   // the section; regulatory-locked fields are always kept (see srv/lib/field-visibility.js).
   // Visibility defaults come from the product category's attribute catalogue (ctx.catalogue).
   const defs = ctx.catalogue.byLevel;
+  // Core product fields only — category-specific values (former textile columns)
+  // are served through `attribute_sections` below, projected from the attributes
+  // bag by the category's catalogue.
   const product = ctx.product
     ? applyFieldVisibility(
         {
@@ -170,21 +177,8 @@ function toConsumerDTO(dpp, ctx) {
           category: ctx.product.category,
           model: ctx.product.model,
           description: ctx.product.description,
-          fibre_composition: ctx.product.fibre_composition,
-          care_instructions: ctx.product.care_instructions,
-          repair_instructions: ctx.product.repair_instructions,
-          disposal_instructions: ctx.product.disposal_instructions,
-          reuse_instructions: ctx.product.reuse_instructions,
           durability_score: ctx.product.durability_score,
           repairability_score: ctx.product.repairability_score,
-          care_video_url: ctx.product.care_video_url,
-          repair_video_url: ctx.product.repair_video_url,
-          disposal_video_url: ctx.product.disposal_video_url,
-          reuse_video_url: ctx.product.reuse_video_url,
-          care_products_url: ctx.product.care_products_url,
-          repair_products_url: ctx.product.repair_products_url,
-          reuse_products_url: ctx.product.reuse_products_url,
-          disposal_products_url: ctx.product.disposal_products_url,
           country_of_origin: ctx.product.country_of_origin,
           substances_of_concern: ctx.product.substances_of_concern,
           espr_compliance: ctx.product.espr_compliance,
@@ -195,11 +189,14 @@ function toConsumerDTO(dpp, ctx) {
       )
     : null;
 
+  // colour/size live in the variant's attribute bag now, but stay part of the
+  // variant DTO block — the consumer hero renders them (stable contract).
+  const variantBag = parseBag(ctx.variant?.attributes);
   const variant = ctx.variant
     ? applyFieldVisibility(
         {
-          color: ctx.variant.color,
-          size: ctx.variant.size,
+          color: variantBag.color ?? null,
+          size: variantBag.size ?? null,
           sku: ctx.variant.sku,
           gtin: ctx.variant.gtin,
           image_url: ctx.variant.image_url,

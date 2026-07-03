@@ -99,12 +99,12 @@ describe('#5 a deactivated user loses access immediately', () => {
 describe('#6 consumer URL fields must be http(s) (stored-XSS guard)', () => {
   test('javascript: in a product care-video URL is rejected; https is accepted', async () => {
     await expectStatus(
-      PATCH(`/odata/v4/dpp/Products('${A.product}')`, { care_video_url: 'javascript:alert(1)' }, alice),
+      PATCH(`/odata/v4/dpp/Products('${A.product}')`, { attributes: JSON.stringify({ care_video_url: 'javascript:alert(1)' }) }, alice),
       400
     );
     const ok = await PATCH(
       `/odata/v4/dpp/Products('${A.product}')`,
-      { care_video_url: 'https://example.com/care.mp4' },
+      { attributes: JSON.stringify({ care_video_url: 'https://example.com/care.mp4' }) },
       alice
     );
     expect(ok.status).toBe(200);
@@ -112,7 +112,7 @@ describe('#6 consumer URL fields must be http(s) (stored-XSS guard)', () => {
 
   test('javascript: in a recommended-products URL is rejected', async () => {
     await expectStatus(
-      PATCH(`/odata/v4/dpp/Products('${A.product}')`, { care_products_url: 'javascript:alert(1)' }, alice),
+      PATCH(`/odata/v4/dpp/Products('${A.product}')`, { attributes: JSON.stringify({ care_products_url: 'javascript:alert(1)' }) }, alice),
       400
     );
   });

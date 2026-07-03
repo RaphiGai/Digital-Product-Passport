@@ -73,15 +73,13 @@ function contentHash(snap) {
 }
 
 // Friendly labels for the changed-fields display; unknown paths are humanized.
+// Category-specific fields live under `<level>.attributes.<key>` since Epic 12 —
+// humanize()'s last-segment fallback labels them well ("Fibre composition"),
+// so only core/nested paths need explicit entries here.
 const PATH_LABELS = {
   'product.name': 'Name',
   'product.brand': 'Brand',
   'product.category': 'Category',
-  'product.fibre_composition': 'Fibre composition',
-  'product.care_instructions': 'Care instructions',
-  'product.repair_instructions': 'Repair instructions',
-  'product.reuse_instructions': 'Reuse instructions',
-  'product.disposal_instructions': 'Disposal instructions',
   'product.country_of_origin': 'Country of origin',
   'product.substances_of_concern': 'Substances of concern',
   'product.espr_compliance': 'ESPR compliance status',
@@ -90,8 +88,8 @@ const PATH_LABELS = {
   'product.model': 'Model',
   'product.description': 'Description',
   'product.gtin': 'Product GTIN',
-  'variant.color': 'Variant colour',
-  'variant.size': 'Variant size',
+  'variant.attributes.color': 'Variant colour',
+  'variant.attributes.size': 'Variant size',
   'variant.sku': 'Variant SKU',
   'variant.weight_g': 'Variant weight',
   'batch.batch_number': 'Batch number',

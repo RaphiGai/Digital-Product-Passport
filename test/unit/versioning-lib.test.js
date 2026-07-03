@@ -62,9 +62,12 @@ describe('mandatory-fields — approve gate', () => {
 
   const fullProduct = {
     product_type: 'finished', name: 'Tee', brand: 'Greenline', category_code: 'tops',
-    fibre_composition: '100% Cotton', care_instructions: 'Wash 30', repair_instructions: 'Sew',
-    disposal_instructions: 'Recycle', country_of_origin: 'PT', substances_of_concern: 'None',
-    espr_compliance: 'compliant'
+    country_of_origin: 'PT', substances_of_concern: 'None', espr_compliance: 'compliant',
+    // category-specific fields live in the attributes bag (Epic 12 migration)
+    attributes: {
+      fibre_composition: '100% Cotton', care_instructions: 'Wash 30',
+      repair_instructions: 'Sew', disposal_instructions: 'Recycle'
+    }
   };
 
   test('a fully-populated product (no batch) has no missing fields', () => {
@@ -72,7 +75,7 @@ describe('mandatory-fields — approve gate', () => {
   });
 
   test('lists every missing product field by friendly label', () => {
-    const p = { ...fullProduct, care_instructions: '', repair_instructions: null };
+    const p = { ...fullProduct, attributes: { ...fullProduct.attributes, care_instructions: '', repair_instructions: null } };
     const labels = missingMandatory(p, null, catalogue).map((m) => m.label);
     expect(labels).toContain('Care instructions');
     expect(labels).toContain('Repair instructions');

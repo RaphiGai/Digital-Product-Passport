@@ -93,7 +93,7 @@ describe('DPP versioning lifecycle (publish-driven, frozen, drift-reverting)', (
 
   test('approve lists ALL missing mandatory fields (full catalogue), not just the legacy four', async () => {
     // Clear two catalogue-mandatory fields → editing reverts to draft → approve must list both.
-    await PATCH(`/odata/v4/dpp/Products('${PRODUCT}')`, { care_instructions: null, repair_instructions: null }, alice);
+    await PATCH(`/odata/v4/dpp/Products('${PRODUCT}')`, { attributes: JSON.stringify({ fibre_composition: '95% Cotton, 5% Elastane', disposal_instructions: 'Textile recycling bin' }) }, alice);
     const { data: dpp } = await readDpp();
     expect(dpp.status).toBe('draft'); // reverted by drift
 

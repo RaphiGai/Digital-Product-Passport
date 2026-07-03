@@ -36,7 +36,7 @@ describe('fieldCatalogue — merged per-category catalogue', () => {
     expect(fibre.mandatory).toBe(true);
     expect(fibre.locked).toBe(true);
     expect(fibre.visibility).toBe('public');
-    expect(fibre.storage).toBe('column');
+    expect(fibre.storage).toBe('json'); // bag-backed since the Epic 12 migration
 
     const gtin = cat.fields.find((f) => f.key === 'gtin' && f.level === 'product');
     expect(gtin.visibility).toBe('internal');
