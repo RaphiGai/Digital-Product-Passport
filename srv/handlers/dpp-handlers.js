@@ -3,34 +3,26 @@
 const cds = require('@sap/cds');
 const { randomUUID } = require('crypto');
 const tokens = require('../lib/token');
-const { requireOwningOrg } = require('./auth-helpers');
+const { requireOwningOrg, requireActiveUser } = require('./auth-helpers');
 const { aggregate } = require('../lib/aggregator');
-const { missingMandatory } = require('../lib/mandatory-fields');
+const { evaluateDppChecks, loadDppValidationContext } = require('../lib/dpp-validation');
 const { contentHash, diffNormalized } = require('../lib/snapshot-hash');
 
 const DPP_OWNER_PATH = 'product.owning_organization_ID';
 
 /**
- * Mandatory-field check used by approveDPP/publishDPP. Returns an array of
- * human-readable error strings — empty means OK to proceed. The mandatory set is
- * the full field catalogue (srv/lib/mandatory-fields.js), kept in sync with the
- * frontend dpp_frontend/app/src/lib/fieldCatalogue.js. Errors are reported inline
- * via req.reject (no ValidationWarnings persistence).
+ * Readiness gate used by approveDPP/publishDPP. Returns an array of
+ * human-readable error strings — empty means OK to proceed. Evaluates the
+ * unified check catalogue (srv/lib/dpp-validation.js), so the gate result is
+ * always identical to what the Validation page and the DPP-detail readiness
+ * panel display. Errors are reported inline via req.reject.
  */
 async function checkDPPReady(dpp) {
-  const { Products, Batches } = cds.entities('dpp');
-
   if (!dpp.product_ID) return ['The DPP must reference a product.'];
-  const product = await SELECT.one.from(Products).where({ ID: dpp.product_ID });
-  if (!product) return ['The referenced product does not exist.'];
-
-  let batch = null;
-  if (dpp.batch_ID) {
-    batch = await SELECT.one.from(Batches).where({ ID: dpp.batch_ID });
-    if (!batch) return ['The referenced batch does not exist.'];
-  }
-
-  return missingMandatory(product, batch).map((m) => `${m.label} is required.`);
+  const ctx = await loadDppValidationContext(dpp);
+  if (!ctx.product) return ['The referenced product does not exist.'];
+  if (dpp.batch_ID && !ctx.batch) return ['The referenced batch does not exist.'];
+  return evaluateDppChecks(ctx).gate_errors;
 }
 
 /**
@@ -350,6 +342,14 @@ module.exports = (srv) => {
       if (current && current.status === 'archived') {
         req.reject(400, 'This DPP is archived and cannot be modified. Unarchive it first.');
       }
+      // Approved/published are outcomes of the approve/publish workflow (mandatory-field
+      // gate, drift baseline, version snapshot, QR token) — a direct PATCH would skip all
+      // of it. The lifecycle actions write programmatically (no bound key params) or via
+      // the DB-level entity, so only client PATCHes are rejected here.
+      const target = req.data.status;
+      if ((target === 'approved' || target === 'published') && current && current.status !== target) {
+        req.reject(400, 'This status can only be set through the approval or publishing workflow.');
+      }
     }
   });
 
@@ -500,13 +500,12 @@ module.exports = (srv) => {
   srv.on('validationStatus', DPPs, async (req) => {
     const id = req.params[req.params.length - 1].ID;
     await requireOwningOrg(req, 'DPPs', id, DPP_OWNER_PATH);
-    const { Products, Batches, DPPVersions } = cds.entities('dpp');
+    const { DPPVersions } = cds.entities('dpp');
     const dpp = await SELECT.one.from(DPPs).where({ ID: id });
     if (!dpp) req.reject(404, 'DPP not found.');
 
-    const product = dpp.product_ID ? await SELECT.one.from(Products).where({ ID: dpp.product_ID }) : null;
-    const batch = dpp.batch_ID ? await SELECT.one.from(Batches).where({ ID: dpp.batch_ID }) : null;
-    const missing = missingMandatory(product, batch);
+    // Full unified check catalogue — same evaluation the approve/publish gate runs.
+    const validation = evaluateDppChecks(await loadDppValidationContext(dpp));
 
     // Latest published version = what the consumer currently sees.
     const versions = await SELECT.from(DPPVersions)
@@ -536,11 +535,117 @@ module.exports = (srv) => {
       status: dpp.status,
       live_version: liveVersion,
       next_version: (liveVersion || 0) + 1,
-      can_approve: missing.length === 0,
-      missing_mandatory: missing,
+      can_approve: validation.can_approve,
+      missing_mandatory: validation.missing_mandatory,
+      checks: validation.checks,
+      passed: validation.passed,
+      total: validation.total,
+      score: validation.score,
+      percent: validation.percent,
+      mandatory_failed: validation.mandatory_failed,
       pending_changes: pendingChanges,
       changed_fields: changedFields
     });
+  });
+
+  // ----- Function: validationOverview (unbound; org-wide readiness for the Validation page) -----
+  // Read-only (NOT a write event) → also readable by company_user. Bulk-loads the caller
+  // org's DPPs with their source records in a handful of IN-list queries (same pattern as
+  // compliance-handlers.js) and evaluates the unified check catalogue per DPP. Returns a
+  // JSON string: { generated_at, dpps: [{ dpp, product, variant, batch, item, validation }] }.
+  srv.on('validationOverview', async (req) => {
+    const orgId = await requireActiveUser(req);
+    const { Products, ProductVariants, Batches, ProductItems, ProductBOMs, BatchComponents } = cds.entities('dpp');
+    const DPPdb = cds.entities('dpp').DPPs;
+
+    const empty = () => JSON.stringify({ generated_at: new Date().toISOString(), dpps: [] });
+
+    const products = await SELECT.from(Products).where({ owning_organization_ID: orgId });
+    if (!products.length) return empty();
+    const productIds = products.map((p) => p.ID);
+    const pById = Object.fromEntries(products.map((p) => [p.ID, p]));
+
+    const dpps = await SELECT.from(DPPdb).where({ product_ID: { in: productIds } });
+    if (!dpps.length) return empty();
+
+    const variants = await SELECT.from(ProductVariants).where({ product_ID: { in: productIds } });
+    const vById = Object.fromEntries(variants.map((v) => [v.ID, v]));
+    const variantIds = variants.map((v) => v.ID);
+
+    const batches = variantIds.length
+      ? await SELECT.from(Batches).where({ variant_ID: { in: variantIds } })
+      : [];
+    const bById = Object.fromEntries(batches.map((b) => [b.ID, b]));
+    const batchIds = batches.map((b) => b.ID);
+
+    const itemIds = [...new Set(dpps.map((d) => d.item_ID).filter(Boolean))];
+    const items = itemIds.length
+      ? await SELECT.from(ProductItems).where({ ID: { in: itemIds } })
+      : [];
+    const iById = Object.fromEntries(items.map((i) => [i.ID, i]));
+
+    const boms = variantIds.length
+      ? await SELECT.from(ProductBOMs).where({ parent_ID: { in: variantIds } })
+      : [];
+    const bomsByVariant = new Map();
+    for (const b of boms) {
+      if (!bomsByVariant.has(b.parent_ID)) bomsByVariant.set(b.parent_ID, []);
+      bomsByVariant.get(b.parent_ID).push(b);
+    }
+
+    const comps = batchIds.length
+      ? await SELECT.from(BatchComponents).where({ batch_ID: { in: batchIds } })
+      : [];
+    const compsByBatch = new Map();
+    for (const c of comps) {
+      if (!compsByBatch.has(c.batch_ID)) compsByBatch.set(c.batch_ID, []);
+      compsByBatch.get(c.batch_ID).push(c);
+    }
+
+    const entries = dpps
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+      .map((dpp) => {
+        const product = pById[dpp.product_ID] || null;
+        const batch = dpp.batch_ID ? bById[dpp.batch_ID] || null : null;
+        const variantId = dpp.variant_ID || (batch && batch.variant_ID) || null;
+        const variant = variantId ? vById[variantId] || null : null;
+        const item = dpp.item_ID ? iById[dpp.item_ID] || null : null;
+        const bom = variant ? bomsByVariant.get(variant.ID) || [] : [];
+        const batchComponents = batch ? compsByBatch.get(batch.ID) || [] : [];
+
+        const validation = evaluateDppChecks({ dpp, product, variant, batch, item, bom, batchComponents });
+
+        return {
+          dpp: {
+            ID: dpp.ID,
+            status: dpp.status,
+            visibility: dpp.visibility,
+            dpp_type: dpp.dpp_type,
+            current_version: dpp.current_version,
+            product_ID: dpp.product_ID,
+            variant_ID: variantId,
+            batch_ID: dpp.batch_ID,
+            item_ID: dpp.item_ID,
+            createdAt: dpp.createdAt
+          },
+          product: product ? { ID: product.ID, name: product.name } : null,
+          variant: variant ? { ID: variant.ID, color: variant.color, size: variant.size, sku: variant.sku } : null,
+          batch: batch ? { ID: batch.ID, batch_number: batch.batch_number } : null,
+          item: item ? { ID: item.ID, serial_number: item.serial_number, upi: item.upi } : null,
+          validation: {
+            checks: validation.checks,
+            can_approve: validation.can_approve,
+            missing_mandatory: validation.missing_mandatory,
+            mandatory_failed: validation.mandatory_failed,
+            passed: validation.passed,
+            total: validation.total,
+            score: validation.score,
+            percent: validation.percent
+          }
+        };
+      });
+
+    return JSON.stringify({ generated_at: new Date().toISOString(), dpps: entries });
   });
 
   // ----- Action: regenerateQRToken (US6.14) -----

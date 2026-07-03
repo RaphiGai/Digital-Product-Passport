@@ -1,6 +1,7 @@
 'use strict';
 
 const { getUserOrg, requireOwningOrg } = require('./auth-helpers');
+const { isHttpUrl } = require('../lib/url-validate');
 
 function rejectCrossOrgWrite(req, fieldValue, callerOrgId) {
   if (fieldValue !== undefined && fieldValue !== callerOrgId) {
@@ -15,14 +16,14 @@ function checkValidWindow(req) {
   }
 }
 
-// The link target and an external thumbnail must be real web URLs. An uploaded thumbnail
-// (image_data) is a base64 data: URL and is intentionally not validated for format here.
+// The link target and an external thumbnail must be real web URLs (rendered as <a href> /
+// <img src> on the public page). An uploaded thumbnail (image_data) is a base64 data: URL
+// and is intentionally not format-checked here. Shares the http(s) rule with url-validate.js.
 function checkUrls(req) {
-  const isWeb = (v) => /^https?:\/\//i.test(v);
-  if (req.data.url && !isWeb(req.data.url)) {
+  if (!isHttpUrl(req.data.url)) {
     req.reject(400, 'The link URL must start with https:// (or http://).');
   }
-  if (req.data.image_url && !isWeb(req.data.image_url)) {
+  if (!isHttpUrl(req.data.image_url)) {
     req.reject(400, 'The image URL must start with https:// (or http://).');
   }
 }

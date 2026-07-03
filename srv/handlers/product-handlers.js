@@ -2,7 +2,14 @@
 
 const cds = require('@sap/cds');
 const { getUserOrg, requireOwningOrg } = require('./auth-helpers');
+const { assertHttpUrls } = require('../lib/url-validate');
 const dppHandlers = require('./dpp-handlers'); // for reevaluateDrift (one-way require)
+
+// Product URL fields rendered as <a href> on the public consumer page — must be http(s).
+const PRODUCT_URL_FIELDS = [
+  'care_video_url', 'repair_video_url', 'disposal_video_url', 'reuse_video_url',
+  'care_products_url', 'repair_products_url', 'reuse_products_url', 'disposal_products_url'
+];
 
 function rejectCrossOrgWrite(req, fieldValue, callerOrgId) {
   if (fieldValue !== undefined && fieldValue !== callerOrgId) {
@@ -92,6 +99,8 @@ module.exports = (srv) => {
         req.reject(400, 'Durability and repairability scores must be between 0 and 10.');
       }
     }
+    // Consumer-facing URLs must be http(s) — block stored javascript:/data: XSS.
+    assertHttpUrls(req, req.data, PRODUCT_URL_FIELDS);
   });
 
   srv.before('CREATE', BusinessPartners, async (req) => {
@@ -163,6 +172,8 @@ module.exports = (srv) => {
     if (ext_recycled_content_pct != null && (ext_recycled_content_pct < 0 || ext_recycled_content_pct > 100)) {
       req.reject(400, 'Recycled content must be between 0 and 100 %.');
     }
+    // external_dpp_url is rendered as <a href> in the public materials tree — must be http(s).
+    assertHttpUrls(req, req.data, ['external_dpp_url']);
     if (parentVariant && component_ID) {
       const dbEntities = cds.entities('dpp');
       const wouldCycle = await descendantsReach(

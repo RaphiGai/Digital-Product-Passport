@@ -104,6 +104,50 @@ module.exports = (srv) => {
     );
   });
 
+  // ----- Write-side tenant isolation -----
+  // CAP applies the READ filters above ONLY to READ; CREATE/UPDATE/DELETE bypass them.
+  // So verify ownership on every write: the TARGET row (UPDATE/DELETE) and the referenced
+  // PARENT(s) (CREATE) must belong to the caller's organization. Reuses requireOwningOrg +
+  // the TENANT_ANCHORS owner paths. (Documents keep their own XOR guards in
+  // document-handlers.js; internal writes via cds.entities('dpp') bypass these hooks.)
+  const keyOf = (req) => {
+    const last = req.params && req.params[req.params.length - 1];
+    return last && typeof last === 'object' ? last.ID : last;
+  };
+
+  // CREATE parent-ownership: entity → [ [fkField, parentEntity, ownerPath], … ].
+  const CREATE_PARENTS = {
+    ProductVariants:      [['product_ID', 'Products', 'owning_organization_ID']],
+    Batches:              [['variant_ID', 'ProductVariants', 'product.owning_organization_ID']],
+    ProductItems:         [['batch_ID', 'Batches', 'variant.product.owning_organization_ID']],
+    ProductBOMs:          [['parent_ID', 'ProductVariants', 'product.owning_organization_ID']],
+    BatchComponents:      [['batch_ID', 'Batches', 'variant.product.owning_organization_ID'],
+                           ['bom_ID', 'ProductBOMs', 'parent.product.owning_organization_ID']],
+    QRCodes:              [['dpp_ID', 'DPPs', 'product.owning_organization_ID']],
+    DPPs:                 [['product_ID', 'Products', 'owning_organization_ID']],
+    BusinessPartnerRoles: [['partner_ID', 'BusinessPartners', 'owning_organization_ID']]
+  };
+
+  // UPDATE/DELETE target-ownership for every tenant-anchored entity, except Organizations
+  // (own self-guard below) and DPPVersions (writes already rejected).
+  const WRITE_GUARD_SKIP = new Set(['Organizations', 'DPPVersions']);
+  for (const [entity, ownerPath] of Object.entries(TENANT_ANCHORS)) {
+    if (WRITE_GUARD_SKIP.has(entity)) continue;
+    srv.before(['UPDATE', 'DELETE'], entity, async (req) => {
+      const id = keyOf(req);
+      if (id == null) req.reject(400, 'A record key is required for this operation.');
+      await authHelpers.requireOwningOrg(req, entity, id, ownerPath);
+    });
+  }
+  for (const [entity, parents] of Object.entries(CREATE_PARENTS)) {
+    srv.before('CREATE', entity, async (req) => {
+      for (const [fk, parentEntity, ownerPath] of parents) {
+        const v = req.data && req.data[fk];
+        if (v != null) await authHelpers.requireOwningOrg(req, parentEntity, v, ownerPath);
+      }
+    });
+  }
+
   // ----- Audit stamping (catalogue: CreatedBy / ChangedBy / CreatedAt / LastChange) -----
   // The acting user (req.user._appUserId) and timestamps are stamped server-side
   // for the eight catalogue business objects; client-supplied values are ignored.

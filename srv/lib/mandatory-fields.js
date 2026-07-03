@@ -1,19 +1,23 @@
 'use strict';
 
 /**
- * Mandatory-field catalogue for the DPP approve/publish gate — the single backend
- * source of truth for "what must be filled before a passport can be approved".
+ * Mandatory-field catalogue — the field-presence core of the unified DPP
+ * validation (srv/lib/dpp-validation.js builds the full check catalogue on top
+ * of these lists; add/remove FIELDS here, add/remove CHECKS there).
  *
- * KEEP IN SYNC with the frontend catalogue dpp_frontend/app/src/lib/fieldCatalogue.js
- * (the `mandatory: true` entries of PRODUCT_CATALOGUE / BATCH_CATALOGUE). The key set
- * is asserted equal in test/unit/mandatory-fields.test.js. Labels here are clean,
- * human-facing English (no internal column names), per the error-message conventions.
+ * Consumers:
+ *  - srv/lib/dpp-validation.js → approve/publish gate + validationStatus/validationOverview
+ *  - srv/handlers/compliance-handlers.js → product-level readiness KPIs
  *
- * Deliberately EXCLUDED from the approve gate: the product `status` field — it is the
- * product's own internal lifecycle, not DPP content. `product_type` is included for
- * catalogue fidelity (it is non-null in the DB, so it never actually blocks).
- * `espr_compliance` is checked for PRESENCE only — its default 'draft' counts as set;
- * compliance *quality* is surfaced separately in the compliance view, not the gate.
+ * Behavior is asserted in test/unit/versioning-lib.test.js and
+ * test/unit/dpp-validation.test.js. Labels are clean, human-facing English
+ * (no internal column names), per the error-message conventions.
+ *
+ * Deliberately EXCLUDED: the product `status` field — it is the product's own
+ * internal lifecycle, not DPP content. `product_type` is included for catalogue
+ * fidelity (it is non-null in the DB, so it never actually blocks).
+ * `espr_compliance` must be 'compliant' — a merely-set status (draft/in_review/
+ * non_compliant) blocks approval; see isSatisfied below.
  */
 
 const MANDATORY = {
@@ -31,6 +35,8 @@ const MANDATORY = {
     { key: 'espr_compliance', label: 'ESPR compliance status' }
   ],
   batch: [
+    { key: 'batch_number', label: 'Batch number' },
+    { key: 'production_date', label: 'Production date' },
     { key: 'country_of_origin', label: 'Batch country of origin' }
   ]
 };
@@ -38,6 +44,15 @@ const MANDATORY = {
 /** A value is "present" when it is neither null/undefined nor an empty/whitespace string. */
 function isPresent(value) {
   return value != null && String(value).trim() !== '';
+}
+
+/**
+ * Whether a single mandatory field is satisfied. All fields are presence
+ * checks except espr_compliance, which must be exactly 'compliant'.
+ */
+function isSatisfied(key, value) {
+  if (key === 'espr_compliance') return value === 'compliant';
+  return isPresent(value);
 }
 
 /**
@@ -52,15 +67,15 @@ function missingMandatory(product, batch) {
     missing.push({ scope: 'product', key: '_product', label: 'Product' });
   } else {
     for (const f of MANDATORY.product) {
-      if (!isPresent(product[f.key])) missing.push({ scope: 'product', key: f.key, label: f.label });
+      if (!isSatisfied(f.key, product[f.key])) missing.push({ scope: 'product', key: f.key, label: f.label });
     }
   }
   if (batch) {
     for (const f of MANDATORY.batch) {
-      if (!isPresent(batch[f.key])) missing.push({ scope: 'batch', key: f.key, label: f.label });
+      if (!isSatisfied(f.key, batch[f.key])) missing.push({ scope: 'batch', key: f.key, label: f.label });
     }
   }
   return missing;
 }
 
-module.exports = { MANDATORY, isPresent, missingMandatory };
+module.exports = { MANDATORY, isPresent, isSatisfied, missingMandatory };

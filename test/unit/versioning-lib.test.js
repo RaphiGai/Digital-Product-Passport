@@ -79,8 +79,11 @@ describe('mandatory-fields — approve gate', () => {
     expect(labels).toContain('Batch country of origin');
   });
 
-  test('espr_compliance default "draft" counts as present (presence check only)', () => {
-    expect(missingMandatory({ ...fullProduct, espr_compliance: 'draft' }, null)).toEqual([]);
+  test('espr_compliance below "compliant" blocks approval (strict check)', () => {
+    const labels = missingMandatory({ ...fullProduct, espr_compliance: 'draft' }, null).map((m) => m.label);
+    expect(labels).toContain('ESPR compliance status');
+    // 'compliant' satisfies the check
+    expect(missingMandatory(fullProduct, null)).toEqual([]);
   });
 
   test('a missing product is reported', () => {

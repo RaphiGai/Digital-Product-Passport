@@ -27,7 +27,10 @@ const DEV_SESSION_SECRET = 'dpp-dev-session-secret-do-not-use-in-production';
 function getSecret() {
   const s = process.env.SESSION_SECRET;
   if (s && s.length >= 16) return s;
-  if (process.env.NODE_ENV !== 'production') return DEV_SESSION_SECRET;
+  // Fail closed: the committed dev default is allowed ONLY in an explicit local
+  // dev/test context. An unset NODE_ENV (a common prod misconfiguration) must NOT
+  // silently fall back to a public secret — require a real SESSION_SECRET instead.
+  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') return DEV_SESSION_SECRET;
   throw new Error('SESSION_SECRET must be set to at least 16 characters');
 }
 

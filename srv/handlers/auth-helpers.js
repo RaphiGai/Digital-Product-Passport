@@ -60,15 +60,14 @@ function getAppRole(req) {
  * Resolve the caller's owning organization (cached per request via the cds tx).
  */
 async function getUserOrg(req) {
-  // Entity-specific before-handlers (e.g. CREATE Products/BusinessPartners) run
-  // ahead of the central before('*') gate, and the XSUAA token carries no tenant
-  // claim — so resolve the user here to inject req.user.attr.tenant first. Idempotent.
-  await resolveAppUserInline(req);
-  const tenantId = requireTenant(req);
+  // Resolve + enforce an active DB user first (fail-closed), then load its org row.
+  // requireActiveUser returns the org id derived from the active Users row — so this no
+  // longer trusts the cookie tenant claim alone.
+  const orgId = await requireActiveUser(req);
   const { Organizations } = cds.entities('dpp');
-  const org = await SELECT.one.from(Organizations).where({ tenant_id: tenantId });
+  const org = await SELECT.one.from(Organizations).where({ ID: orgId });
   if (!org) {
-    console.warn(`[auth] no organization found for tenant '${tenantId}'`);
+    console.warn(`[auth] no organization found for org id '${orgId}'`);
     req.reject(403, 'Your account is not assigned to an organization. Please contact your administrator.');
   }
   return org;
@@ -96,6 +95,9 @@ async function resolveAppUserInline(req) {
     if (userRow) break;
   }
   if (!userRow || userRow.active === false) {
+    // Deactivated or deleted: mark inactive so requireActiveUser fails closed. The
+    // session cookie's role/tenant claims must NOT by themselves keep access alive.
+    req.user._appInactive = true;
     console.warn(`[auth] no active Users row for ${JSON.stringify(candidates)}`);
     return;
   }
@@ -128,15 +130,14 @@ async function resolveAppUserInline(req) {
 async function requireActiveUser(req) {
   await resolveAppUserInline(req);
 
-  const role = getAppRole(req);
-  const tenant = getTenant(req);
-  if (!role || !tenant) {
+  // Fail closed: an ACTIVE Users row must have been resolved this request. The session
+  // cookie carries role/tenant claims, but they must not by themselves grant access —
+  // a deactivated/deleted user (_appInactive, or no _appUserId/_appOrgId resolved) is
+  // rejected on the very next request instead of surviving until the cookie expires.
+  if (req.user._appInactive || !req.user._appUserId || !req.user._appOrgId) {
     req.reject(403, 'Your account is not active. Please contact your administrator.');
   }
-  if (req.user._appOrgId) return req.user._appOrgId;
-  const org = await getUserOrg(req);
-  req.user._appOrgId = org.ID;
-  return org.ID;
+  return req.user._appOrgId;
 }
 
 function requireRole(req, ...roles) {

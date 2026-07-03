@@ -106,7 +106,10 @@ service DPPService @(
     function aggregatedFootprint()                   returns AggregatedFootprint;
 
     // Readiness + drift for the DPP-detail validation panel (JSON string):
-    // { status, live_version, next_version, can_approve, missing_mandatory[], pending_changes, changed_fields[] }
+    // { status, live_version, next_version, can_approve, missing_mandatory[], checks[],
+    //   passed, total, score, percent, mandatory_failed, pending_changes, changed_fields[] }
+    // checks[] is the full unified catalogue (srv/lib/dpp-validation.js) — the same
+    // evaluation the approveDPP/publishDPP gate runs.
     function validationStatus()                      returns LargeString;
   };
 
@@ -172,4 +175,11 @@ service DPPService @(
     productType : String(20),
     esprStatus  : String(20)
   ) returns LargeString;
+
+  // ----- Validation overview — see srv/handlers/dpp-handlers.js -----
+  // Org-wide readiness for the Validation page: every DPP of the caller's org with the
+  // full unified check catalogue (srv/lib/dpp-validation.js) evaluated per DPP, as a
+  // JSON string { generated_at, dpps: [{ dpp, product, variant, batch, item, validation }] }.
+  // Read-only and intentionally NOT in auth-helpers.WRITE_EVENTS → company_user may read.
+  function validationOverview() returns LargeString;
 }

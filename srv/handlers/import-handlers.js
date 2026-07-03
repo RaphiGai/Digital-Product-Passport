@@ -2,6 +2,13 @@
 
 const { randomUUID } = require('crypto');
 const { getUserOrg } = require('./auth-helpers');
+const { isHttpUrl } = require('../lib/url-validate');
+
+// Product URL fields rendered as <a href> on the public consumer page — must be http(s).
+const PRODUCT_URL_FIELDS = [
+  'care_video_url', 'repair_video_url', 'disposal_video_url', 'reuse_video_url',
+  'care_products_url', 'repair_products_url', 'reuse_products_url', 'disposal_products_url'
+];
 
 // ── Enum sets for validation ───────────────────────────────────────────────
 const PRODUCT_TYPES    = new Set(['finished', 'material', 'component', 'packaging']);
@@ -140,6 +147,11 @@ module.exports = (srv) => {
       const name = str(r.name);
       if (name && existingNames.has(name.toLowerCase()))
         err(allIssues, i, 'name', `A product named "${name}" already exists — skipped.`);
+
+      // Consumer-facing URLs must be http(s) — block stored javascript:/data: XSS on import.
+      for (const key of PRODUCT_URL_FIELDS) {
+        if (!isHttpUrl(r[key])) err(allIssues, i, key, `"${key}" must start with https:// (or http://).`);
+      }
 
       if (countHardErrors(allIssues, issueBase) === 0) {
         toInsert.push({
@@ -406,6 +418,10 @@ module.exports = (srv) => {
         err(allIssues, i, 'co2_footprint_kg', 'CO₂ footprint cannot be negative.');
       if (recycled !== null && (recycled < 0 || recycled > 100))
         err(allIssues, i, 'recycled_content_pct', 'Recycled content must be 0–100.');
+
+      // external_dpp_url is rendered as <a href> in the public materials tree — must be http(s).
+      if (!isHttpUrl(r.external_dpp_url))
+        err(allIssues, i, 'external_dpp_url', 'External DPP URL must start with https:// (or http://).');
 
       // Duplicate edge check.
       const compRef = compProduct ? compProduct.ID : compName;

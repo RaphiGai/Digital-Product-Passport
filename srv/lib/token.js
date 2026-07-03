@@ -31,7 +31,10 @@ const SEG_MAX = 32; // bound each segment so the token stays within DPPs.qr_toke
 function getSecret() {
   const s = process.env.QR_TOKEN_HMAC_SECRET;
   if (s && s.length >= 16) return s;
-  if (process.env.NODE_ENV !== 'production') return DEV_QR_SECRET;
+  // Fail closed: the committed dev default is allowed ONLY in an explicit local
+  // dev/test context. An unset NODE_ENV (a common prod misconfiguration) must NOT
+  // silently fall back to a public secret — require a real QR_TOKEN_HMAC_SECRET instead.
+  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') return DEV_QR_SECRET;
   throw new Error('QR_TOKEN_HMAC_SECRET must be set to at least 16 characters');
 }
 
