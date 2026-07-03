@@ -73,6 +73,25 @@ service DPPService @(
   @readonly
   entity ProductCategories     as projection on db.ProductCategories;
 
+  // ----- Attribute catalogue (Epic 12) — read-only master data -----
+  // Curated as seed/master data by developers/IT consultants; global (not
+  // tenant-scoped, like ProductCategories). The frontend consumes the merged
+  // per-category catalogue via the fieldCatalogue() function below, not these
+  // raw sets — they are exposed for transparency/debugging.
+  @readonly
+  entity AttributeDefinitions  as projection on db.AttributeDefinitions;
+  @readonly
+  entity AttributeSections     as projection on db.AttributeSections;
+  @readonly
+  entity CategoryRequirements  as projection on db.CategoryRequirements;
+
+  // Merged field catalogue for one product category (core ∪ category rows), as a
+  // JSON string: { category, sections:[{key,title,icon,sort_order,show_on_consumer}],
+  // fields:[{key,level,storage,label,datatype,widget,section,grp,sort_order,unit,
+  // constraints…,mandatory,fix_hint,visibility,locked}] }. Null/unknown category
+  // resolves to the default category (see srv/lib/catalogue.js#DEFAULT_CATEGORY).
+  function fieldCatalogue(category : String) returns LargeString;
+
   entity ProductVariants       as projection on db.ProductVariants;
   entity Batches               as projection on db.Batches;
   entity ProductItems          as projection on db.ProductItems;

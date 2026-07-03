@@ -12,6 +12,7 @@ const userHandlers        = require('./handlers/user-handlers');
 const importHandlers      = require('./handlers/import-handlers');
 const analyticsHandlers   = require('./handlers/analytics-handlers');
 const complianceHandlers  = require('./handlers/compliance-handlers');
+const catalogueHandlers   = require('./handlers/catalogue-handlers');
 
 /**
  * App-internal RBAC + tenant isolation is enforced here in handlers instead
@@ -217,4 +218,5 @@ module.exports = (srv) => {
   importHandlers(srv);
   analyticsHandlers(srv);
   complianceHandlers(srv);
+  catalogueHandlers(srv);
 };

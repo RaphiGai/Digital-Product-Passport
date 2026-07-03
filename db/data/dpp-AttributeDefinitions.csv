@@ -1,0 +1,41 @@
+ID;category_code;level;key;storage;label;datatype;widget;section_ID;grp;sort_order;unit;min_value;max_value;max_length;regex;options;mandatory;fix_hint;validation_section;default_visibility;locked_public;is_active
+attr-prod-product-type;;product;product_type;column;Product type;enum;select;sec-basic;;10;;;;;;;true;Add product type.;Product;internal;false;true
+attr-prod-name;;product;name;column;Name;string;input;sec-basic;;20;;;;120;;;true;Add product name.;Product;public;true;true
+attr-prod-brand;;product;brand;column;Brand;string;input;sec-basic;;30;;;;120;;;true;Add brand.;Product;public;true;true
+attr-prod-category;;product;category;column;Category;string;select;sec-basic;;40;;;;;;;true;Select a product category.;Product;public;true;true
+attr-prod-model;;product;model;column;Model;string;input;sec-basic;;50;;;;120;;;false;;Product;public;false;true
+attr-prod-description;;product;description;column;Description;text;textarea;sec-basic;;60;;;;500;;;false;;Product;public;false;true
+attr-prod-gtin;;product;gtin;column;GTIN;string;input;sec-basic;;70;;;;14;;;false;;Product;internal;false;true
+attr-prod-upc;;product;upc;column;UPC;string;input;sec-basic;;80;;;;20;;;false;;Product;internal;false;true
+attr-prod-ein;;product;ein;column;EIN;string;input;sec-basic;;90;;;;20;;;false;;Product;internal;false;true
+attr-prod-status;;product;status;column;Product status;enum;select;sec-basic;;200;;;;;;;false;;Product;internal;false;true
+attr-prod-storytelling;;product;storytelling;column;Storytelling;text;storytelling;sec-basic;;210;;;;;;;false;;Product;public;false;true
+attr-prod-country-of-origin;;product;country_of_origin;column;Country of origin;string;country;sec-compliance;;10;;;;;;;true;Add country of origin.;Product;public;true;true
+attr-prod-substances;;product;substances_of_concern;column;Substances of concern;text;textarea;sec-compliance;;20;;;;500;;;true;Add substances of concern, REACH status or SCIP reference.;Product;public;true;true
+attr-prod-espr-compliance;;product;espr_compliance;column;ESPR compliance status;enum;select;sec-compliance;;30;;;;;;;true;Set ESPR compliance status to Compliant in Product information.;Product;public;true;true
+attr-prod-durability;;product;durability_score;column;Durability score;number;score;sec-scores;;10;;0;10;;;;false;;Product;public;false;true
+attr-prod-repairability;;product;repairability_score;column;Repairability score;number;score;sec-scores;;20;;0;10;;;;false;;Product;public;false;true
+attr-tex-fibre-composition;textiles;product;fibre_composition;column;Fibre composition;text;textarea;sec-materials;;10;;;;500;;;true;Add fibre composition.;Product;public;true;true
+attr-tex-care-instructions;textiles;product;care_instructions;column;Care instructions;text;textarea;sec-care;care;10;;;;500;;;true;Add washing/care instructions.;Circularity;public;true;true
+attr-tex-care-video;textiles;product;care_video_url;column;Care video link;url;video_link;sec-care;care;11;;;;500;;;false;;Circularity;public;false;true
+attr-tex-care-products;textiles;product;care_products_url;column;Care products link;url;shop_link;sec-care;care;12;;;;500;;;false;;Circularity;public;false;true
+attr-tex-repair-instructions;textiles;product;repair_instructions;column;Repair instructions;text;textarea;sec-care;repair;20;;;;500;;;true;Add repair information.;Circularity;public;true;true
+attr-tex-repair-video;textiles;product;repair_video_url;column;Repair video link;url;video_link;sec-care;repair;21;;;;500;;;false;;Circularity;public;false;true
+attr-tex-repair-products;textiles;product;repair_products_url;column;Repair products link;url;shop_link;sec-care;repair;22;;;;500;;;false;;Circularity;public;false;true
+attr-tex-reuse-instructions;textiles;product;reuse_instructions;column;Reuse instructions;text;textarea;sec-care;reuse;30;;;;500;;;false;Add reuse or second-life information.;Circularity;public;false;true
+attr-tex-reuse-video;textiles;product;reuse_video_url;column;Reuse video link;url;video_link;sec-care;reuse;31;;;;500;;;false;;Circularity;public;false;true
+attr-tex-reuse-products;textiles;product;reuse_products_url;column;Reuse products link;url;shop_link;sec-care;reuse;32;;;;500;;;false;;Circularity;public;false;true
+attr-tex-disposal-instructions;textiles;product;disposal_instructions;column;Disposal instructions;text;textarea;sec-care;disposal;40;;;;500;;;true;Add disposal or recycling information.;Circularity;public;true;true
+attr-tex-disposal-video;textiles;product;disposal_video_url;column;Disposal video link;url;video_link;sec-care;disposal;41;;;;500;;;false;;Circularity;public;false;true
+attr-tex-disposal-products;textiles;product;disposal_products_url;column;Disposal products link;url;shop_link;sec-care;disposal;42;;;;500;;;false;;Circularity;public;false;true
+attr-tex-var-color;textiles;variant;color;column;Colour;string;input;sec-variant;;10;;;;40;;;false;Add color if relevant.;Variant;public;false;true
+attr-tex-var-size;textiles;variant;size;column;Size;string;input;sec-variant;;20;;;;20;;;false;Add size if relevant.;Variant;public;false;true
+attr-var-sku;;variant;sku;column;SKU;string;input;sec-variant;;30;;;;40;;;false;;Variant;internal;false;true
+attr-var-gtin;;variant;gtin;column;GTIN;string;input;sec-variant;;40;;;;14;;;false;;Variant;internal;false;true
+attr-var-image-url;;variant;image_url;column;Product image;url;image;sec-variant;;50;;;;500;;;false;;Variant;public;false;true
+attr-var-image-data;;variant;image_data;column;Product image;text;image;sec-variant;;51;;;;;;;false;;Variant;public;false;true
+attr-batch-number;;batch;batch_number;column;Batch number;string;input;sec-production;;10;;;;40;;;true;Add supplier/production batch number.;Production;internal;false;true
+attr-batch-production-date;;batch;production_date;column;Production date;date;date;sec-production;;20;;;;;;;true;Add production date.;Production;internal;false;true
+attr-batch-country-of-origin;;batch;country_of_origin;column;Batch country of origin;string;country;sec-production;;30;;;;;;;true;Add production country.;Production;public;true;true
+attr-batch-co2;;batch;co2_footprint_kg;column;CO₂ footprint;number;input;sec-sustainability;;10;kg;0;;;;;false;Add CO₂ footprint.;Sustainability;public;false;true
+attr-batch-recycled;;batch;recycled_content_pct;column;Recycled content;number;input;sec-sustainability;;20;%;0;100;;;;false;Add recycled content percentage.;Sustainability;public;false;true
