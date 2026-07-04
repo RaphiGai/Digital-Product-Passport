@@ -93,6 +93,7 @@ describe('DPP marketing links', () => {
         title: 'Matching scarf',
         subtitle: 'Complete the look',
         media_type: 'video',
+        placement: 'left',
         image_url: 'https://example.com/scarf.jpg',
         url: 'https://shop.example.com/scarf'
       },
@@ -104,7 +105,24 @@ describe('DPP marketing links', () => {
     expect(link).toBeTruthy();
     expect(link.subtitle).toBe('Complete the look');
     expect(link.media_type).toBe('video');
+    expect(link.placement).toBe('left');
     expect(link.image_url).toBe('https://example.com/scarf.jpg');
+    // A link without an explicit placement defaults to inline "discover_more".
+    const promo = data.marketing.find((m) => m.title === 'Sommerrabatt: -20% auf die neue Kollektion');
+    expect(promo && promo.placement).toBe('discover_more');
+  });
+
+  test('accepts a large base64 image_data (body over the 100 KB parser default, under 2 MB)', async () => {
+    // Regression: an uploaded thumbnail pushes the JSON body past body-parser's ~100 KB
+    // default → the service raises the limit via @cds.server.body_parser.limit: '2mb'.
+    const bigImage = 'data:image/jpeg;base64,' + 'A'.repeat(150 * 1024); // ~150 KB
+    const r = await POST(
+      '/odata/v4/dpp/DPPMarketingLinks',
+      { ID: 'ml-big-image', link_type: 'advertisement', title: 'Big banner', image_data: bigImage },
+      alice
+    );
+    expect(r.status).toBe(201);
+    expect(r.data.image_data.length).toBeGreaterThan(100 * 1024);
   });
 
   test('rejects an image URL that is not http(s)', async () => {

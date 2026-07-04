@@ -68,23 +68,46 @@ describe('DPP versioning lifecycle (publish-driven, frozen, drift-reverting)', (
     expect(v.next_version).toBe(2);
     expect(v.pending_changes).toBe(true);
     expect(v.changed_fields.some((c) => c.label === 'Model' || c.path === 'product.model')).toBe(true);
+
+    // ...and the unapproved-changes diff that drives the internal field markers.
+    expect(v.has_unapproved).toBe(true);
+    expect(v.unapproved_changes.some((c) => c.path === 'product.model')).toBe(true);
   });
 
-  test('re-approve + re-publish makes v2 live; v1 becomes immutable history', async () => {
+  test('re-approve preserves the old state as an approve-version; re-publish makes the new state live', async () => {
     const a = await approve();
     expect(a.data.status).toBe('approved');
-    const p = await publish('v2 with new model');
-    expect(p.data.current_version).toBe(2);
+
+    // Approve re-anchored the baseline: the internal field markers are cleared,
+    // but the consumer live version is still the old v1 → publish is pending.
+    const afterApprove = await validation();
+    expect(afterApprove.has_unapproved).toBe(false);
+    expect(afterApprove.pending_changes).toBe(true);
+
+    // The approve-snapshot must NOT leak to the consumer — still frozen v1.
+    const pubBefore = await getPublic(token);
+    expect(pubBefore.status).toBe(200);
+    expect(pubBefore.data.version).toBe(1);
+    expect(pubBefore.data.product.model).not.toBe('Edited Model 2026');
+
+    // Publish → v3 (v2 was consumed by the approve-snapshot of the old state).
+    const p = await publish('publish with new model');
+    expect(p.data.current_version).toBe(3);
 
     const pub = await getPublic(token);
     expect(pub.status).toBe(200);
-    expect(pub.data.version).toBe(2);
+    expect(pub.data.version).toBe(3);
     expect(pub.data.product.model).toBe('Edited Model 2026');
 
-    // Both versions are recorded; v1 is frozen history.
+    // History: v1 publish (old), v2 approve-snapshot (old state, no consumer payload),
+    // v3 publish (new state).
     const { data } = await GET(`/odata/v4/dpp/DPPVersions?$filter=dpp_ID eq '${DPP}'&$orderby=version_number desc`, alice);
-    const numbers = data.value.map((x) => x.version_number);
-    expect(numbers).toEqual(expect.arrayContaining([1, 2]));
+    const byNumber = Object.fromEntries(data.value.map((x) => [x.version_number, x]));
+    expect(byNumber[1].source).toBe('publish');
+    expect(byNumber[2].source).toBe('approve');
+    expect(byNumber[2].consumer_snapshot ?? null).toBeNull();
+    expect(JSON.parse(byNumber[2].snapshot_data).product.model).not.toBe('Edited Model 2026');
+    expect(byNumber[3].source).toBe('publish');
 
     // No net change after publishing → no pending changes.
     const v = await validation();
@@ -106,5 +129,10 @@ describe('DPP versioning lifecycle (publish-driven, frozen, drift-reverting)', (
       expect(msg).toMatch(/Care instructions/i);
       expect(msg).toMatch(/Repair instructions/i);
     }
+
+    // The gate fires BEFORE the approve-snapshot is written — a rejected approve
+    // must not add a version row (history still v1/v2/v3 from the tests above).
+    const { data } = await GET(`/odata/v4/dpp/DPPVersions?$filter=dpp_ID eq '${DPP}'`, alice);
+    expect(data.value.length).toBe(3);
   });
 });

@@ -103,6 +103,15 @@ type MarketingMediaType : String(10) enum {
   video;
 }
 
+// Where a marketing link is placed on the consumer DPP: inline in the "Discover more"
+// section, or in the left/right side rail next to the passport (desktop) / a "Featured"
+// block (mobile). null ⇒ treated as 'discover_more' (CSV-seeded rows bypass the default).
+type MarketingPlacement : String(16) enum {
+  discover_more;
+  left;
+  right;
+}
+
 type UserRole : String(20) enum {
   company_advanced;
   company_user;

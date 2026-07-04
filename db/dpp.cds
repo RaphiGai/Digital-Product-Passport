@@ -6,6 +6,7 @@ using {
   dpp.QRCodeStatus,
   dpp.MarketingLinkType,
   dpp.MarketingMediaType,
+  dpp.MarketingPlacement,
   dpp.URL
 } from './common';
 using { dpp.Products, dpp.ProductVariants, dpp.Batches, dpp.ProductItems } from './product';
@@ -34,7 +35,10 @@ entity DPPs : identified, audited {
   archived_at         : Timestamp;
   valid_from          : Date;
   last_updated        : Timestamp;
-  aggregated_snapshot : LargeString;  // optional cache of last aggregation; default path computes live
+  // Frozen internal state (buildSnapshot JSON) of the last APPROVED/PUBLISHED moment.
+  // Written on approve AND publish; anchored at startup for legacy/seed DPPs. Serves as
+  // the baseline for the "unapproved changes" field markers on the internal DPP view.
+  aggregated_snapshot : LargeString;
   storytelling        : LargeString;  // optional JSON array of {title, body, media_url, media_type}
   // Normalized content hash of the last APPROVED/PUBLISHED state (drift anchor). When
   // the current data hashes differently, the DPP has unapproved changes and is reverted
@@ -73,6 +77,7 @@ entity DPPMarketingLinks : identified, audited {
   subtitle            : String(300);                          // optional CTA / teaser line shown under the title
   url                 : URL;
   media_type          : MarketingMediaType default 'image';   // image tile or video tile (play overlay)
+  placement           : MarketingPlacement default 'discover_more'; // inline vs left/right side rail
   image_url           : URL;                                  // external thumbnail
   image_data          : LargeString;                          // uploaded thumbnail as a base64 data URL (preferred over image_url)
   display_order       : Integer default 0;
@@ -82,17 +87,20 @@ entity DPPMarketingLinks : identified, audited {
 }
 
 // ----- DPP version history (US5.9) -----
-// One immutable record per publish: the frozen, fully-resolved snapshot of the
-// passport at that moment, with the change reason and a content hash for tamper
-// evidence. Persisted by srv/handlers/dpp-handlers.js#publishDPP; exposed READ-ONLY
-// (writes are rejected). Tenant anchor: dpp.product.owning_organization_ID.
+// One immutable record per publish PLUS one per re-approval: publish rows freeze the
+// state being made live; approve rows preserve the PREVIOUSLY approved state that is
+// being superseded. Approve rows carry NO consumer_snapshot and are never served to
+// the public (public-handler picks the latest row WITH a consumer_snapshot). Persisted
+// by srv/handlers/dpp-handlers.js (publishDPP/approveDPP); exposed READ-ONLY (writes
+// are rejected). Tenant anchor: dpp.product.owning_organization_ID.
 entity DPPVersions : identified {
   dpp            : Association to DPPs not null;
   version_number : Integer not null;
   snapshot_date  : Timestamp;
   change_reason  : String(500);
   changed_by     : Association to Users;
+  source         : String(10) default 'publish';  // 'publish' | 'approve' (superseded-state snapshot)
   snapshot_data  : LargeString;   // fully-resolved internal state (buildSnapshot JSON) — version viewer
-  consumer_snapshot : LargeString; // frozen consumer DTO served to the public until the next publish
+  consumer_snapshot : LargeString; // frozen consumer DTO served to the public until the next publish (publish rows only)
   content_hash   : String(64);    // normalized content hash (volatile/audit fields excluded) — drift anchor
 }

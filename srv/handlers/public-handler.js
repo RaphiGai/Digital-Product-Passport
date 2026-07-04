@@ -125,6 +125,12 @@ function toConsumerDTO(dpp, ctx) {
           category: ctx.product.category,
           model: ctx.product.model,
           description: ctx.product.description,
+          // Identifiers + lifecycle — internal by default (catalogue), opt-in public.
+          gtin: ctx.product.gtin,
+          upc: ctx.product.upc,
+          ein: ctx.product.ein,
+          product_type: ctx.product.product_type,
+          status: ctx.product.status,
           fibre_composition: ctx.product.fibre_composition,
           care_instructions: ctx.product.care_instructions,
           repair_instructions: ctx.product.repair_instructions,
@@ -236,6 +242,7 @@ async function loadMarketingLinks(owningOrgId, dppId) {
       subtitle: l.subtitle,
       url: l.url,
       media_type: l.media_type || 'image', // null (CSV-seeded rows) ⇒ image
+      placement: l.placement || 'discover_more', // null ⇒ inline "Discover more"
       image_url: l.image_url,
       image_data: l.image_data,
       display_order: l.display_order,
@@ -393,15 +400,17 @@ async function loadDPPByToken(token) {
   if (!dpp) return null;
   if (!isPubliclyVisible(dpp)) return null;
 
-  // Serve the FROZEN consumer payload of the latest published version — edits in
-  // progress (status reverted to draft) stay invisible until re-publish. Fall back to
-  // LIVE rendering for legacy/seed DPPs that were never published through publishDPP.
+  // Serve the FROZEN consumer payload of the latest PUBLISHED version — edits in
+  // progress (status reverted to draft) stay invisible until re-publish. Approve-
+  // snapshot rows carry no consumer_snapshot (they preserve superseded internal
+  // states) and are skipped here — they must never reach the public view. Fall back
+  // to LIVE rendering for legacy/seed DPPs that were never published through publishDPP.
   const versions = await SELECT.from(DPPVersions)
     .columns('version_number', 'consumer_snapshot')
     .where({ dpp_ID: dpp.ID })
     .orderBy('version_number desc');
-  const latest = versions[0] || null;
-  if (latest && latest.consumer_snapshot) {
+  const latest = versions.find((v) => v.consumer_snapshot) || null;
+  if (latest) {
     let frozen = null;
     try { frozen = JSON.parse(latest.consumer_snapshot); } catch { frozen = null; }
     if (frozen) return overlayLive(frozen, dpp, latest.version_number);

@@ -281,21 +281,27 @@ async function reevaluateDrift(dppIds) {
 /**
  * Restore the drift-baseline invariant for legacy/seed DPPs. A DPP that is `approved` or
  * `published` but was NOT taken through approveDPP/publishDPP (e.g. CSV-seeded directly as
- * 'published') has no `baseline_content_hash`. Without it, reevaluateDrift() skips the DPP,
- * so editing the underlying product/variant/batch never reverts it to draft — the studio
- * shows the new data but the user can never re-approve/re-publish it (no Approve/Publish
- * button). Anchor a baseline from the current content ONCE, so a later source-data edit is
- * detected as drift and reverts the DPP to draft as intended. Idempotent (only fills NULLs).
+ * 'published') has no `baseline_content_hash` and no `aggregated_snapshot`. Without the
+ * hash, reevaluateDrift() skips the DPP (edits never revert it to draft); without the
+ * snapshot, the internal view cannot mark unapproved changes after an edit. Anchor both
+ * from the current content ONCE. Idempotent (only fills NULLs).
  */
 async function anchorUnbaselinedDPPs() {
   const DPPdb = cds.entities('dpp').DPPs;
-  const rows = await SELECT.from(DPPdb)
-    .where({ status: { in: ['approved', 'published'] }, baseline_content_hash: null });
+  const rows = await SELECT.from(DPPdb).where({ status: { in: ['approved', 'published'] } });
+  let anchored = 0;
   for (const dpp of rows) {
-    const hash = contentHash(await buildSnapshot(dpp));
-    await UPDATE(DPPdb).set({ baseline_content_hash: hash }).where({ ID: dpp.ID });
+    if (dpp.baseline_content_hash && dpp.aggregated_snapshot) continue;
+    const snap = await buildSnapshot(dpp);
+    await UPDATE(DPPdb)
+      .set({
+        baseline_content_hash: dpp.baseline_content_hash || contentHash(snap),
+        aggregated_snapshot: dpp.aggregated_snapshot || JSON.stringify(snap)
+      })
+      .where({ ID: dpp.ID });
+    anchored += 1;
   }
-  if (rows.length) console.log(`[dpp] anchored drift baseline for ${rows.length} legacy/seed DPP(s)`);
+  if (anchored) console.log(`[dpp] anchored drift baseline for ${anchored} legacy/seed DPP(s)`);
 }
 
 module.exports = (srv) => {
@@ -367,10 +373,41 @@ module.exports = (srv) => {
     const errors = await checkDPPReady(dpp);
     if (errors.length) req.reject(400, `DPP cannot be approved: ${errors.join(' | ')}`);
 
-    // Anchor the drift baseline to the approved content so a later edit reverts to draft.
-    const baselineHash = contentHash(await buildSnapshot(dpp));
+    const now = new Date().toISOString();
+
+    // Preserve the superseded (previously approved/published) state as an immutable
+    // approve-version so the old data stays retrievable in the history. No
+    // consumer_snapshot: the public view keeps serving the latest PUBLISH version.
+    // A first-time approval has no prior approved state (no aggregated_snapshot) —
+    // nothing to preserve then. Inserted on the DB entity to bypass the read-only gate.
+    if (dpp.aggregated_snapshot) {
+      const { DPPVersions } = cds.entities('dpp');
+      let oldHash = dpp.baseline_content_hash || null;
+      try { oldHash = contentHash(JSON.parse(dpp.aggregated_snapshot)); } catch { /* keep baseline hash */ }
+      await INSERT.into(DPPVersions).entries({
+        ID: randomUUID(),
+        dpp_ID: id,
+        version_number: await nextVersionNumber(id),
+        snapshot_date: now,
+        change_reason: null,
+        changed_by_ID: req.user._appUserId || null,
+        source: 'approve',
+        snapshot_data: dpp.aggregated_snapshot,
+        consumer_snapshot: null,
+        content_hash: oldHash
+      });
+    }
+
+    // Anchor the drift baseline AND the approved-state snapshot to the newly approved
+    // content — the "unapproved changes" markers on the internal view clear with this.
+    const snap = await buildSnapshot(dpp);
     await UPDATE(DPPs)
-      .set({ status: 'approved', approved_at: new Date().toISOString(), baseline_content_hash: baselineHash })
+      .set({
+        status: 'approved',
+        approved_at: now,
+        baseline_content_hash: contentHash(snap),
+        aggregated_snapshot: JSON.stringify(snap)
+      })
       .where({ ID: id });
 
     return SELECT.one.from(DPPs).where({ ID: id });
@@ -435,6 +472,7 @@ module.exports = (srv) => {
       snapshot_date: now,
       change_reason: changeReason,
       changed_by_ID: req.user._appUserId || null,
+      source: 'publish',
       snapshot_data: snapshotJson,
       consumer_snapshot: consumerJson,
       content_hash: normalizedHash
@@ -507,13 +545,18 @@ module.exports = (srv) => {
     // Full unified check catalogue — same evaluation the approve/publish gate runs.
     const validation = evaluateDppChecks(await loadDppValidationContext(dpp));
 
-    // Latest published version = what the consumer currently sees.
+    // Current internal state — baseline input for both diffs below (computed once).
+    const cur = await buildSnapshot(dpp);
+
+    // Latest PUBLISHED version = what the consumer currently sees. Approve-snapshot
+    // rows carry no consumer_snapshot (they preserve superseded states) and must not
+    // shift the consumer-facing live version or the publish-pending diff.
     const versions = await SELECT.from(DPPVersions)
-      .columns('version_number', 'snapshot_data')
+      .columns('version_number', 'snapshot_data', 'consumer_snapshot')
       .where({ dpp_ID: id })
       .orderBy('version_number desc');
-    const latest = versions[0] || null;
-    const liveVersion = latest ? latest.version_number : null;
+    const latestPublished = versions.find((v) => v.consumer_snapshot) || null;
+    const liveVersion = latestPublished ? latestPublished.version_number : null;
 
     let changedFields = [];
     // Without a published version snapshot there is no baseline to diff against. For a DPP
@@ -523,18 +566,28 @@ module.exports = (srv) => {
     // will create v1" is misleading — it is already published and there is no Publish button.
     const prePublication = dpp.status === 'draft' || dpp.status === 'in_review';
     let pendingChanges = liveVersion == null ? prePublication : false;
-    if (latest) {
-      const cur = await buildSnapshot(dpp);
+    if (latestPublished) {
       let prev = null;
-      try { prev = JSON.parse(latest.snapshot_data); } catch { prev = null; }
+      try { prev = JSON.parse(latestPublished.snapshot_data); } catch { prev = null; }
       changedFields = diffNormalized(prev, cur);
       pendingChanges = changedFields.length > 0;
+    }
+
+    // Unapproved changes vs the last approved/published state (aggregated_snapshot) —
+    // drives the amber field markers on the internal DPP view. Empty right after an
+    // approve (the snapshot is re-anchored there); empty too for DPPs without a prior
+    // approved state (nothing to compare against).
+    let unapprovedChanges = [];
+    if (dpp.aggregated_snapshot) {
+      let approvedSnap = null;
+      try { approvedSnap = JSON.parse(dpp.aggregated_snapshot); } catch { approvedSnap = null; }
+      if (approvedSnap) unapprovedChanges = diffNormalized(approvedSnap, cur);
     }
 
     return JSON.stringify({
       status: dpp.status,
       live_version: liveVersion,
-      next_version: (liveVersion || 0) + 1,
+      next_version: await nextVersionNumber(id),
       can_approve: validation.can_approve,
       missing_mandatory: validation.missing_mandatory,
       checks: validation.checks,
@@ -544,7 +597,9 @@ module.exports = (srv) => {
       percent: validation.percent,
       mandatory_failed: validation.mandatory_failed,
       pending_changes: pendingChanges,
-      changed_fields: changedFields
+      changed_fields: changedFields,
+      unapproved_changes: unapprovedChanges,
+      has_unapproved: unapprovedChanges.length > 0
     });
   });
 

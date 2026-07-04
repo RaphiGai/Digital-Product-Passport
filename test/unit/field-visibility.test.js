@@ -19,6 +19,20 @@ describe('field-visibility — stored overrides', () => {
     expect(out.size).toBe('M');
     expect(out.sku).toBe('X');
   });
+
+  test('product identifiers & lifecycle fields default internal, opt-in public', () => {
+    const section = { gtin: 'G', upc: 'U', ein: 'E', product_type: 'finished', status: 'published' };
+    // No stored map → all five dropped.
+    const hidden = applyFieldVisibility(section, 'product', null);
+    for (const k of Object.keys(section)) expect(hidden).not.toHaveProperty(k);
+    // Opt-in per field.
+    const map = JSON.stringify({ gtin: 'public', product_type: 'public' });
+    const shown = applyFieldVisibility(section, 'product', map);
+    expect(shown.gtin).toBe('G');
+    expect(shown.product_type).toBe('finished');
+    expect(shown).not.toHaveProperty('upc');
+    expect(shown).not.toHaveProperty('status');
+  });
 });
 
 describe('field-visibility — regulatory lock', () => {

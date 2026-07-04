@@ -1,6 +1,7 @@
 'use strict';
 
 const { createHash } = require('crypto');
+const { resolve, CATALOGUES } = require('./field-visibility'); // leaf lib module (no handler imports)
 
 /**
  * Deterministic content hashing + field diffing for DPP snapshots (drift detection).
@@ -42,6 +43,25 @@ function stripDeep(value) {
   return value;
 }
 
+/**
+ * Resolve a stored field_visibility value (JSON string / object / null) to the
+ * EFFECTIVE per-field map (stored override → catalogue default, locked → public).
+ * Normalizing to the effective map makes representations that mean the same thing
+ * hash identically: persisting the catalogue defaults (the edit forms write the map
+ * on every save, seeds ship null) is NOT a content change and must neither
+ * drift-revert a published DPP nor show up as a pending/unapproved change.
+ */
+function effectiveVisibilityMap(kind, stored) {
+  let map = {};
+  if (isObj(stored)) map = stored;
+  else if (typeof stored === 'string' && stored.trim() !== '') {
+    try { const o = JSON.parse(stored); if (isObj(o)) map = o; } catch { map = {}; }
+  }
+  const out = {};
+  for (const field of Object.keys(CATALOGUES[kind] || {})) out[field] = resolve(kind, field, map);
+  return out;
+}
+
 /** Normalize a snapshot for hashing/diffing: strip volatile + surrogate fields. */
 function normalizeForHash(snap) {
   const n = stripDeep(snap);
@@ -54,6 +74,12 @@ function normalizeForHash(snap) {
   // from the version/drift lifecycle: a campaign edit must NOT revert an approved/published
   // DPP to draft, nor show as a "pending change". Exclude them from the hash and the diff.
   if (n && typeof n === 'object') delete n.marketing_links;
+  // Per-field visibility: compare the EFFECTIVE maps, not the raw stored JSON strings.
+  if (n && typeof n === 'object') {
+    for (const kind of ['product', 'variant', 'batch']) {
+      if (isObj(n[kind])) n[kind].field_visibility = effectiveVisibilityMap(kind, n[kind].field_visibility);
+    }
+  }
   return n;
 }
 
@@ -124,6 +150,32 @@ const short = (v) => {
 
 function walkDiff(prev, cur, path, out) {
   if (out.length >= 60) return; // cap noise
+  // Per-field visibility maps get their own readable entries ("Field visibility · X:
+  // internal → public") instead of generic recursion, whose labels would collide with
+  // the data fields themselves ("Gtin" = the GTIN value, not its visibility).
+  if (path.endsWith('field_visibility')) {
+    const toMap = (v) => {
+      if (isObj(v)) return v;
+      if (typeof v === 'string' && v.trim() !== '') {
+        try { const o = JSON.parse(v); return isObj(o) ? o : {}; } catch { return {}; }
+      }
+      return {};
+    };
+    const p = toMap(prev);
+    const c = toMap(cur);
+    for (const k of new Set([...Object.keys(p), ...Object.keys(c)])) {
+      if (out.length >= 60) return;
+      if ((p[k] ?? null) !== (c[k] ?? null)) {
+        out.push({
+          path: `${path}.${k}`,
+          label: `Field visibility · ${humanize(k)}`,
+          old: short(p[k]),
+          new: short(c[k])
+        });
+      }
+    }
+    return;
+  }
   if (isObj(prev) && isObj(cur)) {
     for (const k of new Set([...Object.keys(prev), ...Object.keys(cur)])) {
       walkDiff(prev[k], cur[k], path ? `${path}.${k}` : k, out);

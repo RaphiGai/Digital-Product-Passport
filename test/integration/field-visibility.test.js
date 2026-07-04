@@ -110,6 +110,26 @@ describe('Per-field overrides', () => {
     const { data } = await getPublic(await attachToken('dpp-12345'));
     expect(data.variant.sku).toBe('TSHIRT-BLUE-M');
   });
+
+  test('product identifiers & lifecycle fields are internal by default and can be revealed', async () => {
+    // Default → none of them reach the consumer DTO.
+    let { data } = await getPublic(await attachToken('dpp-12345'));
+    for (const k of ['gtin', 'upc', 'ein', 'product_type', 'status']) {
+      expect(data.product).not.toHaveProperty(k);
+    }
+
+    // Opt-in per field → revealed; the rest stays internal.
+    const { Products } = cds.entities('dpp');
+    await UPDATE(Products)
+      .set({ field_visibility: JSON.stringify({ gtin: 'public', product_type: 'public', status: 'public' }) })
+      .where({ ID: 'prod-tshirt-classic' });
+    ({ data } = await getPublic(await attachToken('dpp-12345')));
+    expect(data.product.gtin).toBe('04012345670010');
+    expect(data.product.product_type).toBe('finished');
+    expect(data.product.status).toBeTruthy();
+    expect(data.product).not.toHaveProperty('upc');
+    expect(data.product).not.toHaveProperty('ein');
+  });
 });
 
 describe('OData write path (company_advanced) end-to-end', () => {

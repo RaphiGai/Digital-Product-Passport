@@ -13,7 +13,12 @@ using { dpp as db } from '../db/schema';
  */
 service DPPService @(
   path     : '/odata/v4/dpp',
-  requires : 'authenticated-user'
+  requires : 'authenticated-user',
+  // Uploaded images (product-variant + marketing-link thumbnails) are stored as base64
+  // `image_data` inside the entity JSON, so a request body can exceed the body-parser
+  // default of ~100 KB. Raise the limit for this service (ImageUpload downscales to a
+  // ~1200px JPEG → typically well under this bound). Keeps a hard cap against abuse.
+  cds.server.body_parser.limit : '2mb'
 ) {
 
   type QRCodeImage : {

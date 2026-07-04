@@ -52,6 +52,40 @@ describe('snapshot-hash — drift hashing', () => {
     expect(entry.old).toBe('M1');
     expect(entry.new).toBe('M2');
   });
+
+  test('persisting the catalogue-default field visibility is NOT a content change', () => {
+    // The edit forms write the field_visibility map on every save; seeds ship null.
+    // Storing values that equal the effective defaults must neither change the hash
+    // (no drift-revert) nor produce diff entries. Locked fields resolve to public
+    // even when a stored map claims 'internal'.
+    const a = baseSnap();
+    const b = baseSnap();
+    a.product.field_visibility = null;
+    b.product.field_visibility = JSON.stringify({
+      gtin: 'internal',  // catalogue default
+      model: 'public',   // catalogue default
+      name: 'internal'   // locked → effectively public either way
+    });
+    expect(contentHash(a)).toBe(contentHash(b));
+    expect(diffNormalized(a, b)).toEqual([]);
+  });
+
+  test('a real visibility flip changes the hash and yields a readable per-field entry', () => {
+    const a = baseSnap();
+    const b = baseSnap();
+    a.product.field_visibility = null;
+    b.product.field_visibility = JSON.stringify({ gtin: 'public' }); // default is 'internal'
+    expect(contentHash(a)).not.toBe(contentHash(b));
+
+    const diff = diffNormalized(a, b);
+    const entry = diff.find((d) => d.path === 'product.field_visibility.gtin');
+    expect(entry).toBeTruthy();
+    expect(entry.label).toMatch(/Field visibility/);
+    expect(entry.old).toBe('internal');
+    expect(entry.new).toBe('public');
+    // no raw-JSON dump entry for the whole map
+    expect(diff.some((d) => d.path === 'product.field_visibility')).toBe(false);
+  });
 });
 
 describe('mandatory-fields — approve gate', () => {

@@ -30,6 +30,8 @@ const CATALOGUES = {
     gtin: { vis: 'internal', locked: false },
     upc: { vis: 'internal', locked: false },
     ein: { vis: 'internal', locked: false },
+    product_type: { vis: 'internal', locked: false },
+    status: { vis: 'internal', locked: false }, // product lifecycle — opt-in only
     fibre_composition: { vis: 'public', locked: true }, // EU Textile Reg 1007/2011
     substances_of_concern: { vis: 'public', locked: true }, // REACH SVHC / SCIP, ESPR
     care_instructions: { vis: 'public', locked: true }, // ESPR lifecycle info

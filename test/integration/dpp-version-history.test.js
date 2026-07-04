@@ -38,6 +38,7 @@ describe('DPP version history', () => {
     expect(row).toBeTruthy();
     expect(row.change_reason).toBe('Initial test release');
     expect(row.changed_by_ID).toBe('usr-alice');
+    expect(row.source).toBe('publish');
     expect(row.content_hash).toMatch(/^[a-f0-9]{64}$/);
 
     const snap = JSON.parse(row.snapshot_data);
