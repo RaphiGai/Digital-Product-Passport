@@ -22,8 +22,7 @@ import {
   Copy,
   Printer,
   ShoppingBag,
-  Megaphone,
-  ChevronDown
+  Megaphone
 } from 'lucide-react';
 import { MARKETING_LINK_LABEL } from '@/lib/fieldCatalogue';
 
@@ -253,6 +252,7 @@ function Passport({ dpp }) {
 
   const co2 = deNum(agg.co2_footprint_kg ?? b.co2_footprint_kg, 2);
   const recycled = deNum(agg.recycled_content_pct ?? b.recycled_content_pct, 2);
+
   const story = p.storytelling?.length > 0 ? p.storytelling : null;
   const marketing = dpp.marketing ?? [];
 
@@ -260,112 +260,106 @@ function Passport({ dpp }) {
     <div className="min-h-screen bg-canvas">
       <Hero product={p} variant={v} espr={p.espr_compliance} />
 
-      <main className="mx-auto max-w-5xl px-4 pb-12">
+      <main className="mx-auto max-w-6xl px-4 pb-12">
         <Stats co2={co2} recycled={recycled} origin={origin} />
 
-        <div className="mt-6 space-y-3">
-          <AccordionSection icon={Sparkles} title="Product story" defaultOpen>
-            {story ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                {story.map((s, i) => (
-                  <div key={i} className="rounded-2xl bg-brand-50/60 p-4">
-                    {s.title && <p className="text-sm font-semibold text-ink">{s.title}</p>}
-                    {s.body && <p className="mt-1 text-sm leading-relaxed text-ink-muted">{s.body}</p>}
-                  </div>
-                ))}
+        {story && (
+          <section className="mt-6 rounded-3xl border border-black/5 bg-card p-5 shadow-sm md:p-8">
+            <div className="mb-4 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-brand-600" />
+              <h2 className="text-lg font-semibold text-ink">The story behind this product</h2>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {story.map((s, i) => (
+                <article key={i} className="rounded-2xl bg-brand-50/60 p-4">
+                  {s.title && <h3 className="text-sm font-semibold text-ink">{s.title}</h3>}
+                  {s.body && <p className="mt-1 text-sm leading-relaxed text-ink-muted">{s.body}</p>}
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {marketing.length > 0 && (
+          <section className="mt-6">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-ink">Discover more</h2>
+                <p className="text-sm text-ink-muted">Care, styling, brand content and product services.</p>
               </div>
-            ) : (
-              <p className="text-sm text-ink-muted">No product story available.</p>
-            )}
-          </AccordionSection>
+            </div>
 
-          <AccordionSection icon={ShoppingBag} title="Product details" defaultOpen>
-            <KeyVal label="Brand" value={p.brand} />
-            <KeyVal label="Category" value={p.category} />
-            <KeyVal label="Model" value={p.model} />
-            <KeyVal label="Colour" value={v.color} />
-            <KeyVal label="Size" value={v.size} />
-            <KeyVal label="SKU" value={v.sku} />
-            <KeyVal label="Description" value={p.description} />
-          </AccordionSection>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {marketing.map((m, i) => (
+                <MarketingCard key={i} link={m} />
+              ))}
+            </div>
+          </section>
+        )}
 
-          <AccordionSection icon={Layers} title="Materials & composition">
-            <KeyVal label="Fibre composition" value={p.fibre_composition} />
-            <KeyVal label="Substances of concern" value={p.substances_of_concern} />
-            <KeyVal label="Country of origin" value={origin} />
-            {b.batch_number && <KeyVal label="Production batch" value={b.batch_number} />}
-            {b.production_date && <KeyVal label="Produced" value={deDate(b.production_date)} />}
+        <div className="mt-6 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="space-y-4">
+            <Section icon={Layers} title="Materials & composition">
+              <KeyVal label="Fibre composition" value={p.fibre_composition} />
+              <KeyVal label="Substances of concern" value={p.substances_of_concern} />
+              <KeyVal label="Country of origin" value={origin} />
+              {b.batch_number && <KeyVal label="Production batch" value={b.batch_number} />}
+              {b.production_date && <KeyVal label="Produced" value={deDate(b.production_date)} />}
+            </Section>
 
             {dpp.materials?.length > 0 && (
-              <div className="mt-4 border-t border-black/5 pt-4">
+              <Section icon={Layers} title="What it's made of">
                 <Materials items={dpp.materials} />
-              </div>
+              </Section>
             )}
-          </AccordionSection>
 
-          {(p.durability_score != null || p.repairability_score != null) && (
-            <AccordionSection icon={Gauge} title="Durability & repairability">
-              <ScoreBar label="Durability" score={p.durability_score} />
-              <ScoreBar label="Repairability" score={p.repairability_score} />
-            </AccordionSection>
-          )}
-
-          {hasCareInfo(p) && (
-            <AccordionSection icon={Repeat} title="Care, repair, reuse & end-of-life">
-              <div className="grid gap-4 md:grid-cols-2">
+            {hasCareInfo(p) && (
+              <Section icon={Droplets} title="Care, repair, reuse & end-of-life">
                 <CareBlock icon={Droplets} label="Care & washing" text={p.care_instructions} videoUrl={p.care_video_url} productsUrl={p.care_products_url} />
                 <CareBlock icon={Wrench} label="Repair" text={p.repair_instructions} videoUrl={p.repair_video_url} productsUrl={p.repair_products_url} />
                 <CareBlock icon={Repeat} label="Reuse" text={p.reuse_instructions} videoUrl={p.reuse_video_url} productsUrl={p.reuse_products_url} />
                 <CareBlock icon={Trash2} label="End-of-life" text={p.disposal_instructions} videoUrl={p.disposal_video_url} productsUrl={p.disposal_products_url} />
-              </div>
-            </AccordionSection>
-          )}
+              </Section>
+            )}
+          </div>
 
-          {dpp.documents?.length > 0 && (
-            <AccordionSection icon={FileCheck} title="Certificates & documents">
-              <ul className="space-y-2">
-                {dpp.documents.map((d) => (
-                  <li key={d.id}>
-                    <a
-                      href={d.download_url}
-                      download={d.file_name || true}
-                      className="flex items-center justify-between gap-2 rounded-xl border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition hover:bg-gray-50"
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <Download className="h-4 w-4 shrink-0 text-ink-muted" />
-                        <span className="truncate">{d.title || d.file_name}</span>
-                      </span>
-                      <span className="shrink-0 text-xs text-ink-muted">
-                        {[DOC_TYPE_LABEL[d.doc_type] ?? d.doc_type, fmtSize(d.file_size)].filter(Boolean).join(' · ')}
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </AccordionSection>
-          )}
+          <aside className="space-y-4">
+            {(p.durability_score != null || p.repairability_score != null) && (
+              <Section icon={Gauge} title="Durability & repairability">
+                <ScoreBar label="Durability" score={p.durability_score} />
+                <ScoreBar label="Repairability" score={p.repairability_score} />
+              </Section>
+            )}
 
-          <AccordionSection icon={Fingerprint} title="Identification">
+            {dpp.documents?.length > 0 && (
+              <Section icon={FileCheck} title="Certificates & documents">
+                <ul className="space-y-2">
+                  {dpp.documents.map((d) => (
+                    <li key={d.id}>
+                      <a
+                        href={d.download_url}
+                        download={d.file_name || true}
+                        className="flex items-center justify-between gap-2 rounded-xl border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition hover:bg-gray-50"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Download className="h-4 w-4 shrink-0 text-ink-muted" />
+                          <span className="truncate">{d.title || d.file_name}</span>
+                        </span>
+                        <span className="shrink-0 text-xs text-ink-muted">
+                          {[DOC_TYPE_LABEL[d.doc_type] ?? d.doc_type, fmtSize(d.file_size)].filter(Boolean).join(' · ')}
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            )}
+
             <Identification ident={dpp.identification} product={dpp.product} />
-          </AccordionSection>
-
-          <AccordionSection icon={ShieldCheck} title="Authenticity">
             <Authenticity dpp={dpp} />
-          </AccordionSection>
-
-          {marketing.length > 0 && (
-            <AccordionSection icon={Megaphone} title="Discover more">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {marketing.map((m, i) => (
-                  <MarketingCard key={i} link={m} />
-                ))}
-              </div>
-            </AccordionSection>
-          )}
-
-          <AccordionSection icon={Share2} title="Share passport">
             <ShareActions token={token} />
-          </AccordionSection>
+          </aside>
         </div>
 
         <footer className="mt-10 text-center text-xs text-ink-muted">
@@ -376,49 +370,17 @@ function Passport({ dpp }) {
     </div>
   );
 }
-function AccordionSection({ icon: Icon, title, children, defaultOpen = false }) {
-  const [open, setOpen] = useState(defaultOpen);
-
-  return (
-    <section className="overflow-hidden rounded-3xl border border-black/5 bg-card shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
-      >
-        <span className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-50 text-brand-700">
-            <Icon className="h-4 w-4" />
-          </span>
-          <span className="text-base font-semibold text-ink">{title}</span>
-        </span>
-
-        <ChevronDown
-          className={`h-5 w-5 shrink-0 text-ink-muted transition-transform ${
-            open ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
-
-      {open && (
-        <div className="border-t border-black/5 px-5 pb-5 pt-4">
-          {children}
-        </div>
-      )}
-    </section>
-  );
-}
 
 function Hero({ product, variant, espr }) {
   const image = variant.image_data || variant.image_url;
 
   return (
-    <header className="relative overflow-hidden bg-gradient-to-br from-[#eaf7e7] via-[#dff2d8] to-[#f6fbf4] text-ink">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.18),transparent_35%)]" />
+    <header className="relative overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-brand-800 text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.22),transparent_34%)]" />
 
-      <div className="relative mx-auto grid max-w-6xl gap-7 px-4 py-7 md:grid-cols-[1.05fr_0.95fr] md:items-center md:py-12">
+      <div className="relative mx-auto grid max-w-6xl gap-8 px-4 py-8 md:grid-cols-[1.1fr_0.9fr] md:items-center md:py-14">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand-700 shadow-sm">
+          <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium uppercase tracking-wider text-brand-100">
             <ShieldCheck className="h-4 w-4" />
             Digital Product Passport
           </div>
@@ -427,7 +389,7 @@ function Hero({ product, variant, espr }) {
             {product.name ?? 'Product'}
           </h1>
 
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-muted md:text-base">
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/85 md:text-base">
             {product.description ||
               [product.brand, product.category, product.model].filter(Boolean).join(' · ')}
           </p>
@@ -436,14 +398,14 @@ function Hero({ product, variant, espr }) {
             {[product.brand, product.category, product.model, variant.color, variant.size, variant.sku]
               .filter(Boolean)
               .map((x) => (
-                <span key={x} className="rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-ink shadow-sm">
+                <span key={x} className="rounded-full bg-white/15 px-3 py-1 text-xs text-white/90">
                   {x}
                 </span>
               ))}
           </div>
 
           {espr && (
-            <span className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm">
+            <span className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-brand-700">
               <BadgeCheck className="h-3.5 w-3.5" />
               {ESPR_LABEL[espr] ?? espr}
             </span>
@@ -451,11 +413,12 @@ function Hero({ product, variant, espr }) {
         </div>
 
         {image && (
-          <div className="relative">
+          <div className="relative mx-auto w-full max-w-sm">
+            <div className="absolute -inset-4 rounded-[2rem] bg-white/10 blur-xl" />
             <img
               src={image}
               alt={product.name ?? 'Product'}
-              className="mx-auto aspect-[4/3] max-h-72 w-full rounded-[2rem] border border-white object-cover shadow-xl md:aspect-[4/5] md:max-h-[460px]"
+              className="relative aspect-[4/5] w-full rounded-[2rem] border border-white/20 object-cover shadow-2xl"
             />
           </div>
         )}
@@ -474,7 +437,7 @@ function Stats({ co2, recycled, origin }) {
   if (!tiles.length) return null;
 
   return (
-    <section className="mt-5 grid gap-3 sm:grid-cols-3">
+    <section className="mt-6 grid gap-3 sm:grid-cols-3">
       {tiles.map((t, i) => {
         const Icon = t.icon;
         return (
@@ -486,6 +449,55 @@ function Stats({ co2, recycled, origin }) {
         );
       })}
     </section>
+  );
+}
+
+function MarketingCard({ link }) {
+  const image = link.image_data || link.image_url;
+  const href = safeHref(link.url);
+  const typeLabel = MARKETING_LINK_LABEL[link.link_type] ?? link.link_type;
+  const isVideo = link.media_type === 'video';
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="group overflow-hidden rounded-3xl border border-black/5 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+    >
+      {image && (
+        <div className="relative">
+          <img src={image} alt={link.title || ''} className="aspect-[16/10] w-full object-cover" />
+          {isVideo && (
+            <span className="absolute inset-0 flex items-center justify-center bg-black/20">
+              <PlayCircle className="h-11 w-11 text-white drop-shadow" />
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="p-4">
+        {typeLabel && (
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-600">
+            {typeLabel}
+          </p>
+        )}
+
+        <h3 className="mt-1 line-clamp-2 text-sm font-semibold text-ink">
+          {link.title}
+        </h3>
+
+        {link.subtitle && (
+          <p className="mt-1 line-clamp-2 text-sm text-ink-muted">
+            {link.subtitle}
+          </p>
+        )}
+
+        <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-700">
+          {isVideo ? 'Watch' : 'Open'} <ExternalLink className="h-3.5 w-3.5" />
+        </span>
+      </div>
+    </a>
   );
 }
 
@@ -501,121 +513,7 @@ function Section({ icon: Icon, title, children, className = '' }) {
   );
 }
 
-/**
- * Image/video-only marketing tile for the side rails + mobile "Featured" block. The whole
- * tile is the hyperlink; the title/subtitle sit as an overlay and a video adds a play
- * badge. Falls back to a compact link row when the link has no image.
- */
-function MarketingTile({ link }) {
-  const image = link.image_data || link.image_url;
-  const href = safeHref(link.url);
-  const isVideo = link.media_type === 'video';
 
-  if (!image) {
-    return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        className="flex items-center justify-between gap-2 rounded-lg border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-gray-50"
-      >
-        <span className="truncate">{link.title}</span>
-        <ExternalLink className="h-4 w-4 shrink-0 text-ink-muted" />
-      </a>
-    );
-  }
-
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="relative block overflow-hidden rounded-xl border border-black/5 shadow-sm transition-transform hover:-translate-y-0.5"
-    >
-      <img src={image} alt={link.title || ''} className="aspect-[4/3] w-full object-cover print:hidden" />
-      {isVideo && (
-        <span className="absolute inset-0 flex items-center justify-center bg-black/20">
-          <PlayCircle className="h-9 w-9 text-white drop-shadow" />
-        </span>
-      )}
-      {(link.title || link.subtitle) && (
-        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-3 pb-2 pt-6">
-          {link.title && <span className="block truncate text-xs font-semibold text-white">{link.title}</span>}
-          {link.subtitle && <span className="block truncate text-[11px] text-white/85">{link.subtitle}</span>}
-        </span>
-      )}
-    </a>
-  );
-}
-
-/** A desktop-only (lg+) sticky side rail of image/video marketing tiles. */
-function MarketingRail({ links }) {
-  return (
-    <aside className="hidden w-56 shrink-0 pt-8 lg:block">
-      <div className="sticky top-6 space-y-4">
-        {links.map((m, i) => (
-          <MarketingTile key={i} link={m} />
-        ))}
-      </div>
-    </aside>
-  );
-}
-
-/**
- * Marketing/advertising tile (US5.8). With an image or video thumbnail it renders as a
- * media card — the thumbnail alternates left/right (`flip`) and the whole card is the
- * hyperlink, so the consumer view doubles as a marketing surface. A video tile adds a
- * play overlay. Without an image it falls back to the compact link row.
- */
-function MarketingCard({ link, flip }) {
-  const image = link.image_data || link.image_url;
-  const typeLabel = MARKETING_LINK_LABEL[link.link_type] ?? link.link_type;
-  const isVideo = link.media_type === 'video';
-
-  if (!image) {
-    return (
-      <a
-        href={safeHref(link.url)}
-        target="_blank"
-        rel="noreferrer"
-        className="flex items-center justify-between gap-2 rounded-lg border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-gray-50"
-      >
-        <span className="min-w-0">
-          <span className="block truncate">{link.title}</span>
-          {link.subtitle && <span className="block truncate text-xs font-normal text-ink-muted">{link.subtitle}</span>}
-        </span>
-        <ExternalLink className="h-4 w-4 shrink-0 text-ink-muted" />
-      </a>
-    );
-  }
-
-  return (
-    <a
-      href={safeHref(link.url)}
-      target="_blank"
-      rel="noreferrer"
-      className={`flex items-stretch gap-4 overflow-hidden rounded-xl border border-black/5 transition-colors hover:bg-gray-50 ${flip ? 'flex-row-reverse' : 'flex-row'}`}
-    >
-      {/* Thumbnails are hidden in the printed PDF so large images don't bloat the output. */}
-      <div className="relative h-24 w-24 shrink-0 sm:h-28 sm:w-28 print:hidden">
-        <img src={image} alt={link.title} className="h-full w-full object-cover" />
-        {isVideo && (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/20">
-            <PlayCircle className="h-8 w-8 text-white drop-shadow" />
-          </span>
-        )}
-      </div>
-      <div className={`flex min-w-0 flex-col justify-center py-3 ${flip ? 'pl-4' : 'pr-4'}`}>
-        <span className="text-[11px] font-medium uppercase tracking-wide text-brand-600">{typeLabel}</span>
-        <span className="mt-0.5 text-sm font-semibold text-ink">{link.title}</span>
-        {link.subtitle && <span className="mt-0.5 text-sm text-ink-muted">{link.subtitle}</span>}
-        <span className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-brand-700">
-          {isVideo ? 'Watch' : 'Discover'} <ExternalLink className="h-3.5 w-3.5" />
-        </span>
-      </div>
-    </a>
-  );
-}
 
 function KeyVal({ label, value }) {
   if (!value) return null;

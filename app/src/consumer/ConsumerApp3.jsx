@@ -22,8 +22,7 @@ import {
   Copy,
   Printer,
   ShoppingBag,
-  Megaphone,
-  ChevronDown
+  Megaphone
 } from 'lucide-react';
 import { MARKETING_LINK_LABEL } from '@/lib/fieldCatalogue';
 
@@ -251,220 +250,199 @@ function Passport({ dpp }) {
   const origin = p.country_of_origin || b.country_of_origin;
   const token = tokenFromPath();
 
+  // Prefer the rolled-up BOM aggregate (batch's own value + mass-weighted component
+  // contributions) over the batch's own component-excluding value. Fall back to the
+  // simple value when no aggregate is available. Formatted in German (de-DE).
   const co2 = deNum(agg.co2_footprint_kg ?? b.co2_footprint_kg, 2);
   const recycled = deNum(agg.recycled_content_pct ?? b.recycled_content_pct, 2);
-  const story = p.storytelling?.length > 0 ? p.storytelling : null;
-  const marketing = dpp.marketing ?? [];
 
-  return (
-    <div className="min-h-screen bg-canvas">
+  // The product story sits directly under the hero (1st block), before the stats and
+  // composition — it is the marketing lead-in to the passport.
+  const story = p.storytelling?.length > 0 ? p.storytelling : null;
+
+  // Marketing placement: inline in "Discover more" vs. left/right side rail (desktop) /
+  // "Featured" block (mobile). null/legacy ⇒ inline.
+  const marketing = dpp.marketing ?? [];
+  const inlineLinks = marketing.filter((m) => !m.placement || m.placement === 'discover_more');
+  const leftLinks = marketing.filter((m) => m.placement === 'left');
+  const rightLinks = marketing.filter((m) => m.placement === 'right');
+  const sideLinks = [...leftLinks, ...rightLinks];
+
+  const body = (
+    <>
       <Hero product={p} variant={v} espr={p.espr_compliance} />
 
-      <main className="mx-auto max-w-5xl px-4 pb-12">
-        <Stats co2={co2} recycled={recycled} origin={origin} />
-
-        <div className="mt-6 space-y-3">
-          <AccordionSection icon={Sparkles} title="Product story" defaultOpen>
-            {story ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                {story.map((s, i) => (
-                  <div key={i} className="rounded-2xl bg-brand-50/60 p-4">
-                    {s.title && <p className="text-sm font-semibold text-ink">{s.title}</p>}
-                    {s.body && <p className="mt-1 text-sm leading-relaxed text-ink-muted">{s.body}</p>}
-                  </div>
-                ))}
+      {story && (
+        <Section icon={Sparkles} title="The story" className="mt-4">
+          <div className="space-y-3">
+            {story.map((s, i) => (
+              <div key={i}>
+                {s.title && <p className="text-sm font-medium text-ink">{s.title}</p>}
+                {s.body && <p className="text-sm text-ink-muted">{s.body}</p>}
               </div>
-            ) : (
-              <p className="text-sm text-ink-muted">No product story available.</p>
-            )}
-          </AccordionSection>
-
-          <AccordionSection icon={ShoppingBag} title="Product details" defaultOpen>
-            <KeyVal label="Brand" value={p.brand} />
-            <KeyVal label="Category" value={p.category} />
-            <KeyVal label="Model" value={p.model} />
-            <KeyVal label="Colour" value={v.color} />
-            <KeyVal label="Size" value={v.size} />
-            <KeyVal label="SKU" value={v.sku} />
-            <KeyVal label="Description" value={p.description} />
-          </AccordionSection>
-
-          <AccordionSection icon={Layers} title="Materials & composition">
-            <KeyVal label="Fibre composition" value={p.fibre_composition} />
-            <KeyVal label="Substances of concern" value={p.substances_of_concern} />
-            <KeyVal label="Country of origin" value={origin} />
-            {b.batch_number && <KeyVal label="Production batch" value={b.batch_number} />}
-            {b.production_date && <KeyVal label="Produced" value={deDate(b.production_date)} />}
-
-            {dpp.materials?.length > 0 && (
-              <div className="mt-4 border-t border-black/5 pt-4">
-                <Materials items={dpp.materials} />
-              </div>
-            )}
-          </AccordionSection>
-
-          {(p.durability_score != null || p.repairability_score != null) && (
-            <AccordionSection icon={Gauge} title="Durability & repairability">
-              <ScoreBar label="Durability" score={p.durability_score} />
-              <ScoreBar label="Repairability" score={p.repairability_score} />
-            </AccordionSection>
-          )}
-
-          {hasCareInfo(p) && (
-            <AccordionSection icon={Repeat} title="Care, repair, reuse & end-of-life">
-              <div className="grid gap-4 md:grid-cols-2">
-                <CareBlock icon={Droplets} label="Care & washing" text={p.care_instructions} videoUrl={p.care_video_url} productsUrl={p.care_products_url} />
-                <CareBlock icon={Wrench} label="Repair" text={p.repair_instructions} videoUrl={p.repair_video_url} productsUrl={p.repair_products_url} />
-                <CareBlock icon={Repeat} label="Reuse" text={p.reuse_instructions} videoUrl={p.reuse_video_url} productsUrl={p.reuse_products_url} />
-                <CareBlock icon={Trash2} label="End-of-life" text={p.disposal_instructions} videoUrl={p.disposal_video_url} productsUrl={p.disposal_products_url} />
-              </div>
-            </AccordionSection>
-          )}
-
-          {dpp.documents?.length > 0 && (
-            <AccordionSection icon={FileCheck} title="Certificates & documents">
-              <ul className="space-y-2">
-                {dpp.documents.map((d) => (
-                  <li key={d.id}>
-                    <a
-                      href={d.download_url}
-                      download={d.file_name || true}
-                      className="flex items-center justify-between gap-2 rounded-xl border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition hover:bg-gray-50"
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <Download className="h-4 w-4 shrink-0 text-ink-muted" />
-                        <span className="truncate">{d.title || d.file_name}</span>
-                      </span>
-                      <span className="shrink-0 text-xs text-ink-muted">
-                        {[DOC_TYPE_LABEL[d.doc_type] ?? d.doc_type, fmtSize(d.file_size)].filter(Boolean).join(' · ')}
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </AccordionSection>
-          )}
-
-          <AccordionSection icon={Fingerprint} title="Identification">
-            <Identification ident={dpp.identification} product={dpp.product} />
-          </AccordionSection>
-
-          <AccordionSection icon={ShieldCheck} title="Authenticity">
-            <Authenticity dpp={dpp} />
-          </AccordionSection>
-
-          {marketing.length > 0 && (
-            <AccordionSection icon={Megaphone} title="Discover more">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {marketing.map((m, i) => (
-                  <MarketingCard key={i} link={m} />
-                ))}
-              </div>
-            </AccordionSection>
-          )}
-
-          <AccordionSection icon={Share2} title="Share passport">
-            <ShareActions token={token} />
-          </AccordionSection>
-        </div>
-
-        <footer className="mt-10 text-center text-xs text-ink-muted">
-          EU Digital Product Passport · ESPR
-          <div className="mt-1">Powered by DPP Studio</div>
-        </footer>
-      </main>
-    </div>
-  );
-}
-function AccordionSection({ icon: Icon, title, children, defaultOpen = false }) {
-  const [open, setOpen] = useState(defaultOpen);
-
-  return (
-    <section className="overflow-hidden rounded-3xl border border-black/5 bg-card shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
-      >
-        <span className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-50 text-brand-700">
-            <Icon className="h-4 w-4" />
-          </span>
-          <span className="text-base font-semibold text-ink">{title}</span>
-        </span>
-
-        <ChevronDown
-          className={`h-5 w-5 shrink-0 text-ink-muted transition-transform ${
-            open ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
-
-      {open && (
-        <div className="border-t border-black/5 px-5 pb-5 pt-4">
-          {children}
-        </div>
+            ))}
+          </div>
+        </Section>
       )}
-    </section>
+
+      <Stats co2={co2} recycled={recycled} origin={origin} hasStoryAbove={!!story} />
+
+      <div className="mt-4 space-y-4">
+        <Section icon={Layers} title="Materials & composition">
+          <KeyVal label="Fibre composition" value={p.fibre_composition} />
+          <KeyVal label="Substances of concern" value={p.substances_of_concern} />
+          <KeyVal label="Country of origin" value={origin} />
+          {b.batch_number && <KeyVal label="Production batch" value={b.batch_number} />}
+          {b.production_date && <KeyVal label="Produced" value={deDate(b.production_date)} />}
+        </Section>
+
+        {(p.durability_score != null || p.repairability_score != null) && (
+          <Section icon={Gauge} title="Durability & repairability">
+            <ScoreBar label="Durability" score={p.durability_score} />
+            <ScoreBar label="Repairability" score={p.repairability_score} />
+          </Section>
+        )}
+
+        {hasCareInfo(p) && (
+          <Section icon={Droplets} title="Care, repair, reuse & end-of-life">
+            <CareBlock icon={Droplets} label="Care & washing" text={p.care_instructions} videoUrl={p.care_video_url} productsUrl={p.care_products_url} />
+            <CareBlock icon={Wrench} label="Repair" text={p.repair_instructions} videoUrl={p.repair_video_url} productsUrl={p.repair_products_url} />
+            <CareBlock icon={Repeat} label="Reuse" text={p.reuse_instructions} videoUrl={p.reuse_video_url} productsUrl={p.reuse_products_url} />
+            <CareBlock icon={Trash2} label="End-of-life" text={p.disposal_instructions} videoUrl={p.disposal_video_url} productsUrl={p.disposal_products_url} />
+          </Section>
+        )}
+
+        {dpp.materials?.length > 0 && (
+          <Section icon={Layers} title="What it's made of">
+            <Materials items={dpp.materials} />
+          </Section>
+        )}
+
+        {dpp.documents?.length > 0 && (
+          <Section icon={FileCheck} title="Certificates & documents">
+            <ul className="space-y-2">
+              {dpp.documents.map((d) => (
+                <li key={d.id}>
+                  <a
+                    href={d.download_url}
+                    download={d.file_name || true}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-gray-50"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Download className="h-4 w-4 shrink-0 text-ink-muted" />
+                      <span className="truncate">{d.title || d.file_name}</span>
+                    </span>
+                    <span className="shrink-0 text-xs text-ink-muted">
+                      {[DOC_TYPE_LABEL[d.doc_type] ?? d.doc_type, fmtSize(d.file_size)].filter(Boolean).join(' · ')}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </Section>
+          
+        )}
+
+        {/* Narrow-screen fallback for left/right-placed tiles (rails are hidden below lg). */}
+        {sideLinks.length > 0 && (
+          <div className="lg:hidden">
+            <Section icon={Megaphone} title="Featured">
+              <div className="grid grid-cols-2 gap-3">
+                {sideLinks.map((m, i) => (
+                  <MarketingTile key={i} link={m} />
+                ))}
+              </div>
+            </Section>
+          </div>
+        )}
+
+        {inlineLinks.length > 0 && (
+          <Section icon={ExternalLink} title="Discover more">
+            <div className="space-y-3">
+              {inlineLinks.map((m, i) => (
+                <MarketingCard key={i} link={m} flip={i % 2 === 1} />
+              ))}
+            </div>
+          </Section>
+        )}
+
+        <Identification ident={dpp.identification} product={dpp.product} />
+
+        <Authenticity dpp={dpp} />
+      </div>
+
+      <ShareActions token={token} />
+
+      <footer className="mt-8 text-center text-xs text-ink-muted">
+        EU Digital Product Passport · ESPR
+        <div className="mt-1">Powered by DPP Studio</div>
+      </footer>
+    
+
+    
+    </>
+  );
+
+  // No side-placed tiles → the classic single centered column (look unchanged).
+  if (sideLinks.length === 0) {
+    return <div className="mx-auto max-w-lg px-4 pb-12">{body}</div>;
+  }
+
+  // With side tiles → 3-column layout on desktop: sticky rails flank the centered passport.
+  // The center keeps px-4 so the Hero's -mx-4 bleed stays aligned. Both rails render (one
+  // may be empty) so the passport stays centered.
+  return (
+    <div className="mx-auto flex max-w-6xl justify-center gap-6 px-4 pb-12">
+      <MarketingRail links={leftLinks} />
+      <div className="w-full max-w-lg px-4">{body}</div>
+      <MarketingRail links={rightLinks} />
+    </div>
   );
 }
 
 function Hero({ product, variant, espr }) {
   const image = variant.image_data || variant.image_url;
-
   return (
-    <header className="relative overflow-hidden bg-gradient-to-br from-[#eaf7e7] via-[#dff2d8] to-[#f6fbf4] text-ink">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.18),transparent_35%)]" />
-
-      <div className="relative mx-auto grid max-w-6xl gap-7 px-4 py-7 md:grid-cols-[1.05fr_0.95fr] md:items-center md:py-12">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand-700 shadow-sm">
+    <header className="-mx-4 rounded-b-3xl bg-gradient-to-br from-brand-600 to-brand-800 px-6 pb-7 pt-8 text-white shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-brand-100">
             <ShieldCheck className="h-4 w-4" />
-            Digital Product Passport
+            <span className="text-xs font-medium uppercase tracking-wider">Digital Product Passport</span>
           </div>
-
-          <h1 className="mt-5 text-3xl font-semibold leading-tight md:text-5xl">
-            {product.name ?? 'Product'}
-          </h1>
-
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-muted md:text-base">
-            {product.description ||
-              [product.brand, product.category, product.model].filter(Boolean).join(' · ')}
+          <h1 className="mt-3 text-2xl font-semibold leading-tight">{product.name ?? 'Product'}</h1>
+          <p className="mt-1 text-sm text-brand-100">
+            {[product.brand, product.category, product.model].filter(Boolean).join(' · ')}
           </p>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            {[product.brand, product.category, product.model, variant.color, variant.size, variant.sku]
-              .filter(Boolean)
-              .map((x) => (
-                <span key={x} className="rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-ink shadow-sm">
-                  {x}
-                </span>
-              ))}
-          </div>
-
-          {espr && (
-            <span className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm">
-              <BadgeCheck className="h-3.5 w-3.5" />
-              {ESPR_LABEL[espr] ?? espr}
-            </span>
+          {(variant.color || variant.size) && (
+            <p className="mt-0.5 text-xs text-brand-200">
+              {[variant.color, variant.size].filter(Boolean).join(' / ')}
+              {variant.sku ? ` · ${variant.sku}` : ''}
+            </p>
           )}
         </div>
-
         {image && (
-          <div className="relative">
-            <img
-              src={image}
-              alt={product.name ?? 'Product'}
-              className="mx-auto aspect-[4/3] max-h-72 w-full rounded-[2rem] border border-white object-cover shadow-xl md:aspect-[4/5] md:max-h-[460px]"
-            />
-          </div>
+          <img
+            src={image}
+            alt={product.name ?? 'Product'}
+            className="h-24 w-24 shrink-0 rounded-2xl border border-white/25 object-cover shadow-md sm:h-28 sm:w-28"
+          />
         )}
       </div>
+      {product.description && (
+        <p className="mt-3 text-sm leading-relaxed text-white/90">{product.description}</p>
+      )}
+      {espr && (
+        <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium">
+          <BadgeCheck className="h-3.5 w-3.5" />
+          {ESPR_LABEL[espr] ?? espr}
+        </span>
+      )}
     </header>
   );
 }
 
-function Stats({ co2, recycled, origin }) {
+function Stats({ co2, recycled, origin, hasStoryAbove }) {
   const tiles = [
     co2 != null && { icon: Leaf, value: `${co2} kg`, label: 'CO₂ footprint' },
     recycled != null && { icon: Recycle, value: `${recycled} %`, label: 'Recycled content' },
@@ -473,19 +451,24 @@ function Stats({ co2, recycled, origin }) {
 
   if (!tiles.length) return null;
 
+  // Directly under the hero the tiles overlap its rounded bottom (-mt-5). When the story
+  // sits between hero and stats, use a normal gap instead so nothing clips the story card.
   return (
-    <section className="mt-5 grid gap-3 sm:grid-cols-3">
+    <div className={`${hasStoryAbove ? 'mt-4' : '-mt-5'} grid grid-cols-3 gap-3`}>
       {tiles.map((t, i) => {
         const Icon = t.icon;
         return (
-          <div key={i} className="rounded-3xl border border-black/5 bg-card p-5 shadow-sm">
-            <Icon className="h-5 w-5 text-brand-600" />
-            <p className="mt-3 text-xl font-semibold text-ink">{t.value}</p>
-            <p className="mt-1 text-xs uppercase tracking-wide text-ink-muted">{t.label}</p>
+          <div
+            key={i}
+            className="flex flex-col items-center gap-1 rounded-2xl border border-black/5 bg-card px-2 py-3 text-center shadow-sm"
+          >
+            <Icon className="h-4 w-4 text-brand-600" />
+            <span className="text-sm font-semibold text-ink">{t.value}</span>
+            <span className="text-[11px] leading-tight text-ink-muted">{t.label}</span>
           </div>
         );
       })}
-    </section>
+    </div>
   );
 }
 
