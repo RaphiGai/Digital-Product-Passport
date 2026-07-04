@@ -17,12 +17,37 @@ import { ExportDropdown } from '@/ui/ExportDropdown';
 import { ValidationReport } from '@/ui/ValidationReport';
 import { ChevronRight, Printer, AlertTriangle } from 'lucide-react';
 
-/** @param {{ label: string, value: React.ReactNode }} props */
-function Row({ label, value }) {
+/**
+ * One label/value line in the info panels. `change` marks the field as edited but
+ * not yet approved (from validationStatus.unapproved_changes): the row is tinted
+ * amber with a dot + "Changed" badge, and the superseded value is shown struck
+ * through next to the current one. The marker clears once the DPP is approved.
+ * @param {{ label: string, value: React.ReactNode, change?: {old:string,new:string}|null }} props
+ */
+function Row({ label, value, change }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-black/5 py-3 last:border-0">
-      <span className="text-sm text-ink-muted">{label}</span>
-      <span className="min-w-0 text-right text-sm text-ink">{value ?? '—'}</span>
+    <div
+      className={[
+        'flex items-center justify-between gap-4 border-b border-black/5 py-3 last:border-0',
+        change ? '-mx-2 rounded-md bg-amber-50/60 px-2' : ''
+      ].join(' ')}
+    >
+      <span className="flex items-center gap-1.5 text-sm text-ink-muted">
+        {change && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden />}
+        {label}
+        {change && <Badge tone="amber">Changed</Badge>}
+      </span>
+      <span className="min-w-0 text-right text-sm text-ink">
+        {change ? (
+          <>
+            <span className="text-xs text-ink-muted line-through">{change.old ?? '—'}</span>
+            <span className="mx-1 text-ink-muted">→</span>
+            <span>{value ?? '—'}</span>
+          </>
+        ) : (
+          value ?? '—'
+        )}
+      </span>
     </div>
   );
 }
@@ -66,6 +91,9 @@ function VersionRow({ v }) {
           <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-ink-muted transition-transform ${open ? 'rotate-90' : ''}`} />
           <span className="min-w-0">
             <span className="text-sm font-medium text-ink">v{v.version_number}</span>
+            {v.source === 'approve' && (
+              <Badge tone="amber" className="ml-2">Approve snapshot</Badge>
+            )}
             {v.change_reason && <span className="ml-2 text-xs text-ink-muted">{v.change_reason}</span>}
           </span>
         </span>
@@ -125,6 +153,7 @@ function VersionHistoryCard({ dppId, productName }) {
       .sort((a, b) => a.version_number - b.version_number)
       .map((v) => ({
         'Version':       `v${v.version_number}`,
+        'Type':          v.source === 'approve' ? 'Approve snapshot' : 'Published',
         'Published At':  fmt(v.snapshot_date),
         'Change Reason': v.change_reason ?? '',
         'Changed By':    v.changed_by?.display_name ?? '',
@@ -320,81 +349,119 @@ function SnapshotDocumentList({ docs }) {
  * mandatory fields that block approval, and the field-level diff vs the live version.
  * Driven by the backend validationStatus() function — the same unified check
  * catalogue the approve/publish gate evaluates; the full report is rendered below.
+ * Collapsible: the header always shows the at-a-glance state (blocking count,
+ * pending changes); the detail rows, blocking list, full check report and the
+ * field-level diff expand on click.
  * @param {{ v: { status: string, live_version: number|null, next_version: number,
  *   can_approve: boolean, missing_mandatory: {key:string,label:string,message?:string}[],
  *   checks?: object[], score?: string, pending_changes: boolean,
- *   changed_fields: {label:string, old:string, new:string}[] },
+ *   changed_fields: {label:string, old:string, new:string}[],
+ *   unapproved_changes?: {path:string,label:string,old:string,new:string}[],
+ *   has_unapproved?: boolean },
  *   entities?: object }} props
  */
 function ReadinessCard({ v, entities }) {
+  const [open, setOpen] = useState(false);
   const blocking = v.missing_mandatory || [];
   const changed = v.changed_fields || [];
   return (
     <Card>
-      <CardTitle>Validation &amp; readiness</CardTitle>
-      <div className="mt-2">
-        <Row
-          label="Live (consumer) version"
-          value={v.live_version ? `v${v.live_version}` : 'Not yet published'}
-        />
-        <Row
-          label="Pending changes"
-          value={
-            v.pending_changes
-              ? <Badge tone="amber">Publishing will create v{v.next_version}</Badge>
-              : 'None'
-          }
-        />
-        <Row
-          label="Mandatory checks"
-          value={
-            v.can_approve
-              ? <Badge tone="green">Complete</Badge>
-              : <Badge tone="red">{blocking.length} blocking</Badge>
-          }
-        />
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-4 text-left"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <ChevronRight
+            className={`h-4 w-4 shrink-0 text-ink-muted transition-transform ${open ? 'rotate-90' : ''}`}
+          />
+          <CardTitle>Validation &amp; readiness</CardTitle>
+        </span>
+        <span className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {v.has_unapproved && (
+            <Badge tone="amber">{(v.unapproved_changes || []).length} unapproved</Badge>
+          )}
+          {v.pending_changes && <Badge tone="amber">Pending changes</Badge>}
+          {v.can_approve ? (
+            <Badge tone="green">Complete</Badge>
+          ) : (
+            <Badge tone="red">{blocking.length} blocking</Badge>
+          )}
+        </span>
+      </button>
 
-      {blocking.length > 0 && (
-        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <p className="font-medium">Blocking checks — required before approval:</p>
-          <ul className="mt-1.5 list-disc pl-5 text-xs">
-            {blocking.map((m, i) => (
-              <li key={i}>{m.message || m.label}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {Array.isArray(v.checks) && v.checks.length > 0 && (
-        <ValidationReport
-          className="mt-4"
-          checks={v.checks}
-          entities={entities}
-          summary={{
-            score: v.score,
-            readyToPublish: v.can_approve,
-            mandatoryFailed: blocking.length
-          }}
-        />
-      )}
-
-      {changed.length > 0 && (
-        <div className="mt-3">
-          <p className="text-sm font-medium text-ink">Changes since the live version (v{v.live_version})</p>
-          <div className="mt-1 divide-y divide-black/5">
-            {changed.map((c, i) => (
-              <div key={i} className="py-2 text-xs">
-                <div className="font-medium text-ink">{c.label}</div>
-                <div className="text-ink-muted">
-                  <span className="line-through">{c.old}</span>
-                  <span className="mx-1">→</span>
-                  <span className="text-ink">{c.new}</span>
-                </div>
-              </div>
-            ))}
+      {open && (
+        <>
+          <div className="mt-2">
+            <Row
+              label="Live (consumer) version"
+              value={v.live_version ? `v${v.live_version}` : 'Not yet published'}
+            />
+            <Row
+              label="Pending changes"
+              value={
+                v.pending_changes
+                  ? <Badge tone="amber">Publishing will create v{v.next_version}</Badge>
+                  : 'None'
+              }
+            />
+            <Row
+              label="Mandatory checks"
+              value={
+                v.can_approve
+                  ? <Badge tone="green">Complete</Badge>
+                  : <Badge tone="red">{blocking.length} blocking</Badge>
+              }
+            />
           </div>
-        </div>
+
+          {blocking.length > 0 && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <p className="font-medium">Blocking checks — required before approval:</p>
+              <ul className="mt-1.5 list-disc pl-5 text-xs">
+                {blocking.map((m, i) => (
+                  <li key={i}>{m.message || m.label}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Unapproved changes are NOT listed here — the info panels below mark the
+              affected fields inline (amber, old → new). The collapsed-header badge
+              keeps the count as an at-a-glance signal. */}
+
+          {Array.isArray(v.checks) && v.checks.length > 0 && (
+            <ValidationReport
+              className="mt-4"
+              checks={v.checks}
+              entities={entities}
+              summary={{
+                score: v.score,
+                readyToPublish: v.can_approve,
+                mandatoryFailed: blocking.length
+              }}
+            />
+          )}
+
+          {changed.length > 0 && (
+            <div className="mt-3">
+              <p className="text-sm font-medium text-ink">Changes since the live version (v{v.live_version})</p>
+              <div className="mt-1 divide-y divide-black/5">
+                {changed.map((c, i) => (
+                  <div key={i} className="py-2 text-xs">
+                    <div className="font-medium text-ink">{c.label}</div>
+                    <div className="text-ink-muted">
+                      <span className="line-through">{c.old}</span>
+                      <span className="mx-1">→</span>
+                      <span className="text-ink">{c.new}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </Card>
   );
@@ -568,6 +635,15 @@ export function DppDetail() {
   const batch = isSnapshot ? snap.batch : batchQ.data;
   const item = isSnapshot ? snap.item : itemQ.data;
 
+  // Unapproved-changes markers (edited but not yet re-approved): the backend's
+  // field-level diff (validationStatus.unapproved_changes) mapped by path so each
+  // panel row can flag itself. Live view only — a frozen snapshot is historical data.
+  const unapprovedChanges = !isSnapshot ? (readiness?.unapproved_changes ?? []) : [];
+  const changeByPath = Object.fromEntries(unapprovedChanges.map((c) => [c.path, c]));
+  const changed = (path) => changeByPath[path] ?? null;
+  const sectionChanged = (prefix) =>
+    unapprovedChanges.some((c) => c.path === prefix || c.path.startsWith(`${prefix}.`));
+
   // Approve/publish gate — the backend's unified validation (validationStatus) is
   // authoritative; fail-closed while it is still loading.
   const canApproveOrPublish = readiness?.can_approve === true;
@@ -701,11 +777,12 @@ export function DppDetail() {
   const viewVersion = isSnapshot ? snap.dpp?.version : dpp.current_version;
 
   // Options for the version picker: live first, then each saved version (newest first).
+  // Approve snapshots (superseded states preserved on approval) are labelled as such.
   const versionOptions = [
     { value: '', label: 'Live (current)' },
     ...versions.map((v) => ({
       value: v.ID,
-      label: `v${v.version_number} · ${fmtDate(v.snapshot_date)}${v.changed_by?.display_name ? ` · ${v.changed_by.display_name}` : ''}`
+      label: `v${v.version_number}${v.source === 'approve' ? ' (approve snapshot)' : ''} · ${fmtDate(v.snapshot_date)}${v.changed_by?.display_name ? ` · ${v.changed_by.display_name}` : ''}`
     }))
   ];
 
@@ -874,7 +951,12 @@ export function DppDetail() {
 
       {/* ── Aggregated footprint — live preview, or the frozen figures of a snapshot ── */}
       <Card>
-        <CardTitle>Aggregated footprint {isSnapshot ? '(snapshot)' : '(live preview)'}</CardTitle>
+        <CardTitle>
+          Aggregated footprint {isSnapshot ? '(snapshot)' : '(live preview)'}
+          {!isSnapshot && (sectionChanged('bom') || sectionChanged('aggregated')) && (
+            <Badge tone="amber" className="ml-2 align-middle">Changed</Badge>
+          )}
+        </CardTitle>
         {!isSnapshot && aggQ.isLoading ? (
           <p className="mt-3 text-sm text-ink-muted">Computing…</p>
         ) : (
@@ -974,23 +1056,23 @@ export function DppDetail() {
                 label="Product ID"
                 value={<IdValue id={product?.ID} to={productHref} />}
               />
-              <Row label="Name" value={product?.name} />
-              <Row label="Brand" value={product?.brand} />
-              <Row label="Category" value={categoryLabel} />
-              <Row label="Model" value={product?.model} />
-              <Row label="GTIN" value={product?.gtin} />
-              <Row label="UPC" value={product?.upc} />
-              <Row label="EIN" value={product?.ein} />
-              <Row label="Fibre composition" value={product?.fibre_composition} />
-              <Row label="Country of origin" value={product?.country_of_origin} />
-              <Row label="Substances of concern" value={product?.substances_of_concern} />
-              <Row label="Care & washing" value={product?.care_instructions} />
-              <Row label="Repair" value={product?.repair_instructions} />
-              <Row label="Reuse" value={product?.reuse_instructions} />
-              <Row label="Disposal" value={product?.disposal_instructions} />
-              <Row label="Durability score" value={product?.durability_score != null ? `${deNum(product.durability_score, 1)} / 10` : null} />
-              <Row label="Repairability score" value={product?.repairability_score != null ? `${deNum(product.repairability_score, 1)} / 10` : null} />
-              <Row label="ESPR compliance" value={product?.espr_compliance} />
+              <Row label="Name" value={product?.name} change={changed('product.name')} />
+              <Row label="Brand" value={product?.brand} change={changed('product.brand')} />
+              <Row label="Category" value={categoryLabel} change={changed('product.category')} />
+              <Row label="Model" value={product?.model} change={changed('product.model')} />
+              <Row label="GTIN" value={product?.gtin} change={changed('product.gtin')} />
+              <Row label="UPC" value={product?.upc} change={changed('product.upc')} />
+              <Row label="EIN" value={product?.ein} change={changed('product.ein')} />
+              <Row label="Fibre composition" value={product?.fibre_composition} change={changed('product.fibre_composition')} />
+              <Row label="Country of origin" value={product?.country_of_origin} change={changed('product.country_of_origin')} />
+              <Row label="Substances of concern" value={product?.substances_of_concern} change={changed('product.substances_of_concern')} />
+              <Row label="Care & washing" value={product?.care_instructions} change={changed('product.care_instructions')} />
+              <Row label="Repair" value={product?.repair_instructions} change={changed('product.repair_instructions')} />
+              <Row label="Reuse" value={product?.reuse_instructions} change={changed('product.reuse_instructions')} />
+              <Row label="Disposal" value={product?.disposal_instructions} change={changed('product.disposal_instructions')} />
+              <Row label="Durability score" value={product?.durability_score != null ? `${deNum(product.durability_score, 1)} / 10` : null} change={changed('product.durability_score')} />
+              <Row label="Repairability score" value={product?.repairability_score != null ? `${deNum(product.repairability_score, 1)} / 10` : null} change={changed('product.repairability_score')} />
+              <Row label="ESPR compliance" value={product?.espr_compliance} change={changed('product.espr_compliance')} />
             </div>
           </Card>
 
@@ -1010,11 +1092,11 @@ export function DppDetail() {
                   label="Variant ID"
                   value={<IdValue id={variant?.ID} to={variantHref} />}
                 />
-                <Row label="Colour" value={variant.color} />
-                <Row label="Size" value={variant.size} />
-                <Row label="SKU" value={variant.sku} />
-                <Row label="GTIN" value={variant.gtin} />
-                <Row label="Weight" value={withUnit(variant.weight_g, 'g', 0)} />
+                <Row label="Colour" value={variant.color} change={changed('variant.color')} />
+                <Row label="Size" value={variant.size} change={changed('variant.size')} />
+                <Row label="SKU" value={variant.sku} change={changed('variant.sku')} />
+                <Row label="GTIN" value={variant.gtin} change={changed('variant.gtin')} />
+                <Row label="Weight" value={withUnit(variant.weight_g, 'g', 0)} change={changed('variant.weight_g')} />
               </div>
             </Card>
           )}
@@ -1028,15 +1110,15 @@ export function DppDetail() {
                   label="Batch ID"
                   value={<IdValue id={batch?.ID} to={batchHref} />}
                 />
-                <Row label="Batch number" value={batch.batch_number} />
-                <Row label="Production date" value={fmtDate(batch.production_date)} />
-                <Row label="Production stage" value={batch.production_stage} />
-                <Row label="Factory" value={batch.factory?.name} />
-                <Row label="Supplier" value={batch.supplier?.name} />
-                <Row label="Country of origin" value={batch.country_of_origin} />
-                <Row label="CO₂ footprint (own production)" value={withUnit(batch.co2_footprint_kg, 'kg')} />
+                <Row label="Batch number" value={batch.batch_number} change={changed('batch.batch_number')} />
+                <Row label="Production date" value={fmtDate(batch.production_date)} change={changed('batch.production_date')} />
+                <Row label="Production stage" value={batch.production_stage} change={changed('batch.production_stage')} />
+                <Row label="Factory" value={batch.factory?.name} change={changed('batch.factory.name')} />
+                <Row label="Supplier" value={batch.supplier?.name} change={changed('batch.supplier.name')} />
+                <Row label="Country of origin" value={batch.country_of_origin} change={changed('batch.country_of_origin')} />
+                <Row label="CO₂ footprint (own production)" value={withUnit(batch.co2_footprint_kg, 'kg')} change={changed('batch.co2_footprint_kg')} />
                 {product?.product_type !== 'finished' && (
-                  <Row label="Recycled content" value={withUnit(batch.recycled_content_pct, '%', 2)} />
+                  <Row label="Recycled content" value={withUnit(batch.recycled_content_pct, '%', 2)} change={changed('batch.recycled_content_pct')} />
                 )}
                 <Row label="Status" value={<StatusBadge status={batch.status} />} />
               </div>
@@ -1052,9 +1134,9 @@ export function DppDetail() {
                   label="Item ID"
                   value={<IdValue id={item?.ID} to={itemHref} />}
                 />
-                <Row label="Serial number" value={<span className="font-mono text-xs">{item.serial_number}</span>} />
-                <Row label="UPI" value={<span className="font-mono text-xs">{item.upi}</span>} />
-                <Row label="Manufacturing date" value={fmtDate(item.manufacturing_date)} />
+                <Row label="Serial number" value={<span className="font-mono text-xs">{item.serial_number}</span>} change={changed('item.serial_number')} />
+                <Row label="UPI" value={<span className="font-mono text-xs">{item.upi}</span>} change={changed('item.upi')} />
+                <Row label="Manufacturing date" value={fmtDate(item.manufacturing_date)} change={changed('item.manufacturing_date')} />
                 <Row label="Status" value={<StatusBadge status={item.status} />} />
               </div>
             </Card>

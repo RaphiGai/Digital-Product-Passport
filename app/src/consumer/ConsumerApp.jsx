@@ -21,7 +21,8 @@ import {
   Share2,
   Copy,
   Printer,
-  ShoppingBag
+  ShoppingBag,
+  Megaphone
 } from 'lucide-react';
 import { MARKETING_LINK_LABEL } from '@/lib/fieldCatalogue';
 
@@ -102,12 +103,17 @@ export function ConsumerApp() {
 
   return (
     <div className="min-h-full bg-canvas">
-      <div className="mx-auto max-w-lg px-4 pb-12">
-        {!token && <TokenEntry />}
-        {token && state.status === 'loading' && <CenteredNote text="Loading passport…" />}
-        {token && state.status === 'error' && <NotFound />}
-        {token && state.status === 'ok' && <Passport dpp={state.data} />}
-      </div>
+      {token && state.status === 'ok' ? (
+        // Passport brings its own container (single column, or 3-column with side rails
+        // when the DPP has left/right-placed marketing tiles).
+        <Passport dpp={state.data} />
+      ) : (
+        <div className="mx-auto max-w-lg px-4 pb-12">
+          {!token && <TokenEntry />}
+          {token && state.status === 'loading' && <CenteredNote text="Loading passport…" />}
+          {token && state.status === 'error' && <NotFound />}
+        </div>
+      )}
     </div>
   );
 }
@@ -254,7 +260,15 @@ function Passport({ dpp }) {
   // composition — it is the marketing lead-in to the passport.
   const story = p.storytelling?.length > 0 ? p.storytelling : null;
 
-  return (
+  // Marketing placement: inline in "Discover more" vs. left/right side rail (desktop) /
+  // "Featured" block (mobile). null/legacy ⇒ inline.
+  const marketing = dpp.marketing ?? [];
+  const inlineLinks = marketing.filter((m) => !m.placement || m.placement === 'discover_more');
+  const leftLinks = marketing.filter((m) => m.placement === 'left');
+  const rightLinks = marketing.filter((m) => m.placement === 'right');
+  const sideLinks = [...leftLinks, ...rightLinks];
+
+  const body = (
     <>
       <Hero product={p} variant={v} espr={p.espr_compliance} />
 
@@ -329,17 +343,30 @@ function Passport({ dpp }) {
           
         )}
 
-        {dpp.marketing?.length > 0 && (
+        {/* Narrow-screen fallback for left/right-placed tiles (rails are hidden below lg). */}
+        {sideLinks.length > 0 && (
+          <div className="lg:hidden">
+            <Section icon={Megaphone} title="Featured">
+              <div className="grid grid-cols-2 gap-3">
+                {sideLinks.map((m, i) => (
+                  <MarketingTile key={i} link={m} />
+                ))}
+              </div>
+            </Section>
+          </div>
+        )}
+
+        {inlineLinks.length > 0 && (
           <Section icon={ExternalLink} title="Discover more">
             <div className="space-y-3">
-              {dpp.marketing.map((m, i) => (
+              {inlineLinks.map((m, i) => (
                 <MarketingCard key={i} link={m} flip={i % 2 === 1} />
               ))}
             </div>
           </Section>
         )}
 
-        <Identification ident={dpp.identification} />
+        <Identification ident={dpp.identification} product={dpp.product} />
 
         <Authenticity dpp={dpp} />
       </div>
@@ -354,7 +381,22 @@ function Passport({ dpp }) {
 
     
     </>
+  );
 
+  // No side-placed tiles → the classic single centered column (look unchanged).
+  if (sideLinks.length === 0) {
+    return <div className="mx-auto max-w-lg px-4 pb-12">{body}</div>;
+  }
+
+  // With side tiles → 3-column layout on desktop: sticky rails flank the centered passport.
+  // The center keeps px-4 so the Hero's -mx-4 bleed stays aligned. Both rails render (one
+  // may be empty) so the passport stays centered.
+  return (
+    <div className="mx-auto flex max-w-6xl justify-center gap-6 px-4 pb-12">
+      <MarketingRail links={leftLinks} />
+      <div className="w-full max-w-lg px-4">{body}</div>
+      <MarketingRail links={rightLinks} />
+    </div>
   );
 }
 
@@ -439,6 +481,66 @@ function Section({ icon: Icon, title, children, className = '' }) {
       </h2>
       <div className="mt-3">{children}</div>
     </section>
+  );
+}
+
+/**
+ * Image/video-only marketing tile for the side rails + mobile "Featured" block. The whole
+ * tile is the hyperlink; the title/subtitle sit as an overlay and a video adds a play
+ * badge. Falls back to a compact link row when the link has no image.
+ */
+function MarketingTile({ link }) {
+  const image = link.image_data || link.image_url;
+  const href = safeHref(link.url);
+  const isVideo = link.media_type === 'video';
+
+  if (!image) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center justify-between gap-2 rounded-lg border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-gray-50"
+      >
+        <span className="truncate">{link.title}</span>
+        <ExternalLink className="h-4 w-4 shrink-0 text-ink-muted" />
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="relative block overflow-hidden rounded-xl border border-black/5 shadow-sm transition-transform hover:-translate-y-0.5"
+    >
+      <img src={image} alt={link.title || ''} className="aspect-[4/3] w-full object-cover print:hidden" />
+      {isVideo && (
+        <span className="absolute inset-0 flex items-center justify-center bg-black/20">
+          <PlayCircle className="h-9 w-9 text-white drop-shadow" />
+        </span>
+      )}
+      {(link.title || link.subtitle) && (
+        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-3 pb-2 pt-6">
+          {link.title && <span className="block truncate text-xs font-semibold text-white">{link.title}</span>}
+          {link.subtitle && <span className="block truncate text-[11px] text-white/85">{link.subtitle}</span>}
+        </span>
+      )}
+    </a>
+  );
+}
+
+/** A desktop-only (lg+) sticky side rail of image/video marketing tiles. */
+function MarketingRail({ links }) {
+  return (
+    <aside className="hidden w-56 shrink-0 pt-8 lg:block">
+      <div className="sticky top-6 space-y-4">
+        {links.map((m, i) => (
+          <MarketingTile key={i} link={m} />
+        ))}
+      </div>
+    </aside>
   );
 }
 
@@ -620,15 +722,34 @@ function Materials({ items, depth = 0 }) {
   );
 }
 
-/** Product identification & traceability (US6.11). Renders only the fields present. */
-function Identification({ ident }) {
-  if (!ident) return null;
+const PRODUCT_TYPE_LABEL = {
+  finished: 'Finished product',
+  material: 'Material',
+  component: 'Component',
+  packaging: 'Packaging'
+};
+
+const cap = (v) => (v ? String(v).replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) : v);
+
+/**
+ * Product identification & traceability (US6.11). Renders only the fields present.
+ * Product identifiers (GTIN/UPC/EIN) and lifecycle fields (type/status) arrive via the
+ * visibility-filtered product section — internal by default, opt-in public per field.
+ */
+function Identification({ ident, product }) {
+  if (!ident && !product) return null;
+  const p = product ?? {};
   const rows = [
-    ['Product ID', ident.product_id],
-    ['Batch number', ident.batch_number],
-    ['Serial number', ident.serial_number],
-    ['UPI', ident.upi],
-    ['Passport ID', ident.dpp_id]
+    ['Product ID', ident?.product_id],
+    ['GTIN', p.gtin],
+    ['UPC', p.upc],
+    ['EIN', p.ein],
+    ['Batch number', ident?.batch_number],
+    ['Serial number', ident?.serial_number],
+    ['UPI', ident?.upi],
+    ['Passport ID', ident?.dpp_id],
+    ['Product type', p.product_type ? (PRODUCT_TYPE_LABEL[p.product_type] ?? cap(p.product_type)) : null],
+    ['Product status', cap(p.status)]
   ].filter(([, v]) => v);
   if (!rows.length) return null;
   return (

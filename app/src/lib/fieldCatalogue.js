@@ -198,6 +198,17 @@ export const MARKETING_MEDIA_TYPES = [
   { value: 'video', label: 'Video' }
 ];
 
+/**
+ * Where a marketing link appears on the consumer DPP (mirrors the CDS `MarketingPlacement`
+ * enum). 'discover_more' = inline in the "Discover more" section; 'left'/'right' = a side
+ * rail next to the passport on desktop, or the "Featured" block on mobile.
+ */
+export const MARKETING_PLACEMENTS = [
+  { value: 'discover_more', label: 'Discover more (inline)' },
+  { value: 'left', label: 'Left of the passport' },
+  { value: 'right', label: 'Right of the passport' }
+];
+
 export const PARTNER_ROLES = [
   { value: 'supplier', label: 'Supplier', hint: 'Provides raw materials or components' },
   { value: 'manufacturer', label: 'Manufacturer', hint: 'Produces or assembles the finished product' },
