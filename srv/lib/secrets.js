@@ -11,6 +11,11 @@
  * Precedence: existing `process.env` values win, so local `.env` files and
  * CI variables stay authoritative for dev/test. VCAP-provided values are
  * only used to fill in gaps in production.
+ *
+ * NOTE: this module runs at the very start of boot — BEFORE server.js loads @sap/cds —
+ * so it deliberately uses `console` instead of `cds.log()` (requiring cds here would
+ * force an early framework load before secrets are projected into process.env). The few
+ * messages below log only KEY NAMES, never secret values or personal data.
  */
 
 const SERVICE_NAME = process.env.SECRETS_SERVICE_NAME || 'dpp-secrets';

@@ -1,5 +1,7 @@
 'use strict';
 
+const cds = require('@sap/cds');
+const LOG = cds.log('dpp/auth');
 const express = require('express');
 const session = require('../lib/session');
 const credentials = require('../lib/credentials');
@@ -137,7 +139,7 @@ function register(app) {
     try {
       result = await credentials.verifyLogin(String(username || ''), String(password || ''));
     } catch (e) {
-      console.error('[auth] login error:', e.message);
+      LOG.error('login error', e);
       if (wantsJson(req)) return res.status(500).json({ ok: false, error: 'Sign-in is currently unavailable. Please try again later.' });
       return res.status(500).type('html').send(renderLogin({ error: 'Sign-in is currently unavailable. Please try again later.' }));
     }
@@ -196,7 +198,7 @@ function register(app) {
     try {
       user = await credentials.findActiveByUsernameAndEmail(String(username || ''), String(emailInput || ''));
     } catch (e) {
-      console.error('[auth] request-password-reset error:', e.message);
+      LOG.error('request-password-reset error', e);
       return res.status(500).json({ ok: false, error: 'Password reset is currently unavailable. Please try again later.' });
     }
     if (!user) {
@@ -208,7 +210,7 @@ function register(app) {
       const link = `${base}/reset-password?token=${encodeURIComponent(token)}`;
       await email.sendPasswordResetEmail(user.email, { link, displayName: user.display_name });
     } catch (e) {
-      console.error('[auth] request-password-reset issue error:', e.message);
+      LOG.error('request-password-reset issue error', e);
       return res.status(500).json({ ok: false, error: 'Password reset is currently unavailable. Please try again later.' });
     }
     return res.json({ ok: true });

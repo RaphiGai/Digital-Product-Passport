@@ -40,6 +40,30 @@
     "supertest": "^7.0.0"
   },
   "cds": {
+    "log": {
+      "levels": {
+        "dpp": "info",
+        "sql": "warn",
+        "odata": "warn"
+      }
+    },
+    "[development]": {
+      "log": {
+        "levels": {
+          "dpp": "debug"
+        }
+      }
+    },
+    "[production]": {
+      "log": {
+        "levels": {
+          "dpp": "info",
+          "cds": "warn",
+          "odata": "warn",
+          "sql": "error"
+        }
+      }
+    },
     "requires": {
       "db": {
         "[development]": "sqlite",

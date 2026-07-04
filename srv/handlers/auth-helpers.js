@@ -1,6 +1,7 @@
 'use strict';
 
 const cds = require('@sap/cds');
+const LOG = cds.log('dpp/auth');
 
 const APP_ROLES = ['company_advanced', 'company_user'];
 
@@ -67,7 +68,7 @@ async function getUserOrg(req) {
   const { Organizations } = cds.entities('dpp');
   const org = await SELECT.one.from(Organizations).where({ ID: orgId });
   if (!org) {
-    console.warn(`[auth] no organization found for org id '${orgId}'`);
+    LOG.warn('no organization found for org', { orgId });
     req.reject(403, 'Your account is not assigned to an organization. Please contact your administrator.');
   }
   return org;
@@ -98,7 +99,9 @@ async function resolveAppUserInline(req) {
     // Deactivated or deleted: mark inactive so requireActiveUser fails closed. The
     // session cookie's role/tenant claims must NOT by themselves keep access alive.
     req.user._appInactive = true;
-    console.warn(`[auth] no active Users row for ${JSON.stringify(candidates)}`);
+    // DSGVO: never log the principal (username/email). The request correlation_id ties
+    // this warning to the offending request in Kibana.
+    LOG.warn('no active user row for the request principal');
     return;
   }
 
@@ -106,7 +109,7 @@ async function resolveAppUserInline(req) {
     ? await SELECT.one.from(Organizations).where({ ID: userRow.organization_ID })
     : null;
   if (!org) {
-    console.warn(`[auth] user '${userRow.email}' has no org`);
+    LOG.warn('active user has no organization', { userId: userRow.ID });
     return;
   }
 
@@ -143,7 +146,7 @@ async function requireActiveUser(req) {
 function requireRole(req, ...roles) {
   const role = getAppRole(req);
   if (!roles.includes(role)) {
-    console.warn(`[auth] insufficient role '${role}' — requires one of: ${roles.join(', ')}`);
+    LOG.warn('insufficient role for action', { role, required: roles });
     req.reject(403, "You don't have permission to perform this action.");
   }
 }
@@ -166,7 +169,7 @@ async function requireOwningOrg(req, entityName, id, ownerPath = 'owning_organiz
   const callerOrgId = await requireActiveUser(req);
   const entity = cds.entities('dpp')[entityName];
   if (!entity) {
-    console.error(`[auth] requireOwningOrg called with unknown entity '${entityName}'`);
+    LOG.error('requireOwningOrg called with unknown entity', { entityName });
     req.reject(500, 'An internal error occurred.');
   }
   const row = await SELECT.one
@@ -175,7 +178,7 @@ async function requireOwningOrg(req, entityName, id, ownerPath = 'owning_organiz
     .where({ ID: id });
   if (!row) req.reject(404, 'The requested item could not be found.');
   if (row.ownerOrgId !== callerOrgId) {
-    console.warn(`[auth] ${entityName} '${id}' belongs to a different organization`);
+    LOG.warn('cross-organization access blocked', { entity: entityName, id });
     req.reject(403, "You don't have permission to access this item.");
   }
 }

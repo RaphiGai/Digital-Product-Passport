@@ -1,6 +1,7 @@
 'use strict';
 
 const cds = require('@sap/cds');
+const LOG = cds.log('dpp/public');
 const QRCode = require('qrcode');
 const tokens = require('../lib/token');
 const { aggregate, firstItemDpp } = require('../lib/aggregator');
@@ -412,7 +413,7 @@ async function loadDPPByToken(token) {
   const latest = versions.find((v) => v.consumer_snapshot) || null;
   if (latest) {
     let frozen = null;
-    try { frozen = JSON.parse(latest.consumer_snapshot); } catch { frozen = null; }
+    try { frozen = JSON.parse(latest.consumer_snapshot); } catch { /* keep null */ }
     if (frozen) return overlayLive(frozen, dpp, latest.version_number);
   }
 
@@ -428,7 +429,7 @@ async function resolveDPPByToken(req, res) {
     res.set('Cache-Control', 'no-store');
     res.json(dto);
   } catch (err) {
-    req.app?.locals?.logger?.error?.(err) || console.error('public-handler error', err);
+    LOG.error('resolve DPP by token failed', err);
     res.status(500).json({ error: 'internal_error' });
   }
 }
@@ -473,7 +474,7 @@ async function downloadPublicDocument(req, res) {
 
     if (typeof content.pipe === 'function') {
       content.on('error', (err) => {
-        console.error('public document stream error', err);
+        LOG.error('public document stream error', err);
         if (!res.headersSent) res.status(500).end();
       });
       content.pipe(res);
@@ -483,7 +484,7 @@ async function downloadPublicDocument(req, res) {
       res.end(Buffer.from(String(content), 'base64')); // defensive: non-stream driver
     }
   } catch (err) {
-    console.error('public document download error', err);
+    LOG.error('public document download error', err);
     if (!res.headersSent) res.status(500).end();
   }
 }
@@ -497,7 +498,7 @@ async function getQRImage(req, res) {
     res.set('Cache-Control', 'public, max-age=3600');
     res.send(png);
   } catch (err) {
-    console.error('qr-image error', err);
+    LOG.error('qr-image error', err);
     res.status(500).end();
   }
 }

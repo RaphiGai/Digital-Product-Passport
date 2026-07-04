@@ -1,5 +1,7 @@
 'use strict';
 
+const cds = require('@sap/cds');
+const LOG = cds.log('dpp/service');
 const authHelpers = require('./handlers/auth-helpers');
 
 const productHandlers     = require('./handlers/product-handlers');
@@ -72,7 +74,7 @@ module.exports = (srv) => {
 
     // Any remaining unexpected server error: log the real cause, show a generic message.
     if (status >= 500) {
-      console.error('[dpp] unexpected error:', err.message, err.stack || '');
+      LOG.error('unexpected server error', err);
       err.code = '500';
       err.message = 'Something went wrong on the server. Please try again later.';
     }

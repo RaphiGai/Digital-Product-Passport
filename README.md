@@ -81,6 +81,37 @@ cf restart dpp-srv
 
 Requires `mbt`, `cf` CLI (with the multiapps plugin), and Node.js ≥ 20. Step-by-step setup is documented in [docs/architecture.md](docs/architecture.md) §1.
 
+## Logging & troubleshooting
+
+The backend logs through CAP's structured logger (`cds.log('dpp/<area>')`). In production the
+output is **JSON** and carries a `correlation_id` per request, so a single request can be traced
+across log lines. Log messages never contain personal data (no emails / usernames — only internal
+IDs), per the project's DSGVO rules.
+
+**Read logs on BTP (Kibana).** The `application-logs` service (`dpp-logs` in `mta.yaml`) is bound to
+`dpp-srv` and `dpp-approuter`, so stdout is shipped to Kibana automatically:
+
+- BTP Cockpit → your space → **Application Logging** → **Open Kibana Dashboard** — then filter by
+  `component` (e.g. `dpp/service`, `dpp/auth`, `dpp/public`), `level` (`error`/`warn`), or a
+  `correlation_id` copied from a failing request's `x-correlation-id` response header.
+- Quick check without Kibana (short-lived buffer): `cf logs dpp-srv --recent`.
+
+> Requires the `application-logs` entitlement in the subaccount (BTP Cockpit → Entitlements). If it
+> is missing, `cf deploy` fails on the `dpp-logs` resource — add the entitlement or switch the plan.
+
+**Log levels per environment** (`cds.log.levels` in `package.json`): dev = `debug`, prod = `info`
+(app) with framework noise at `warn`/`error`. Turn on verbose logging in prod temporarily without a
+redeploy, then revert:
+
+```bash
+cf set-env dpp-srv CDS_LOG_LEVELS 'dpp=debug' && cf restart dpp-srv
+# revert
+cf unset-env dpp-srv CDS_LOG_LEVELS && cf restart dpp-srv
+```
+
+**Dev loop:** find the failing request in Kibana by its `correlation_id` → reproduce locally with
+`cds watch` (dev logs are human-readable text at `debug`) → fix → redeploy.
+
 ## Project layout
 
 ```

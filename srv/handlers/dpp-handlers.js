@@ -1,6 +1,7 @@
 'use strict';
 
 const cds = require('@sap/cds');
+const LOG = cds.log('dpp/dpp');
 const { randomUUID } = require('crypto');
 const tokens = require('../lib/token');
 const { requireOwningOrg, requireActiveUser } = require('./auth-helpers');
@@ -301,7 +302,51 @@ async function anchorUnbaselinedDPPs() {
       .where({ ID: dpp.ID });
     anchored += 1;
   }
-  if (anchored) console.log(`[dpp] anchored drift baseline for ${anchored} legacy/seed DPP(s)`);
+  if (anchored) LOG.info('anchored drift baseline for legacy/seed DPPs', { count: anchored });
+}
+
+/**
+ * Freeze a consumer_snapshot for every publicly-visible DPP that has none yet — i.e.
+ * seed/legacy DPPs marked 'published' in the DB that never went through publishDPP.
+ * Without a frozen snapshot, public-handler.js#loadDPPByToken falls back to LIVE
+ * rendering, so an edit / re-approve would leak to the external view before the next
+ * publish. Freezing the current (seeded = published) state as a DPPVersions publish row
+ * makes the public view serve that frozen state until the next real publish. Idempotent
+ * (skips DPPs that already carry a consumer_snapshot version).
+ */
+async function freezeLegacyConsumerSnapshots() {
+  const DPPdb = cds.entities('dpp').DPPs;
+  const { DPPVersions } = cds.entities('dpp');
+  const { buildConsumerSnapshot } = require('./public-handler'); // lazy: avoid load cycle
+  const rows = await SELECT.from(DPPdb).where({ visibility: 'public' });
+  let frozen = 0;
+  for (const dpp of rows) {
+    // Mirror public-handler.js#isPubliclyVisible: served once published (published_at) or
+    // seeded as published/archived.
+    const publiclyVisible =
+      dpp.published_at != null || dpp.status === 'published' || dpp.status === 'archived';
+    if (!publiclyVisible) continue;
+
+    const existing = await SELECT.from(DPPVersions).columns('ID', 'consumer_snapshot').where({ dpp_ID: dpp.ID });
+    if (existing.some((v) => v.consumer_snapshot)) continue; // already has a frozen publish
+
+    const snap = await buildSnapshot(dpp);
+    const consumerJson = JSON.stringify(await buildConsumerSnapshot(dpp));
+    await INSERT.into(DPPVersions).entries({
+      ID: randomUUID(),
+      dpp_ID: dpp.ID,
+      version_number: dpp.current_version || 1,
+      snapshot_date: dpp.published_at || new Date().toISOString(),
+      change_reason: null,
+      changed_by_ID: null,
+      source: 'publish',
+      snapshot_data: JSON.stringify(snap),
+      consumer_snapshot: consumerJson,
+      content_hash: contentHash(snap)
+    });
+    frozen += 1;
+  }
+  if (frozen) LOG.info('froze consumer snapshot for legacy/seed DPPs', { count: frozen });
 }
 
 module.exports = (srv) => {
@@ -311,8 +356,19 @@ module.exports = (srv) => {
   // 'published'/'approved' without one — otherwise source-data edits never revert it to
   // draft and it can never be re-approved/re-published (see anchorUnbaselinedDPPs).
   cds.once('served', () =>
-    anchorUnbaselinedDPPs().catch((e) => console.error('[dpp] baseline anchoring failed:', e.message))
+    anchorUnbaselinedDPPs().catch((e) => LOG.error('baseline anchoring failed', e))
   );
+
+  // Freeze consumer snapshots for legacy/seed published DPPs so the external view is never
+  // served live — edits / re-approvals stay invisible until the next publish. Skipped in
+  // the jest suite (DPP_TEST_AUTH): several integration tests intentionally exercise the
+  // live-render path for seed DPPs; the function is covered directly by
+  // test/integration/consumer-snapshot-freeze.test.js.
+  if (process.env.DPP_TEST_AUTH !== 'basic') {
+    cds.once('served', () =>
+      freezeLegacyConsumerSnapshots().catch((e) => LOG.error('consumer snapshot freeze failed', e))
+    );
+  }
 
   // ----- DPPVersions: immutable audit trail (US5.9) -----
   // Reject every OData write; rows are inserted server-side on publish (see publishDPP),
@@ -568,7 +624,7 @@ module.exports = (srv) => {
     let pendingChanges = liveVersion == null ? prePublication : false;
     if (latestPublished) {
       let prev = null;
-      try { prev = JSON.parse(latestPublished.snapshot_data); } catch { prev = null; }
+      try { prev = JSON.parse(latestPublished.snapshot_data); } catch { /* keep null */ }
       changedFields = diffNormalized(prev, cur);
       pendingChanges = changedFields.length > 0;
     }
@@ -580,7 +636,7 @@ module.exports = (srv) => {
     let unapprovedChanges = [];
     if (dpp.aggregated_snapshot) {
       let approvedSnap = null;
-      try { approvedSnap = JSON.parse(dpp.aggregated_snapshot); } catch { approvedSnap = null; }
+      try { approvedSnap = JSON.parse(dpp.aggregated_snapshot); } catch { /* keep null */ }
       if (approvedSnap) unapprovedChanges = diffNormalized(approvedSnap, cur);
     }
 
@@ -789,3 +845,4 @@ module.exports.buildSnapshot = buildSnapshot;
 module.exports.rotateActiveQRCode = rotateActiveQRCode;
 module.exports.reevaluateDrift = reevaluateDrift;
 module.exports.anchorUnbaselinedDPPs = anchorUnbaselinedDPPs;
+module.exports.freezeLegacyConsumerSnapshots = freezeLegacyConsumerSnapshots;

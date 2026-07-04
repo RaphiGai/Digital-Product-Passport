@@ -32,6 +32,7 @@ modules:
       - name: dpp-db
       - name: dpp-uaa
       - name: dpp-secrets
+      - name: dpp-logs
     provides:
       - name: srv-api          # consumed by approuter via destinations
         properties:
@@ -68,6 +69,7 @@ modules:
           url: ~{srv-url}
           forwardAuthToken: true
       - name: dpp-uaa
+      - name: dpp-logs
     provides:
       - name: app-api
         properties:
@@ -75,6 +77,15 @@ modules:
           app-uri: ${default-uri}
 
 resources:
+  # ---- Application Logging Service: ships stdout (CAP JSON logs) to Kibana ----
+  # View: BTP Cockpit → space → Application Logging → "Open Kibana Dashboard".
+  # Needs the `application-logs` entitlement in the subaccount (plan `lite`).
+  - name: dpp-logs
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: application-logs
+      service-plan: lite
+
   - name: dpp-db
     type: com.sap.xs.hdi-container
     parameters:

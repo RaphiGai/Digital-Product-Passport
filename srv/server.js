@@ -3,6 +3,7 @@
 require('./lib/secrets').load();
 
 const cds = require('@sap/cds');
+const LOG = cds.log('dpp/server');
 const publicHandler = require('./handlers/public-handler');
 const authRoutes = require('./handlers/auth-routes');
 
@@ -139,7 +140,7 @@ cds.on('bootstrap', (app) => {
     }
     app.use(swaggerUi());
   } else if (process.env.NODE_ENV !== 'test') {
-    console.warn('cds-swagger-ui-express not installed — /swagger is disabled');
+    LOG.warn('cds-swagger-ui-express not installed — /swagger is disabled');
   }
 
   // Generic backstop for unhandled errors thrown by the Express-mounted routes above
@@ -148,7 +149,7 @@ cds.on('bootstrap', (app) => {
   // since it is registered before CAP mounts its OData routes + error middleware.
   app.use((err, req, res, next) => {
     if (res.headersSent) return next(err);
-    console.error('[express] unhandled error:', err && err.message, err && err.stack);
+    LOG.error('unhandled express route error', err);
     res
       .status((err && err.status) || 500)
       .json({ error: { message: 'Something went wrong. Please try again later.' } });

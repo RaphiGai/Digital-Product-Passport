@@ -1,5 +1,8 @@
 'use strict';
 
+const cds = require('@sap/cds');
+const LOG = cds.log('dpp/mail');
+
 /**
  * Outbound email via nodemailer.
  *
@@ -72,11 +75,13 @@ async function sendPasswordResetEmail(to, { link, displayName }) {
   try {
     await getTransport().sendMail({ from, to, subject, text, html });
   } catch (err) {
-    console.error('[email] password-reset send failed:', err && err.message);
+    LOG.error('password-reset send failed', err);
   }
-  // Dev visibility: without SMTP the mail is not delivered, so surface the link.
+  // Dev visibility: without SMTP the mail is not delivered, so surface the link so the
+  // flow is testable locally. DSGVO: log ONLY the link (dev-only branch), never the
+  // recipient address.
   if (!smtpConfigured()) {
-    console.log(`[email][dev] password reset link for ${to}: ${link}`);
+    LOG.info('password reset link generated (dev, mail not configured)', { link });
   }
 }
 

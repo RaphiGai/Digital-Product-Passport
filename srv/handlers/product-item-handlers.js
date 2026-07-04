@@ -1,6 +1,7 @@
 'use strict';
 
 const cds = require('@sap/cds');
+const LOG = cds.log('dpp/items');
 const { randomUUID } = require('crypto');
 const tokens = require('../lib/token');
 const { requireOwningOrg } = require('./auth-helpers');
@@ -51,7 +52,7 @@ module.exports = (srv) => {
   srv.after('CREATE', ProductItems, async (item, req) => {
     const chain = await resolveChain(item.batch_ID);
     if (!chain) {
-      console.warn(`[product-item] cannot resolve product chain for batch '${item.batch_ID}'`);
+      LOG.warn('cannot resolve product chain for batch', { batchId: item.batch_ID });
       req.reject(400, 'This item cannot be linked to its product. Please check the batch assignment.');
     }
 
