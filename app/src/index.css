@@ -66,8 +66,35 @@
   --canvas: 244 243 238;
 }
 
+.pdf-export-mode * {
+  line-height: 1.35 !important;
+}
+
+.pdf-export-mode svg text {
+  dominant-baseline: auto !important;
+}
+
+.pdf-export-mode select,
+.pdf-export-mode input,
+.pdf-export-mode button {
+  display: none !important;
+}
+
+.pdf-export-mode .overflow-hidden {
+  overflow: visible !important;
+}
+
+.pdf-export-mode td,
+.pdf-export-mode th,
+.pdf-export-mode p,
+.pdf-export-mode span,
+.pdf-export-mode h3 {
+  overflow: visible !important;
+}
+
 
 @layer base {
+
   html,
   body,
   #root {

@@ -92,9 +92,7 @@ export function App() {
           <Route path="reports/sustainability" element={<SustainabilityAnalytics />} />
           <Route path="reports/compliance" element={<ComplianceAnalytics />} />
 
-              
-          
-          
+        
           <Route path="settings" element={<Settings />} />
           <Route
             path="/activity-logs"
