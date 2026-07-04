@@ -65,7 +65,7 @@ function validateValue(def, value) {
       return `${label} must be yes or no.`;
     }
     case 'url': {
-      if (!isHttpUrl(value)) return 'Links must start with https:// (or http://).';
+      if (!isHttpUrl(value)) return `${label} must be a full web address starting with https:// or http:// (for example https://example.com).`;
       if (def.max_length != null && String(value).length > def.max_length) {
         return `${label} must be at most ${def.max_length} characters.`;
       }

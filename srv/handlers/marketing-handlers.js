@@ -21,10 +21,10 @@ function checkValidWindow(req) {
 // and is intentionally not format-checked here. Shares the http(s) rule with url-validate.js.
 function checkUrls(req) {
   if (!isHttpUrl(req.data.url)) {
-    req.reject(400, 'The link URL must start with https:// (or http://).');
+    req.reject(400, 'The link URL must be a full web address starting with https:// or http:// (for example https://example.com).');
   }
   if (!isHttpUrl(req.data.image_url)) {
-    req.reject(400, 'The image URL must start with https:// (or http://).');
+    req.reject(400, 'The image URL must be a full web address starting with https:// or http:// (for example https://example.com/image.png).');
   }
 }
 

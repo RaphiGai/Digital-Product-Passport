@@ -110,7 +110,7 @@ async function verifyLogin(username, password) {
 async function changePassword(userId, currentPassword, newPassword) {
   const { Users } = entities();
   const user = await findById(userId);
-  if (!user) throw fail(404, 'User not found.');
+  if (!user) throw fail(404, 'Your account could not be found. Please sign in again or contact your administrator.');
 
   const currentOk = await passwords.verify(currentPassword, user.password_hash);
   if (!currentOk) throw fail(400, 'Current password is incorrect.');

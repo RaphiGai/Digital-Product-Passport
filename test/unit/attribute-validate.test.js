@@ -116,8 +116,8 @@ describe('attribute-validate — rejections', () => {
   });
 
   test('url fields block javascript:/data: (stored XSS on the public passport)', () => {
-    expect(firstError({ manual_url: 'javascript:alert(1)' })).toBe('Links must start with https:// (or http://).');
-    expect(firstError({ manual_url: 'data:text/html,x' })).toBe('Links must start with https:// (or http://).');
+    expect(firstError({ manual_url: 'javascript:alert(1)' })).toMatch(/must be a full web address starting with https:\/\//);
+    expect(firstError({ manual_url: 'data:text/html,x' })).toMatch(/must be a full web address starting with https:\/\//);
   });
 
   test('string constraints: max_length and regex', () => {
