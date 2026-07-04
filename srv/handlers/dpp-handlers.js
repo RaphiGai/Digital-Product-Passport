@@ -494,6 +494,11 @@ module.exports = (srv) => {
 
     await UPDATE(DPPs).set({
       status: 'published',
+      // Publishing makes the passport consumer-visible: force `public` so the QR/consumer
+      // link resolves. Runtime-created DPPs (esp. auto-created item DPPs) default to
+      // 'internal', and relying on a separate UI PATCH to flip it was fragile — a publish
+      // via any path (item DPP, API, import) left them 'internal' → public view 404.
+      visibility: 'public',
       published_at: now,
       qr_token: qrToken,
       qr_payload_url: payloadUrl,
