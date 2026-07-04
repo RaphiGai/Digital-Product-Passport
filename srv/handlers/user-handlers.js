@@ -40,7 +40,7 @@ module.exports = (srv) => {
 
     if (!username || !email) req.reject(400, 'Username and email are required.');
     if (!APP_ROLES.includes(role)) {
-      req.reject(400, 'Invalid role. Please choose a valid user role.');
+      req.reject(400, 'The selected role is not valid. Please choose either Advanced (full access) or User (read-only).');
     }
 
     // Uniqueness: username is global; email is unique within the caller's org.
@@ -80,7 +80,7 @@ module.exports = (srv) => {
     requireRole(req, 'company_advanced');
 
     const target = await credentials.findById(req.data.userId);
-    if (!target) req.reject(404, 'User not found.');
+    if (!target) req.reject(404, 'The selected user could not be found. The account may have been deleted in the meantime. Please refresh the user list and try again.');
     if (target.organization_ID !== callerOrgId) {
       req.reject(403, 'Users can only be managed within your own organization.');
     }
@@ -97,7 +97,13 @@ module.exports = (srv) => {
     try {
       await credentials.changePassword(uid, req.data.currentPassword, req.data.newPassword);
     } catch (e) {
-      req.reject(e.status || 400, e.message);
+      // Only errors flagged by credentials.fail() carry user-facing text (wrong current
+      // password, password policy, …); anything else must not leak internals.
+      if (e.expose === true) {
+        req.reject(e.status || 400, e.message);
+      } else {
+        req.reject(400, 'Your password could not be changed because of a technical problem. Please try again.');
+      }
     }
     return true;
   });
@@ -145,7 +151,7 @@ module.exports = (srv) => {
       changes.appearance_theme = theme;
     }
 
-    if (Object.keys(changes).length === 0) req.reject(400, 'Nothing to update.');
+    if (Object.keys(changes).length === 0) req.reject(400, 'No changes were provided. Please edit at least one field before saving.');
 
     await UPDATE(Users).set(changes).where({ ID: uid });
     return true;
@@ -157,7 +163,7 @@ module.exports = (srv) => {
     requireRole(req, 'company_advanced');
 
     const target = await credentials.findById(req.data.userId);
-    if (!target) req.reject(404, 'User not found.');
+    if (!target) req.reject(404, 'The selected user could not be found. The account may have been deleted in the meantime. Please refresh the user list and try again.');
     if (target.organization_ID !== callerOrgId) {
       req.reject(403, 'Users can only be managed within your own organization.');
     }
@@ -171,7 +177,7 @@ module.exports = (srv) => {
         .columns('ID')
         .where({ organization_ID: callerOrgId, role: 'company_advanced', active: true });
       if (admins.length <= 1) {
-        req.reject(400, 'Cannot deactivate the last active company_advanced user of the organization.');
+        req.reject(400, 'This user is the only active user with full access in your organization and cannot be deactivated. Grant another user the Advanced role first.');
       }
     }
 
@@ -185,7 +191,7 @@ module.exports = (srv) => {
     requireRole(req, 'company_advanced');
 
     const target = await credentials.findById(req.data.userId);
-    if (!target) req.reject(404, 'User not found.');
+    if (!target) req.reject(404, 'The selected user could not be found. The account may have been deleted in the meantime. Please refresh the user list and try again.');
     if (target.organization_ID !== callerOrgId) {
       req.reject(403, 'Users can only be managed within your own organization.');
     }

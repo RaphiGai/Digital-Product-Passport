@@ -13,6 +13,7 @@ const importHandlers      = require('./handlers/import-handlers');
 const analyticsHandlers   = require('./handlers/analytics-handlers');
 const complianceHandlers  = require('./handlers/compliance-handlers');
 const catalogueHandlers   = require('./handlers/catalogue-handlers');
+const catalogueAdminHandlers = require('./handlers/catalogue-admin-handlers');
 
 /**
  * App-internal RBAC + tenant isolation is enforced here in handlers instead
@@ -46,6 +47,22 @@ module.exports = (srv) => {
   // serializes them. Deliberate `req.reject(4xx, …)` messages and errors explicitly
   // marked `expose` (e.g. from srv/lib/credentials.js) are left untouched; the real cause
   // of any 5xx is logged server-side. The frontend (api/errors.js) is the final display net.
+  // Raw unique-constraint errors name the violated table/columns (SQLite:
+  // "UNIQUE constraint failed: dpp_ProductVariants.sku, …") — map them to the
+  // business rule the user actually broke (see @assert.unique in db/*.cds).
+  const UNIQUE_HINTS = [
+    [/Users\.username/i, 'This username is already taken. Please choose a different one.'],
+    [/Users\./i, 'A user with this email address already exists in your organization.'],
+    [/Products\./i, 'A product with this GTIN already exists in your organization. Please use a different GTIN.'],
+    [/ProductVariants\./i, 'A variant with this SKU already exists for this product. Please use a different SKU.'],
+    [/Batches\./i, 'A batch with this batch number already exists for this variant. Please use a different batch number.'],
+    [/ProductItems\.upi/i, 'An item with this UPI already exists. Each UPI can only be used once.'],
+    [/ProductItems\./i, 'An item with this serial number already exists in this batch. Please use a different serial number.'],
+    [/ProductBOMs\./i, 'This component is already in the bill of materials of this variant. Please edit the existing line instead of adding it again.'],
+    [/BusinessPartnerRoles\./i, 'This business partner already has this role.'],
+    [/Documents\./i, 'A document with this title already exists for this product or batch. Please use a different title.'],
+  ];
+
   srv.on('error', (err, req) => {
     if (err.expose === true) return; // intentionally user-facing, already clean
     const status = err.status || err.statusCode || Number(err.code) || 500;
@@ -55,19 +72,30 @@ module.exports = (srv) => {
     if (/unique|duplicate/i.test(raw)) {
       err.status = 409;
       err.code = '409';
-      err.message = 'This entry already exists.';
+      const hint = UNIQUE_HINTS.find(([pattern]) => pattern.test(raw));
+      err.message = hint
+        ? hint[1]
+        : 'An entry with the same unique value already exists (for example the same name, number, or code). Please change the value and try again.';
       return;
     }
     if (/foreign key/i.test(raw)) {
       err.status = 409;
       err.code = '409';
-      err.message = 'This action is not possible because related data is affected.';
+      err.message = req && req.event === 'DELETE'
+        ? 'This record cannot be deleted because other records still refer to it. Please remove the linked records first, then try again.'
+        : 'This record refers to another record that no longer exists. Please refresh the page and select an existing record.';
       return;
     }
     if (status >= 500 && /not[ _]?null|cannot be null/i.test(raw)) {
       err.status = 400;
       err.code = '400';
-      err.message = 'Required information is missing. Please check your input.';
+      err.message = 'A required field is missing. Please fill in all required fields and try again.';
+      return;
+    }
+    // CAP's bare "Not Found" would reach the user verbatim; deliberate 404 rejects
+    // carry their own descriptive text and are left untouched.
+    if (status === 404 && /^not ?found$/i.test((err.message || '').trim())) {
+      err.message = 'The requested record could not be found. It may have been deleted in the meantime. Please refresh the page and try again.';
       return;
     }
 
@@ -187,7 +215,7 @@ module.exports = (srv) => {
     // Role can be changed via PATCH (promote/demote read-only ↔ full) but must
     // stay a valid app role.
     if (req.data.role !== undefined && !['company_advanced', 'company_user'].includes(req.data.role)) {
-      req.reject(400, 'Invalid role. Please choose a valid user role.');
+      req.reject(400, 'The selected role is not valid. Please choose either Advanced (full access) or User (read-only).');
     }
     if (req.data.organization_ID === undefined && req.event === 'CREATE') {
       req.data.organization_ID = callerOrgId;
@@ -197,7 +225,7 @@ module.exports = (srv) => {
   });
 
   srv.before(['CREATE', 'DELETE'], 'Organizations', (req) => {
-    req.reject(403, 'Organizations cannot be created or deleted via the application API.');
+    req.reject(403, 'Organizations cannot be created or deleted in this application. Please contact your system administrator if your organization setup needs to change.');
   });
   srv.before('UPDATE', 'Organizations', (req) => {
     const callerOrgId = req.user._appOrgId;
@@ -219,4 +247,5 @@ module.exports = (srv) => {
   analyticsHandlers(srv);
   complianceHandlers(srv);
   catalogueHandlers(srv);
+  catalogueAdminHandlers(srv);
 };

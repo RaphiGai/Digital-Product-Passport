@@ -173,8 +173,12 @@ function register(app) {
     try {
       await credentials.changePassword(payload.uid, String(currentPassword || ''), String(newPassword || ''));
     } catch (e) {
-      if (wantsJson(req)) return res.status(e.status || 400).json({ ok: false, error: e.message });
-      return res.status(e.status || 400).type('html').send(renderReset({ error: e.message }));
+      // Only credentials.fail() errors (expose:true) carry user-facing text; anything
+      // else (DB down, bug) must not leak its raw message.
+      const status = e.expose === true ? (e.status || 400) : 500;
+      const msg = e.expose === true ? e.message : 'Something went wrong on our side. Please try again later.';
+      if (wantsJson(req)) return res.status(status).json({ ok: false, error: msg });
+      return res.status(status).type('html').send(renderReset({ error: msg }));
     }
 
     // Issue a full session now that the password is set.
@@ -222,7 +226,9 @@ function register(app) {
     try {
       await credentials.consumePasswordResetToken(String(token || ''), String(newPassword || ''));
     } catch (e) {
-      return res.status(e.status || 400).json({ ok: false, error: e.message });
+      if (e.expose === true) return res.status(e.status || 400).json({ ok: false, error: e.message });
+      console.error('[auth] reset-password error:', e.message);
+      return res.status(500).json({ ok: false, error: 'Something went wrong on our side. Please try again later.' });
     }
     return res.json({ ok: true });
   });
@@ -263,14 +269,16 @@ function register(app) {
       try {
         await credentials.changePassword(payload.uid, currentPassword, newPassword);
       } catch (e) {
-        return res.status(e.status || 400).json({ ok: false, error: e.message });
+        if (e.expose === true) return res.status(e.status || 400).json({ ok: false, error: e.message });
+        console.error('[auth] me password change error:', e.message);
+        return res.status(500).json({ ok: false, error: 'Something went wrong on our side. Please try again later.' });
       }
     }
 
     const user = await credentials.sessionUser(payload.uid);
     if (!user) {
       clearSessionCookie(res);
-      return res.status(404).json({ ok: false, error: 'User not found.' });
+      return res.status(404).json({ ok: false, error: 'Your account could not be found, so you have been signed out. Please sign in again or contact your administrator.' });
     }
     setSessionCookie(res, fullSessionToken(user), session.FULL_TTL_SECONDS);
     return res.json({ ok: true });

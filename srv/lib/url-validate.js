@@ -26,7 +26,8 @@ function assertHttpUrls(req, data, fields) {
   if (!data) return;
   for (const f of fields) {
     if (!isHttpUrl(data[f])) {
-      req.reject(400, 'Links must start with https:// (or http://).');
+      const label = f.replace(/_url$/i, '').replace(/_/g, ' ').replace(/\bdpp\b/i, 'DPP');
+      req.reject(400, `The ${label} link must be a full web address starting with https:// or http:// (for example https://example.com). Please correct the link and try again.`);
     }
   }
 }

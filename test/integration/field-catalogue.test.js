@@ -62,10 +62,14 @@ describe('fieldCatalogue — merged per-category catalogue', () => {
     await expectStatus(GET(`/odata/v4/dpp/fieldCatalogue(category='textiles')`), 401);
   });
 
-  test('config entities are exposed read-only: writes are rejected', async () => {
+  test('catalogue writes are platform-operator-only: tenant admin and read-only user get 403', async () => {
+    const dan = { auth: { username: 'dan.advanced.b', password: 'x' } }; // ORG-B advanced (not platform tenant)
     await expectStatus(POST('/odata/v4/dpp/AttributeDefinitions', {
       ID: 'attr-hack', level: 'product', key: 'hack', label: 'Hack', datatype: 'string'
-    }, alice), 405);
+    }, dan), 403);
+    await expectStatus(POST('/odata/v4/dpp/AttributeDefinitions', {
+      ID: 'attr-hack2', level: 'product', key: 'hack2', label: 'Hack', datatype: 'string'
+    }, carol), 403);
   });
 
   test('batch mandatory trio is present (pins the Demo-branch validation update)', async () => {

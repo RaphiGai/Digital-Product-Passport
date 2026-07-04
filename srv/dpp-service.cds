@@ -30,6 +30,9 @@ service DPPService @(
     tenantId         : String;
     mustResetPassword: Boolean;
     appearanceTheme  : String;
+    // true for company_advanced users of the platform-operator organization
+    // (Organizations.is_platform_tenant) — gates the Field-Catalogue admin UI.
+    isPlatformAdmin  : Boolean;
   };
 
   // Results of the user-management actions. Temp passwords are returned ONCE to
@@ -67,22 +70,20 @@ service DPPService @(
     action archiveProduct() returns Products;
   };
 
-  // Product category code list (master data). Read-only over OData: categories are
-  // curated as seed/master data, not edited through the app. Drives the category
-  // dropdown in the product forms; consumer/public views resolve the label server-side.
-  @readonly
+  // Product category code list (master data). Drives the category dropdown in the
+  // product forms; consumer/public views resolve the label server-side. Writable at
+  // runtime by the PLATFORM OPERATOR only (company_advanced of an is_platform_tenant
+  // organization — enforced in srv/handlers/catalogue-admin-handlers.js).
   entity ProductCategories     as projection on db.ProductCategories;
 
-  // ----- Attribute catalogue (Epic 12) — read-only master data -----
-  // Curated as seed/master data by developers/IT consultants; global (not
-  // tenant-scoped, like ProductCategories). The frontend consumes the merged
-  // per-category catalogue via the fieldCatalogue() function below, not these
-  // raw sets — they are exposed for transparency/debugging.
-  @readonly
+  // ----- Attribute catalogue (Epic 12) — global master data -----
+  // Global (not tenant-scoped, like ProductCategories). Maintainable at runtime
+  // through the Field-Catalogue admin UI: writes are restricted to the platform
+  // operator and validated in srv/handlers/catalogue-admin-handlers.js; every
+  // write clears the catalogue cache so changes take effect immediately. The
+  // frontend consumes the merged per-category catalogue via fieldCatalogue().
   entity AttributeDefinitions  as projection on db.AttributeDefinitions;
-  @readonly
   entity AttributeSections     as projection on db.AttributeSections;
-  @readonly
   entity CategoryRequirements  as projection on db.CategoryRequirements;
 
   // Merged field catalogue for one product category (core ∪ category rows), as a
@@ -91,6 +92,17 @@ service DPPService @(
   // constraints…,mandatory,fix_hint,visibility,locked}] }. Null/unknown category
   // resolves to the default category (see srv/lib/catalogue.js#DEFAULT_CATEGORY).
   function fieldCatalogue(category : String) returns LargeString;
+
+  // ----- Field-Catalogue administration (platform operator only) -----
+  // Create a category as a copy of an existing one: new ProductCategories row +
+  // duplicated AttributeSections/AttributeDefinitions/CategoryRequirements.
+  // Returns the new category code. See srv/handlers/catalogue-admin-handlers.js.
+  action cloneCategoryCatalogue(source_code : String, code : String, name : String, descr : String) returns String;
+
+  // Usage counts for a category's bag-backed fields, as a JSON string
+  // { "<level>.<key>": count } — drives the delete-vs-deactivate decision in the
+  // admin UI (fields with stored values can only be deactivated).
+  function catalogueUsage(category : String) returns LargeString;
 
   entity ProductVariants       as projection on db.ProductVariants;
   entity Batches               as projection on db.Batches;

@@ -478,30 +478,33 @@ async function resolveDPPByToken(req, res) {
  * token resolves to (no cross-DPP leak).
  */
 async function downloadPublicDocument(req, res) {
+  // These download links open directly in the consumer's browser (no SPA error
+  // handling), so failed responses carry a short plain-text explanation.
+  const gone = 'This document is no longer available. The product passport may have been updated since you opened this page. Please rescan the QR code on the product to see the current documents.';
   try {
     const { token, docId } = req.params;
-    if (!tokens.verify(token)) return res.status(404).end();
+    if (!tokens.verify(token)) return res.status(404).type('text/plain').send(gone);
     const { DPPs, Documents } = cds.entities('dpp');
 
     const dpp = await SELECT.one.from(DPPs)
       .columns('ID', 'product_ID', 'batch_ID', 'status', 'visibility', 'published_at', 'qr_token')
       .where({ qr_token: token });
-    if (!isPubliclyVisible(dpp)) return res.status(404).end();
+    if (!isPubliclyVisible(dpp)) return res.status(404).type('text/plain').send(gone);
 
     const doc = await SELECT.one.from(Documents)
       .columns('ID', 'product_ID', 'batch_ID', 'visibility', 'file_name', 'mime_type')
       .where({ ID: docId });
-    if (!doc || doc.visibility !== 'public') return res.status(404).end();
+    if (!doc || doc.visibility !== 'public') return res.status(404).type('text/plain').send(gone);
 
     // The document must belong to the same product/batch the token resolves to.
     const okProduct = doc.product_ID && doc.product_ID === dpp.product_ID;
     const okBatch = doc.batch_ID && dpp.batch_ID && doc.batch_ID === dpp.batch_ID;
-    if (!okProduct && !okBatch) return res.status(404).end();
+    if (!okProduct && !okBatch) return res.status(404).type('text/plain').send(gone);
 
     // @cap-js returns an explicitly-selected media column as a Readable stream.
     const row = await SELECT.one.from(Documents).columns('content').where({ ID: doc.ID });
     const content = row && row.content;
-    if (content == null) return res.status(404).end();
+    if (content == null) return res.status(404).type('text/plain').send('The file for this document is not available yet. Please check back later.');
 
     res.set('Content-Type', doc.mime_type || 'application/octet-stream');
     // Force a download (the consumer expects to save the certificate, not view it inline).
@@ -511,7 +514,7 @@ async function downloadPublicDocument(req, res) {
     if (typeof content.pipe === 'function') {
       content.on('error', (err) => {
         console.error('public document stream error', err);
-        if (!res.headersSent) res.status(500).end();
+        if (!res.headersSent) res.status(500).type('text/plain').send('The document download failed because of a technical problem. Please try again.');
       });
       content.pipe(res);
     } else if (Buffer.isBuffer(content)) {
@@ -521,7 +524,7 @@ async function downloadPublicDocument(req, res) {
     }
   } catch (err) {
     console.error('public document download error', err);
-    if (!res.headersSent) res.status(500).end();
+    if (!res.headersSent) res.status(500).type('text/plain').send('The document download failed because of a technical problem. Please try again.');
   }
 }
 

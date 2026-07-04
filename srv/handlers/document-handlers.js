@@ -35,7 +35,7 @@ function keyFromReq(req) {
 async function guardExistingOwner(req, id) {
   const { Documents } = cds.entities('dpp');
   const row = await SELECT.one.from(Documents).columns('product_ID', 'batch_ID').where({ ID: id });
-  if (!row) req.reject(404, 'Document not found.');
+  if (!row) req.reject(404, 'This document could not be found. It may have been deleted in the meantime. Please refresh the page and try again.');
   if (row.product_ID) await requireOwningOrg(req, 'Products', row.product_ID);
   else if (row.batch_ID) await requireOwningOrg(req, 'Batches', row.batch_ID, BATCH_OWNER_PATH);
 }
@@ -53,7 +53,7 @@ module.exports = (srv) => {
   srv.before('CREATE', Documents, async (req) => {
     const { product_ID, batch_ID } = req.data;
     if (!!product_ID === !!batch_ID) {
-      req.reject(400, 'A document must reference exactly one product OR one batch.');
+      req.reject(400, 'A document must be linked to exactly one product or one batch. Please select either a product or a batch, not both.');
     }
     await guardTargetOwner(req);
     if (!req.data.doc_type) req.data.doc_type = 'certificate';
@@ -82,16 +82,18 @@ module.exports = (srv) => {
       : (req.data.mime_type || '');
     const mime = String(rawMime).split(';')[0].trim().toLowerCase();
     if (mime && !ALLOWED_MIME.has(mime)) {
-      req.reject(415, 'Unsupported file type. Allowed: PDF, PNG, JPEG.');
+      req.reject(415, 'This file type is not supported. Please upload a PDF, PNG, or JPEG file instead.');
     }
 
+    const tooLarge = (bytes) =>
+      `The file is ${(bytes / (1024 * 1024)).toFixed(1)} MB, but documents can be at most 20 MB. Please choose a smaller file or compress it, then try again.`;
     const declared = Number(req.data.file_size);
     if (declared && declared > MAX_BYTES) {
-      req.reject(413, 'File too large (max 20 MB).');
+      req.reject(413, tooLarge(declared));
     }
     const len = Number((req.headers && req.headers['content-length']) || (httpReq && httpReq.headers['content-length']));
     if (len && len > MAX_BYTES) {
-      req.reject(413, 'File too large (max 20 MB).');
+      req.reject(413, tooLarge(len));
     }
   });
 

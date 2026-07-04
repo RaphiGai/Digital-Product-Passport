@@ -52,7 +52,7 @@ module.exports = (srv) => {
     const chain = await resolveChain(item.batch_ID);
     if (!chain) {
       console.warn(`[product-item] cannot resolve product chain for batch '${item.batch_ID}'`);
-      req.reject(400, 'This item cannot be linked to its product. Please check the batch assignment.');
+      req.reject(400, `Item "${item.serial_number}" could not be saved because its batch is no longer linked to a variant and product. The batch or variant may have been deleted in the meantime. Please choose a different batch and try again.`);
     }
 
     const { DPPs } = cds.entities('dpp');

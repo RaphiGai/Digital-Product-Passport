@@ -36,8 +36,8 @@ const DPP_OWNER_PATH = 'product.owning_organization_ID';
 async function checkDPPReady(dpp) {
   if (!dpp.product_ID) return ['The DPP must reference a product.'];
   const ctx = await loadDppValidationContext(dpp);
-  if (!ctx.product) return ['The referenced product does not exist.'];
-  if (dpp.batch_ID && !ctx.batch) return ['The referenced batch does not exist.'];
+  if (!ctx.product) return ['The product linked to this DPP no longer exists. It may have been deleted — please link the DPP to an existing product.'];
+  if (dpp.batch_ID && !ctx.batch) return ['The batch linked to this DPP no longer exists. It may have been deleted — please link the DPP to an existing batch or remove the batch link.'];
   return evaluateDppChecks(ctx).gate_errors;
 }
 
@@ -379,13 +379,13 @@ module.exports = (srv) => {
     const id = req.params[req.params.length - 1].ID;
     await requireOwningOrg(req, 'DPPs', id, DPP_OWNER_PATH);
     const dpp = await SELECT.one.from(DPPs).where({ ID: id });
-    if (!dpp) req.reject(404, 'DPP not found.');
+    if (!dpp) req.reject(404, 'This DPP could not be found. It may have been deleted in the meantime. Please refresh the page and try again.');
 
-    if (dpp.status === 'archived') req.reject(400, 'This DPP is archived.');
+    if (dpp.status === 'archived') req.reject(400, 'This DPP is archived and cannot be approved. Unarchive it first.');
     if (dpp.status !== 'draft' && dpp.status !== 'in_review') return dpp;
 
     const errors = await checkDPPReady(dpp);
-    if (errors.length) req.reject(400, `DPP cannot be approved: ${errors.join(' | ')}`);
+    if (errors.length) req.reject(400, `This DPP cannot be approved yet. Please fix the following: ${errors.join(' ')}`);
 
     // Anchor the drift baseline to the approved content so a later edit reverts to draft.
     const baselineHash = contentHash(await buildSnapshot(dpp));
@@ -403,11 +403,11 @@ module.exports = (srv) => {
     const changeReason = req.data.change_reason || null;
     await requireOwningOrg(req, 'DPPs', id, DPP_OWNER_PATH);
     const dpp = await SELECT.one.from(DPPs).where({ ID: id });
-    if (!dpp) req.reject(404, 'DPP not found.');
+    if (!dpp) req.reject(404, 'This DPP could not be found. It may have been deleted in the meantime. Please refresh the page and try again.');
     if (dpp.status === 'archived') req.reject(400, 'This DPP is archived and cannot be published.');
 
     const errors = await checkDPPReady(dpp);
-    if (errors.length) req.reject(400, `DPP cannot be published: ${errors.join(' | ')}`);
+    if (errors.length) req.reject(400, `This DPP cannot be published yet. Please fix the following: ${errors.join(' ')}`);
 
     const now = new Date().toISOString();
     // Draw from the shared per-DPP version sequence so publish and manual versions
@@ -472,7 +472,7 @@ module.exports = (srv) => {
     const id = req.params[req.params.length - 1].ID;
     await requireOwningOrg(req, 'DPPs', id, DPP_OWNER_PATH);
     const dpp = await SELECT.one.from(DPPs).where({ ID: id });
-    if (!dpp) req.reject(404, 'DPP not found.');
+    if (!dpp) req.reject(404, 'This DPP could not be found. It may have been deleted in the meantime. Please refresh the page and try again.');
 
     await UPDATE(DPPs)
       .set({ status: 'archived', archived_at: new Date().toISOString() })
@@ -491,7 +491,7 @@ module.exports = (srv) => {
     const id = req.params[req.params.length - 1].ID;
     await requireOwningOrg(req, 'DPPs', id, DPP_OWNER_PATH);
     const dpp = await SELECT.one.from(DPPs).where({ ID: id });
-    if (!dpp) req.reject(404, 'DPP not found.');
+    if (!dpp) req.reject(404, 'This DPP could not be found. It may have been deleted in the meantime. Please refresh the page and try again.');
     if (dpp.status !== 'archived') return dpp; // idempotent: nothing to do
 
     const restoredStatus = dpp.published_at ? 'published' : (dpp.approved_at ? 'approved' : 'draft');
@@ -522,7 +522,7 @@ module.exports = (srv) => {
     await requireOwningOrg(req, 'DPPs', id, DPP_OWNER_PATH);
     const { DPPVersions } = cds.entities('dpp');
     const dpp = await SELECT.one.from(DPPs).where({ ID: id });
-    if (!dpp) req.reject(404, 'DPP not found.');
+    if (!dpp) req.reject(404, 'This DPP could not be found. It may have been deleted in the meantime. Please refresh the page and try again.');
 
     // Full unified check catalogue — same evaluation the approve/publish gate runs.
     const validation = evaluateDppChecks(await loadDppValidationContext(dpp));
@@ -692,7 +692,7 @@ module.exports = (srv) => {
     const id = req.params[req.params.length - 1].ID;
     await requireOwningOrg(req, 'DPPs', id, DPP_OWNER_PATH);
     const dpp = await SELECT.one.from(DPPs).where({ ID: id });
-    if (!dpp) req.reject(404, 'DPP not found.');
+    if (!dpp) req.reject(404, 'This DPP could not be found. It may have been deleted in the meantime. Please refresh the page and try again.');
     if (dpp.status === 'archived') req.reject(400, 'This DPP is archived and cannot be modified. Unarchive it first.');
 
     const qrToken = tokens.generate(await tokenContextFor(dpp));
@@ -714,7 +714,7 @@ module.exports = (srv) => {
     const id = req.params[req.params.length - 1].ID;
     await requireOwningOrg(req, 'DPPs', id, DPP_OWNER_PATH);
     const dpp = await SELECT.one.from(DPPs).where({ ID: id });
-    if (!dpp) req.reject(404, 'DPP not found.');
+    if (!dpp) req.reject(404, 'This DPP could not be found. It may have been deleted in the meantime. Please refresh the page and try again.');
     if (!dpp.qr_token) req.reject(409, 'This DPP has no QR code yet. Please publish it first.');
 
     // Always anchor the scan target to the current PUBLIC_BASE_URL + token. The
@@ -736,7 +736,7 @@ module.exports = (srv) => {
     const id = req.params[req.params.length - 1].ID;
     await requireOwningOrg(req, 'DPPs', id, DPP_OWNER_PATH);
     const dpp = await SELECT.one.from(DPPs).where({ ID: id });
-    if (!dpp) req.reject(404, 'DPP not found.');
+    if (!dpp) req.reject(404, 'This DPP could not be found. It may have been deleted in the meantime. Please refresh the page and try again.');
 
     const result = await aggregate(id);
     const bd = result.breakdown || { own_co2_kg: null, components: [] };

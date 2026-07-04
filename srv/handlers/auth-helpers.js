@@ -144,7 +144,7 @@ function requireRole(req, ...roles) {
   const role = getAppRole(req);
   if (!roles.includes(role)) {
     console.warn(`[auth] insufficient role '${role}' — requires one of: ${roles.join(', ')}`);
-    req.reject(403, "You don't have permission to perform this action.");
+    req.reject(403, "You don't have permission to perform this action. Please contact an administrator in your organization if you need this access.");
   }
 }
 
@@ -162,21 +162,34 @@ function isWriteEvent(req) {
  * @param {string} id        — instance ID (string PK)
  * @param {string} ownerPath — dot-path to the owning_organization_ID, default 'owning_organization_ID'
  */
+// UI vocabulary for entity names in error messages (technical names must not leak).
+const ENTITY_LABELS = {
+  Products: 'product', ProductVariants: 'variant', Batches: 'batch',
+  ProductItems: 'item', ProductBOMs: 'bill of materials entry',
+  BatchComponents: 'batch component', DPPs: 'DPP', QRCodes: 'QR code',
+  Documents: 'document', BusinessPartners: 'business partner',
+  BusinessPartnerRoles: 'partner role', DPPMarketingLinks: 'marketing link',
+  DPPVersions: 'version', Users: 'user', Organizations: 'organization'
+};
+
 async function requireOwningOrg(req, entityName, id, ownerPath = 'owning_organization_ID') {
   const callerOrgId = await requireActiveUser(req);
   const entity = cds.entities('dpp')[entityName];
   if (!entity) {
     console.error(`[auth] requireOwningOrg called with unknown entity '${entityName}'`);
-    req.reject(500, 'An internal error occurred.');
+    req.reject(500, 'Something went wrong on the server. Please try again later.');
   }
+  const label = ENTITY_LABELS[entityName] || 'record';
   const row = await SELECT.one
     .from(entity)
     .columns(`${ownerPath} as ownerOrgId`)
     .where({ ID: id });
-  if (!row) req.reject(404, 'The requested item could not be found.');
+  if (!row) req.reject(404, `The requested ${label} could not be found. It may have been deleted in the meantime. Please refresh the page and try again.`);
   if (row.ownerOrgId !== callerOrgId) {
     console.warn(`[auth] ${entityName} '${id}' belongs to a different organization`);
-    req.reject(403, "You don't have permission to access this item.");
+    // Same wording as the not-found case on purpose: the response must not
+    // confirm that a record outside the caller's organization exists.
+    req.reject(403, `The requested ${label} could not be found. It may have been deleted in the meantime. Please refresh the page and try again.`);
   }
 }
 

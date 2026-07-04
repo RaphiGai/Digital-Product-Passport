@@ -36,10 +36,10 @@ function parseNum(v) {
 function parseRows(raw, req) {
   try {
     const rows = JSON.parse(raw);
-    if (!Array.isArray(rows)) req.reject(400, '"rows" must be a JSON array.');
+    if (!Array.isArray(rows)) req.reject(400, 'The import data could not be read. Please re-upload your CSV file and start the import again.');
     return rows;
   } catch {
-    req.reject(400, '"rows" is not valid JSON.');
+    req.reject(400, 'The import data could not be read. Please re-upload your CSV file and start the import again.');
   }
 }
 
@@ -252,7 +252,7 @@ module.exports = (srv) => {
       const productName = str(r.product_name);
       const product     = productByName.get(productName.toLowerCase());
       if (productName && !product)
-        err(allIssues, i, 'product_name', `Product "${productName}" not found in your organisation.`);
+        err(allIssues, i, 'product_name', `Product "${productName}" not found in your organization. Check the spelling or import the product first.`);
 
       const sku     = str(r.variant_sku);
       const variant = product ? variantByKey.get(variantKey(product.ID, sku)) : null;
@@ -271,7 +271,7 @@ module.exports = (srv) => {
 
       const recycled = parseNum(r.recycled_content_pct);
       if (recycled !== null && (recycled < 0 || recycled > 100))
-        err(allIssues, i, 'recycled_content_pct', 'Recycled content must be between 0 and 100.');
+        err(allIssues, i, 'recycled_content_pct', 'Recycled content must be between 0 and 100 %.');
 
       const statusVal = str(r.status) || 'draft';
       requireEnum(allIssues, i, 'status', statusVal, BATCH_STATUSES);
@@ -377,14 +377,14 @@ module.exports = (srv) => {
       const parentProductName = str(r.parent_product_name);
       const parentProduct     = productByName.get(parentProductName.toLowerCase());
       if (parentProductName && !parentProduct)
-        err(allIssues, i, 'parent_product_name', `Product "${parentProductName}" not found.`);
+        err(allIssues, i, 'parent_product_name', `Product "${parentProductName}" not found in your organization. Check the spelling or import the product first.`);
 
       const parentSku     = str(r.parent_variant_sku);
       const parentVariant = parentProduct
         ? variantByKey.get(variantKey(parentProduct.ID, parentSku))
         : null;
       if (parentProduct && parentSku && !parentVariant)
-        err(allIssues, i, 'parent_variant_sku', `Variant "${parentSku}" not found in product "${parentProductName}".`);
+        err(allIssues, i, 'parent_variant_sku', `Variant with SKU "${parentSku}" not found for product "${parentProductName}".`);
 
       // Component: look up internal product; fall back to external name if not found.
       const compName    = str(r.component_product_name);
@@ -407,17 +407,17 @@ module.exports = (srv) => {
       if (co2 !== null && co2 < 0)
         err(allIssues, i, 'co2_footprint_kg', 'CO₂ footprint cannot be negative.');
       if (recycled !== null && (recycled < 0 || recycled > 100))
-        err(allIssues, i, 'recycled_content_pct', 'Recycled content must be 0–100.');
+        err(allIssues, i, 'recycled_content_pct', 'Recycled content must be between 0 and 100 %.');
 
       // external_dpp_url is rendered as <a href> in the public materials tree — must be http(s).
       if (!isHttpUrl(r.external_dpp_url))
-        err(allIssues, i, 'external_dpp_url', 'External DPP URL must start with https:// (or http://).');
+        err(allIssues, i, 'external_dpp_url', 'The external DPP link must be a full web address starting with https:// or http:// (for example https://example.com).');
 
       // Duplicate edge check.
       const compRef = compProduct ? compProduct.ID : compName;
       if (parentVariant && compRef) {
         if (existingEdgeKeys.has(edgeKey(parentVariant.ID, compRef)))
-          err(allIssues, i, 'component_product_name', 'This BOM edge already exists — skipped.');
+          err(allIssues, i, 'component_product_name', `Component "${compName}" is already in the bill of materials of this variant — skipped.`);
       }
 
       if (countHardErrors(allIssues, issueBase) === 0 && parentVariant) {
@@ -495,7 +495,7 @@ module.exports = (srv) => {
       const productName = str(r.product_name);
       const product     = productByName.get(productName.toLowerCase());
       if (productName && !product)
-        err(allIssues, i, 'product_name', `Product "${productName}" not found.`);
+        err(allIssues, i, 'product_name', `Product "${productName}" not found in your organization. Check the spelling or import the product first.`);
 
       const sku     = str(r.sku);
       const weightG = parseNum(r.weight_g);

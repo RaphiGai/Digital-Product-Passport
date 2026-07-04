@@ -33,19 +33,28 @@ passport) via `DPPService.fieldCatalogue(category)`.
 
 ## How do I …
 
-**… add a field to a category?** Add ONE row to
-`dpp-AttributeDefinitions.csv` (or insert it directly into the deployed DB).
-No code, no schema change, no frontend rebuild — validation, the approve gate,
-visibility, snapshots/drift, the consumer passport, import and export pick it
-up from the catalogue. Key rules: `^[a-z][a-z0-9_]*$`, not
-`status`/`id`/`attributes`/`field_visibility`, no `_id` suffix.
+**… add a field or a category? → Use the admin UI (primary way).** DPP Studio →
+System → **Field catalogue** (visible to the PLATFORM OPERATOR only:
+`company_advanced` of the `is_platform_tenant` organization — enforced
+server-side in `srv/handlers/catalogue-admin-handlers.js`, surfaced via
+`me().isPlatformAdmin`). There you create categories (blank or as a clone of an
+existing one via `cloneCategoryCatalogue`), manage sections and add/edit fields
+with a live preview of the resulting form. Changes take effect IMMEDIATELY —
+every write clears the server-side catalogue cache and the UI invalidates its
+queries; no redeploy, no restart. Guardrails: technical keys are derived once
+from the label and immutable afterwards; runtime fields are always bag-backed
+(`storage='json'`); enum fields need options; locked fields must be public;
+fields with stored values can only be deactivated, not deleted
+(`catalogueUsage` shows the counts).
 
-**… add a whole category?** Add rows to `dpp-ProductCategories.csv`,
-`dpp-AttributeSections.csv`, `dpp-AttributeDefinitions.csv` and
-`dpp-CategoryRequirements.csv`. That's it — see `electronics` in the seeds and
-`test/integration/electronics-category.test.js`, which proves the full
-lifecycle (create → category-specific gate → publish → consumer passport) for a
-category that exists only as data.
+**… the seed-CSV way (bootstrap/transport).** The same rows can be shipped as
+seed data — `dpp-ProductCategories.csv`, `dpp-AttributeSections.csv`,
+`dpp-AttributeDefinitions.csv`, `dpp-CategoryRequirements.csv` — e.g. for a
+fresh deployment or to transport a catalogue between environments. See
+`electronics` in the seeds and `test/integration/electronics-category.test.js`,
+which proves the full lifecycle for a category that exists only as data. Key
+rules (enforced in both paths): `^[a-z][a-z0-9_]*$`, not
+`status`/`id`/`attributes`/`field_visibility`, no `_id` suffix.
 
 **… add a new widget/rendering style?** The only code-level extension point:
 register a renderer in the frontend widget registries

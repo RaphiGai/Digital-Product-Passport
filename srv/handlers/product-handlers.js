@@ -41,20 +41,27 @@ async function dppIdsForVariant(variantId) {
 }
 
 /**
- * Walk the BOM graph downward from `startProductId`: is `targetProductId`
- * reachable as a descendant component? BOMs are anchored at variant level, so
- * each expansion step resolves all variants of the current product and follows
- * their outgoing edges. Used to reject edges that would create a cycle
- * (US4.11).
+ * Walk the BOM graph downward from `startProductId` and return the product-ID
+ * path to `targetProductId` (`[start, …, target]`), or `null` when the target
+ * is not reachable as a descendant component. BOMs are anchored at variant
+ * level, so each expansion step resolves all variants of the current product
+ * and follows their outgoing edges. Used to reject edges that would create a
+ * cycle (US4.11) — the path lets the error message name the existing links
+ * that would close the loop.
  */
-async function descendantsReach(startProductId, targetProductId, { ProductVariants, ProductBOMs }) {
+async function findBOMPath(startProductId, targetProductId, { ProductVariants, ProductBOMs }) {
+  const cameFrom = new Map(); // productId → predecessor on the discovered walk
   const visited = new Set();
   const stack = [startProductId];
   while (stack.length) {
     const cur = stack.pop();
     if (visited.has(cur)) continue;
     visited.add(cur);
-    if (cur === targetProductId) return true;
+    if (cur === targetProductId) {
+      const path = [cur];
+      while (path[0] !== startProductId) path.unshift(cameFrom.get(path[0]));
+      return path;
+    }
     const variants = await SELECT.from(ProductVariants)
       .columns(['ID'])
       .where({ product_ID: cur });
@@ -62,9 +69,17 @@ async function descendantsReach(startProductId, targetProductId, { ProductVarian
     const edges = await SELECT.from(ProductBOMs)
       .columns(['component_ID'])
       .where({ parent_ID: { in: variants.map((v) => v.ID) } });
-    for (const e of edges) stack.push(e.component_ID);
+    for (const e of edges) {
+      if (e.component_ID == null || visited.has(e.component_ID)) continue; // external lines have no product
+      if (!cameFrom.has(e.component_ID)) cameFrom.set(e.component_ID, cur);
+      stack.push(e.component_ID);
+    }
   }
-  return false;
+  return null;
+}
+
+async function descendantsReach(startProductId, targetProductId, entities) {
+  return (await findBOMPath(startProductId, targetProductId, entities)) !== null;
 }
 
 module.exports = (srv) => {
@@ -91,10 +106,10 @@ module.exports = (srv) => {
   // fields moved into the attributes bag — their http(s)-only XSS guard now runs
   // in the bag validation below, srv/lib/attribute-validate.js.)
   srv.before(['CREATE', 'UPDATE'], Products, (req) => {
-    for (const field of ['durability_score', 'repairability_score']) {
+    for (const [field, label] of [['durability_score', 'durability'], ['repairability_score', 'repairability']]) {
       const v = req.data[field];
       if (v != null && (v < 0 || v > 10)) {
-        req.reject(400, 'Durability and repairability scores must be between 0 and 10.');
+        req.reject(400, `The ${label} score must be between 0 and 10 (0 = lowest, 10 = highest). Please enter a value within this range.`);
       }
     }
   });
@@ -218,19 +233,22 @@ module.exports = (srv) => {
         .columns(['ID', 'product_ID'])
         .where({ ID: parent_ID });
       if (!parentVariant) {
-        req.reject(400, 'The selected parent variant does not exist.');
+        req.reject(400, 'The variant this component should be added to no longer exists. It may have been deleted in the meantime. Please refresh the page and try again.');
       }
       await requireOwningOrg(req, 'Products', parentVariant.product_ID);
     }
 
     if (parentVariant && component_ID && parentVariant.product_ID === component_ID) {
-      req.reject(400, 'A product cannot reference its own variant as a component.');
+      const own = await SELECT.one.from(cds.entities('dpp').Products)
+        .columns(['name']).where({ ID: component_ID });
+      const ownName = own && own.name ? `"${own.name}"` : 'This product';
+      req.reject(400, `A product cannot contain itself: ${ownName} is the product this variant belongs to, so it cannot be added to its own bill of materials. Please choose a different component product, or enter it as an external component by name.`);
     }
     if (unit === '%' && quantity != null && (quantity <= 0 || quantity > 100)) {
-      req.reject(400, 'Percentage share must be within (0, 100].');
+      req.reject(400, 'A percentage share must be greater than 0 and at most 100. Please enter the component\'s share within this range, or choose a different unit.');
     }
     if (quantity != null && quantity < 0) {
-      req.reject(400, 'BOM quantity must not be negative.');
+      req.reject(400, 'The component quantity cannot be negative. Please enter 0 or a positive number.');
     }
     if (ext_co2_footprint != null && ext_co2_footprint < 0) {
       req.reject(400, 'CO₂ footprint cannot be negative.');
@@ -242,11 +260,25 @@ module.exports = (srv) => {
     assertHttpUrls(req, req.data, ['external_dpp_url']);
     if (parentVariant && component_ID) {
       const dbEntities = cds.entities('dpp');
-      const wouldCycle = await descendantsReach(
+      const cyclePath = await findBOMPath(
         component_ID, parentVariant.product_ID, dbEntities
       );
-      if (wouldCycle) {
-        req.reject(409, 'Adding this component would introduce a cycle in the BOM.');
+      if (cyclePath) {
+        // Name the products along the existing chain so the user can see WHICH
+        // links close the loop. Only own-org products are named (the IDs come
+        // from client input / the BOM walk) — anything else gets a neutral label.
+        const rows = await SELECT.from(dbEntities.Products)
+          .columns(['ID', 'name'])
+          .where({ ID: { in: cyclePath }, owning_organization_ID: req.user._appOrgId });
+        const nameOf = new Map(rows.map((r) => [r.ID, r.name]));
+        const label = (id) => (nameOf.get(id) ? `"${nameOf.get(id)}"` : 'an unnamed product');
+        const componentName = label(component_ID);
+        const parentName = label(parentVariant.product_ID);
+        const chain = [parentName, ...cyclePath.map(label)].join(' → ');
+        req.reject(409,
+          `${componentName} cannot be added to the bill of materials of ${parentName}, because ${componentName} already contains ${parentName} as a component (${chain}). ` +
+          'This would create a loop in which a product contains itself. Please remove one of the existing links in this chain first, or choose a different component.'
+        );
       }
     }
   });
@@ -316,3 +348,4 @@ module.exports = (srv) => {
 };
 
 module.exports.descendantsReach = descendantsReach;
+module.exports.findBOMPath = findBOMPath;

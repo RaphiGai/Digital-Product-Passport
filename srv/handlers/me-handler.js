@@ -21,7 +21,7 @@ module.exports = (srv) => {
 
     const org = await SELECT.one
       .from(Organizations)
-      .columns('tenant_id')
+      .columns('tenant_id', 'is_platform_tenant')
       .where({ ID: orgId });
 
     return {
@@ -32,7 +32,9 @@ module.exports = (srv) => {
       organizationId:   orgId,
       tenantId:         org?.tenant_id || '',
       mustResetPassword: !!userRow?.must_reset_password,
-      appearanceTheme:  userRow?.appearance_theme || 'green'
+      appearanceTheme:  userRow?.appearance_theme || 'green',
+      // gates the Field-Catalogue admin UI (global master data — operator only)
+      isPlatformAdmin:  getAppRole(req) === 'company_advanced' && org?.is_platform_tenant === true
     };
   });
 };
