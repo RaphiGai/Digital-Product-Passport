@@ -799,6 +799,9 @@ function Materials({ items, depth = 0 }) {
             <div>
               <span className="text-sm font-medium text-ink">{m.name}</span>
               {m.role && <span className="ml-2 text-xs text-ink-muted">{m.role}</span>}
+              {m.quantity != null && (
+                <span className="ml-2 text-xs text-ink-muted">{`${m.quantity} ${m.unit ?? ''}`.trim()}</span>
+              )}
               {m.fibre_composition && (
                 <div className="text-xs text-ink-muted">{m.fibre_composition}</div>
               )}

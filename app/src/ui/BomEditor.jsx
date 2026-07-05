@@ -15,6 +15,7 @@ const EMPTY_ROW = {
   component_name: '',
   quantity: '',
   unit: 'g',
+  quantity_visibility: 'internal',
   component_role: '',
   dpp_source: 'internal',
   external_dpp_url: ''
@@ -244,6 +245,7 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
       component_name: r.component_name ?? '',
       quantity: r.quantity ?? '',
       unit: r.unit ?? 'g',
+      quantity_visibility: r.quantity_visibility ?? 'internal',
       component_role: r.component_role ?? '',
       dpp_source: r.external_dpp_url ? 'external' : 'internal',
       external_dpp_url: r.external_dpp_url ?? ''
@@ -389,6 +391,7 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
       component_fibre_composition: null,
       quantity: row.quantity === '' ? null : Number(row.quantity),
       unit: row.unit || null,
+      quantity_visibility: row.quantity_visibility || 'internal',
       component_role: row.component_role || null,
       is_mandatory: true,
       status: 'active',
@@ -899,6 +902,23 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
                 value={row.unit}
                 onChange={set('unit')}
                 options={['g', 'kg', 'pcs', '%'].map((u) => ({ value: u, label: u }))}
+              />
+            </FieldRow>
+
+            <FieldRow
+              label="Quantity on consumer view"
+              htmlFor="bom-qty-vis"
+              className="md:col-span-2"
+              hint="Show this amount (e.g. 1.5 kg) on the public passport, or keep it internal. The amount always counts towards the CO₂/recycled figures either way."
+            >
+              <Select
+                id="bom-qty-vis"
+                value={row.quantity_visibility ?? 'internal'}
+                onChange={set('quantity_visibility')}
+                options={[
+                  { value: 'internal', label: 'Internal — hidden from the passport' },
+                  { value: 'public', label: 'Public — shown on the passport' }
+                ]}
               />
             </FieldRow>
 
