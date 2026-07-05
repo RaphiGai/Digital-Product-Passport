@@ -50,7 +50,7 @@ export function TemplateDropdown({ templates, label = 'Download template', size 
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-lg border border-black/10 bg-white py-1 shadow-lg">
+        <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-lg border border-black/10 bg-card py-1 shadow-lg">
           {templates.map((t) => (
             <button
               key={t.key}

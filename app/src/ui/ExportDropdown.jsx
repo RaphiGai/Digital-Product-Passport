@@ -44,7 +44,7 @@ export function ExportDropdown({ onExport, label = 'Export', disabled = false, s
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-black/10 bg-white py-1 shadow-lg">
+        <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-black/10 bg-card py-1 shadow-lg">
           <button
             className="flex w-full items-center gap-2 px-4 py-2 text-sm text-ink hover:bg-gray-50"
             onClick={() => { onExport('xlsx'); setOpen(false); }}
