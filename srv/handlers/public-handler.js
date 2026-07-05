@@ -201,6 +201,7 @@ function toConsumerDTO(dpp, ctx) {
           size: variantBag.size ?? null,
           sku: ctx.variant.sku,
           gtin: ctx.variant.gtin,
+          weight_g: ctx.variant.weight_g,
           image_url: ctx.variant.image_url,
           image_data: ctx.variant.image_data,
         },

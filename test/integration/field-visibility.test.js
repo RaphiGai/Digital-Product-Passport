@@ -128,6 +128,23 @@ describe('Per-field overrides', () => {
     const { data } = await getPublic(await attachToken('dpp-12345'));
     expect(data.variant.sku).toBe('TSHIRT-BLUE-M');
   });
+
+  test('variant weight is internal by default and can be revealed (weight_g → public)', async () => {
+    const { ProductVariants } = cds.entities('dpp');
+    // Default (no override): hidden from the consumer DTO.
+    await UPDATE(ProductVariants)
+      .set({ field_visibility: null })
+      .where({ ID: 'var-tshirt-blue-m' });
+    let { data } = await getPublic(await attachToken('dpp-12345'));
+    expect(data.variant).not.toHaveProperty('weight_g');
+
+    // Toggled public → exposed like any other variant field.
+    await UPDATE(ProductVariants)
+      .set({ field_visibility: JSON.stringify({ weight_g: 'public' }) })
+      .where({ ID: 'var-tshirt-blue-m' });
+    ({ data } = await getPublic(await attachToken('dpp-12345')));
+    expect(Number(data.variant.weight_g)).toBe(180);
+  });
 });
 
 describe('OData write path (company_advanced) end-to-end', () => {

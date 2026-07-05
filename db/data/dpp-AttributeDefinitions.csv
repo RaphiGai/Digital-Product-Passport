@@ -32,6 +32,7 @@ attr-tex-var-color;textiles;variant;color;json;Colour;string;input;sec-variant;;
 attr-tex-var-size;textiles;variant;size;json;Size;string;input;sec-variant;;20;;;;20;;;false;Add size if relevant.;Variant;public;false;true
 attr-var-sku;;variant;sku;column;SKU;string;input;sec-variant;;30;;;;40;;;false;;Variant;internal;false;true
 attr-var-gtin;;variant;gtin;column;GTIN;string;input;sec-variant;;40;;;;14;;;false;;Variant;internal;false;true
+attr-var-weight;;variant;weight_g;column;Weight;number;input;sec-variant;;45;g;;;;;;false;;Variant;internal;false;true
 attr-var-image-url;;variant;image_url;column;Product image;url;image;sec-variant;;50;;;;500;;;false;;Variant;public;false;true
 attr-var-image-data;;variant;image_data;column;Product image;text;image;sec-variant;;51;;;;;;;false;;Variant;public;false;true
 attr-batch-number;;batch;batch_number;column;Batch number;string;input;sec-production;;10;;;;40;;;true;Add supplier/production batch number.;Production;internal;false;true
