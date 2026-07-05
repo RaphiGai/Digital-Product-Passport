@@ -125,11 +125,26 @@ service DPPService @(
   // rejected in srv/handlers/dpp-handlers.js; rows are inserted server-side on publish.
   entity DPPVersions           as projection on db.DPPVersions;
 
+  // ── Import staging & approval (US7.7–7.8) ──────────────────────────────────
+  entity PendingImports as projection on db.PendingImports {
+    *,
+    created_by  : redirected to Users,
+    reviewed_by : redirected to Users
+  };
+
   // Result type for Excel/CSV bulk imports (US7.2–7.4).
   // `errors` is a JSON array: [{row, field, message, severity: 'error'|'warning'}]
   type ImportResult : {
     total   : Integer;
     created : Integer;
+    skipped : Integer;
+    errors  : LargeString;
+  };
+
+  type StageImportResult : {
+    id      : UUID;
+    total   : Integer;
+    valid   : Integer;
     skipped : Integer;
     errors  : LargeString;
   };
@@ -142,6 +157,11 @@ service DPPService @(
   action importBatches         (rows : LargeString, dryRun : Boolean) returns ImportResult;
   action importBOM             (rows : LargeString, dryRun : Boolean) returns ImportResult;
   action importBusinessPartners(rows : LargeString, dryRun : Boolean) returns ImportResult;
+
+  // Stage → approve/reject workflow (US7.7–7.8).
+  action stageImport          (entity_type : String, rows : LargeString, file_name : String) returns StageImportResult;
+  action approvePendingImport (id : UUID)                                                    returns ImportResult;
+  action rejectPendingImport  (id : UUID, note : String)                                     returns Boolean;
 
   function me() returns MeInfo;
 

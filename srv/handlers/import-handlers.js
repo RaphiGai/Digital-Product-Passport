@@ -1,8 +1,9 @@
 'use strict';
 
+const cds            = require('@sap/cds');
 const { randomUUID } = require('crypto');
 const { getUserOrg } = require('./auth-helpers');
-const { isHttpUrl } = require('../lib/url-validate');
+const { isHttpUrl }  = require('../lib/url-validate');
 
 // Product URL fields rendered as <a href> on the public consumer page — must be http(s).
 const PRODUCT_URL_FIELDS = [
@@ -111,6 +112,7 @@ module.exports = (srv) => {
 
     const allIssues = [];
     const toInsert  = [];
+    const seenNames = new Set();
 
     for (let i = 0; i < rows.length; i++) {
       const r         = rows[i];
@@ -147,6 +149,9 @@ module.exports = (srv) => {
       const name = str(r.name);
       if (name && existingNames.has(name.toLowerCase()))
         err(allIssues, i, 'name', `A product named "${name}" already exists — skipped.`);
+      else if (name && seenNames.has(name.toLowerCase()))
+        err(allIssues, i, 'name', `Duplicate product name "${name}" in this file — skipped.`);
+      if (name) seenNames.add(name.toLowerCase());
 
       // Consumer-facing URLs must be http(s) — block stored javascript:/data: XSS on import.
       for (const key of PRODUCT_URL_FIELDS) {
@@ -248,8 +253,9 @@ module.exports = (srv) => {
       existingBatches.map((b) => `${b.variant_ID}:${b.batch_number?.toLowerCase()}`)
     );
 
-    const allIssues = [];
-    const toInsert  = [];
+    const allIssues      = [];
+    const toInsert       = [];
+    const seenBatchKeys  = new Set();
 
     for (let i = 0; i < rows.length; i++) {
       const r         = rows[i];
@@ -272,8 +278,12 @@ module.exports = (srv) => {
       const batchNum = str(r.batch_number);
       if (batchNum.length > 40)
         err(allIssues, i, 'batch_number', 'Batch number must not exceed 40 characters.');
+      const batchFileKey = `${variant?.ID ?? sku}:${batchNum.toLowerCase()}`;
       if (variant && batchNum && existingBatchKeys.has(`${variant.ID}:${batchNum.toLowerCase()}`))
         err(allIssues, i, 'batch_number', `Batch "${batchNum}" already exists for this variant — skipped.`);
+      else if (batchNum && seenBatchKeys.has(batchFileKey))
+        err(allIssues, i, 'batch_number', `Duplicate batch "${batchNum}" in this file — skipped.`);
+      if (batchNum) seenBatchKeys.add(batchFileKey);
 
       const co2 = parseNum(r.co2_footprint_kg);
       if (co2 !== null && co2 < 0)
@@ -372,8 +382,9 @@ module.exports = (srv) => {
       existingEdges.map((e) => edgeKey(e.parent_ID, e.component_ID || e.component_name || ''))
     );
 
-    const allIssues = [];
-    const toInsert  = [];
+    const allIssues     = [];
+    const toInsert      = [];
+    const seenEdgeKeys  = new Set();
 
     for (let i = 0; i < rows.length; i++) {
       const r         = rows[i];
@@ -396,21 +407,36 @@ module.exports = (srv) => {
       if (parentProduct && parentSku && !parentVariant)
         err(allIssues, i, 'parent_variant_sku', `Variant "${parentSku}" not found in product "${parentProductName}".`);
 
-      // Component: look up internal product; fall back to external name if not found.
+      // Component: always require a name.
+      requireField(allIssues, i, 'component_product_name', r.component_product_name);
+
+      // Try to link to an internal product by exact name (case-insensitive).
       const compName    = str(r.component_product_name);
       const compProduct = compName ? productByName.get(compName.toLowerCase()) : null;
-      if (compName && !compProduct)
-        // Treat as external component name — warn so the user knows it won't link internally.
-        warn(allIssues, i, 'component_product_name',
-          `Product "${compName}" not found — will be recorded as an external component.`);
+      const isExternal  = compName && !compProduct;
 
-      if (!compName && !str(r.external_dpp_url))
-        err(allIssues, i, 'component_product_name',
-          'Provide a component product name or an external DPP URL.');
+      if (isExternal) {
+        // Not found internally — treated as external component. External DPP URL is then required.
+        warn(allIssues, i, 'component_product_name',
+          `"${compName}" not found in your system — will be recorded as an external component.`);
+        if (!str(r.external_dpp_url))
+          err(allIssues, i, 'external_dpp_url',
+            'External DPP URL is required for external components.');
+      }
+
+      // external_dpp_url format check (when provided).
+      if (!isHttpUrl(r.external_dpp_url))
+        err(allIssues, i, 'external_dpp_url', 'External DPP URL must start with https:// (or http://).');
+
+      const ALLOWED_UNITS = ['g', 'kg', 'pcs', '%'];
+      if (r.unit && !ALLOWED_UNITS.includes(str(r.unit)))
+        err(allIssues, i, 'unit', `Unit must be one of: ${ALLOWED_UNITS.join(', ')}.`);
 
       const qty = parseNum(r.quantity);
       if (qty === null) err(allIssues, i, 'quantity', 'Quantity must be a valid number.');
-      else if (qty < 0) err(allIssues, i, 'quantity', 'Quantity must not be negative.');
+      else if (qty <= 0)  err(allIssues, i, 'quantity', 'Quantity must be greater than 0.');
+      else if (str(r.unit) === 'pcs' && !Number.isInteger(qty))
+        err(allIssues, i, 'quantity', 'Pieces must be a whole number.');
 
       const co2      = parseNum(r.co2_footprint_kg);
       const recycled = parseNum(r.recycled_content_pct);
@@ -419,15 +445,16 @@ module.exports = (srv) => {
       if (recycled !== null && (recycled < 0 || recycled > 100))
         err(allIssues, i, 'recycled_content_pct', 'Recycled content must be 0–100.');
 
-      // external_dpp_url is rendered as <a href> in the public materials tree — must be http(s).
-      if (!isHttpUrl(r.external_dpp_url))
-        err(allIssues, i, 'external_dpp_url', 'External DPP URL must start with https:// (or http://).');
-
       // Duplicate edge check.
       const compRef = compProduct ? compProduct.ID : compName;
       if (parentVariant && compRef) {
-        if (existingEdgeKeys.has(edgeKey(parentVariant.ID, compRef)))
-          err(allIssues, i, 'component_product_name', 'This BOM edge already exists — skipped.');
+        const eKey = edgeKey(parentVariant.ID, compRef);
+        if (existingEdgeKeys.has(eKey))
+          err(allIssues, i, 'component_product_name', 'This component is already in this BOM — skipped.');
+        else if (seenEdgeKeys.has(eKey))
+          err(allIssues, i, 'component_product_name', 'Duplicate component in this file — skipped.');
+        else
+          seenEdgeKeys.add(eKey);
       }
 
       if (countHardErrors(allIssues, issueBase) === 0 && parentVariant) {
@@ -489,8 +516,9 @@ module.exports = (srv) => {
       existingVariants.map((v) => `${v.product_ID}:${v.sku?.toLowerCase()}`)
     );
 
-    const allIssues = [];
-    const toInsert  = [];
+    const allIssues  = [];
+    const toInsert   = [];
+    const seenSkuKeys = new Set();
 
     for (let i = 0; i < rows.length; i++) {
       const r         = rows[i];
@@ -512,8 +540,12 @@ module.exports = (srv) => {
       if (weightG !== null && weightG <= 0)
         err(allIssues, i, 'weight_g', 'Weight must be a positive number (grams).');
 
+      const skuFileKey = `${productName.toLowerCase()}:${sku.toLowerCase()}`;
       if (product && sku && existingSkuKeys.has(`${product.ID}:${sku.toLowerCase()}`))
         err(allIssues, i, 'sku', `Variant with SKU "${sku}" already exists for product "${productName}".`);
+      else if (sku && seenSkuKeys.has(skuFileKey))
+        err(allIssues, i, 'sku', `Duplicate SKU "${sku}" for product "${productName}" in this file — skipped.`);
+      if (sku) seenSkuKeys.add(skuFileKey);
 
       if (countHardErrors(allIssues, issueBase) === 0 && product) {
         toInsert.push({
@@ -624,5 +656,112 @@ module.exports = (srv) => {
       skipped: rows.length - toInsert.length,
       errors:  JSON.stringify(allIssues),
     };
+  });
+
+  // ── Staging & approval workflow (US7.7–7.8) ───────────────────────────────
+
+  const STAGEABLE_ACTIONS = {
+    products:          'importProducts',
+    variants:          'importVariants',
+    batches:           'importBatches',
+    bom:               'importBOM',
+    business_partners: 'importBusinessPartners',
+  };
+
+  // stageImport — validate the uploaded rows and park them in PendingImports.
+  // The actual data is NOT written to production tables yet.
+  srv.on('stageImport', async (req) => {
+    const { entity_type, rows: rawJson, file_name } = req.data;
+    const org = await getUserOrg(req);
+    const uid = req.user._appUserId || null;
+    const now = new Date().toISOString();
+    const { PendingImports } = srv.entities;
+
+    const actionName = STAGEABLE_ACTIONS[entity_type];
+    if (!actionName) return req.reject(400, `Unknown entity type: "${entity_type}".`);
+
+    // Re-use the existing import handler for dry-run validation so there's no
+    // duplicated validation logic. Prototypal inheritance passes req.user through.
+    const dryReq = Object.assign(Object.create(req), {
+      event: actionName,
+      data:  { rows: rawJson, dryRun: true },
+    });
+    const dryResult = await srv.dispatch(dryReq);
+
+    const total   = dryResult.total   ?? 0;
+    const skipped = dryResult.skipped ?? 0;
+    const valid   = total - skipped;
+
+    if (valid === 0) return req.reject(422, 'No valid rows to stage — all rows have validation errors.');
+
+    const id = randomUUID();
+    await INSERT.into(PendingImports).entries({
+      ID:                     id,
+      entity_type,
+      file_name:              file_name ?? '',
+      total_rows:             total,
+      valid_rows:             valid,
+      skipped_rows:           skipped,
+      rows_data:              rawJson,
+      validation_issues:      dryResult.errors ?? '[]',
+      status:                 'pending',
+      owning_organization_ID: org.ID,
+      created_at:             now,
+      created_by_ID:          uid,
+    });
+
+    return { id, total, valid, skipped, errors: dryResult.errors ?? '[]' };
+  });
+
+  // approvePendingImport — run the real import on the staged rows and mark approved.
+  srv.on('approvePendingImport', async (req) => {
+    const { id } = req.data;
+    const { PendingImports } = srv.entities;
+    const org = await getUserOrg(req);
+    const uid = req.user._appUserId || null;
+
+    const pending = await SELECT.one.from(PendingImports)
+      .where({ ID: id, owning_organization_ID: org.ID });
+    if (!pending)                    return req.reject(404, 'Pending import not found.');
+    if (pending.status !== 'pending') return req.reject(400, `Import is already ${pending.status}.`);
+
+    const actionName = STAGEABLE_ACTIONS[pending.entity_type];
+    if (!actionName) return req.reject(400, `Unknown entity type stored: "${pending.entity_type}".`);
+
+    const commitReq = Object.assign(Object.create(req), {
+      event: actionName,
+      data:  { rows: pending.rows_data, dryRun: false },
+    });
+    const result = await srv.dispatch(commitReq);
+
+    await UPDATE(PendingImports)
+      .set({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by_ID: uid })
+      .where({ ID: id });
+
+    return result;
+  });
+
+  // rejectPendingImport — discard the staged import without touching production data.
+  srv.on('rejectPendingImport', async (req) => {
+    const { id, note } = req.data;
+    const { PendingImports } = srv.entities;
+    const org = await getUserOrg(req);
+    const uid = req.user._appUserId || null;
+
+    const pending = await SELECT.one.from(PendingImports)
+      .where({ ID: id, owning_organization_ID: org.ID });
+    if (!pending)                    return req.reject(404, 'Pending import not found.');
+    if (pending.status !== 'pending') return req.reject(400, `Import is already ${pending.status}.`);
+
+    await UPDATE(PendingImports)
+      .set({
+        status:      'rejected',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by_ID: uid,
+        review_note: note ?? null,
+      })
+      .where({ ID: id });
+
+    return true;
   });
 };
