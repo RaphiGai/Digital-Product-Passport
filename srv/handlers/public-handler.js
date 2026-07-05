@@ -106,8 +106,10 @@ async function expandBomTree(variantId, productsById, bomsByParent, overrides = 
       // legacy frozen snapshots still carry `fibre_composition` (FE reads both).
       composition: parseBag(componentProduct?.attributes).fibre_composition
         || e.component_composition || null,
-      quantity: e.quantity,
-      unit: e.unit,
+      // Quantity/unit are shown on the consumer view only when the line is opted into
+      // 'public' (default 'internal'). Aggregation is unaffected (uses e.quantity directly).
+      quantity: e.quantity_visibility === 'public' ? e.quantity : null,
+      unit: e.quantity_visibility === 'public' ? e.unit : null,
       role: e.component_role,
       sub_dpp: null,
       external_dpp_url: e.external_dpp_url || null,
