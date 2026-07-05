@@ -2,8 +2,8 @@ import { cn } from '@/lib/cn';
 
 const VARIANTS = {
   primary: 'bg-brand-600 text-white hover:bg-brand-700',
-  outline: 'border border-gray-300 bg-white text-ink hover:bg-gray-50',
-  danger: 'border border-red-300 bg-white text-red-700 hover:bg-red-50',
+  outline: 'border border-gray-300 dark:border-white/15 bg-white dark:bg-white/8 text-ink hover:bg-gray-50',
+  danger: 'border border-red-300 dark:border-red-500/30 bg-white dark:bg-white/8 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20',
   ghost: 'text-ink hover:bg-gray-100'
 };
 

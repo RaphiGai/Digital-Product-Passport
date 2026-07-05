@@ -129,7 +129,7 @@ function VersionRow({ v }) {
 }
 
 /** Read-only version history card (US5.9). One row per published version. */
-function VersionHistoryCard({ dppId, productName }) {
+function VersionHistoryCard({ dppId }) {
   const q = useQuery({
     queryKey: ['DPPVersions', dppId],
     queryFn: () =>
@@ -142,99 +142,9 @@ function VersionHistoryCard({ dppId, productName }) {
   });
   const rows = q.data ?? [];
 
-  const fmt = (v) => {
-    if (!v) return '';
-    const [y, m, d] = String(v).slice(0, 10).split('-');
-    return d && m && y ? `${d}.${m}.${y}` : String(v).slice(0, 10);
-  };
-
-  function handleExportVersionHistory(format = 'xlsx') {
-    const summaryRows = [...rows]
-      .sort((a, b) => a.version_number - b.version_number)
-      .map((v) => ({
-        'Version':       `v${v.version_number}`,
-        'Type':          v.source === 'approve' ? 'Approve snapshot' : 'Published',
-        'Published At':  fmt(v.snapshot_date),
-        'Change Reason': v.change_reason ?? '',
-        'Changed By':    v.changed_by?.display_name ?? '',
-        'Content Hash':  v.content_hash ?? '',
-      }));
-
-    const snapshotRows = [...rows]
-      .sort((a, b) => a.version_number - b.version_number)
-      .map((v) => {
-        let snap = null;
-        try { snap = v.snapshot_data ? JSON.parse(v.snapshot_data) : null; } catch { snap = null; }
-        const p = snap?.product ?? {};
-        const va = snap?.variant ?? {};
-        const b = snap?.batch ?? {};
-        const item = snap?.item ?? {};
-        return {
-          'Version':              `v${v.version_number}`,
-          'Published At':         fmt(v.snapshot_date),
-          'DPP Type':             snap?.dpp?.dpp_type ?? '',
-          'Visibility at Publish':snap?.dpp?.visibility ?? '',
-          'Product Name':         p.name ?? '',
-          'Brand':                p.brand ?? '',
-          'Category':             p.category ?? '',
-          'GTIN':                 p.gtin ?? '',
-          'Country of Origin':    p.country_of_origin ?? '',
-          'ESPR Compliance':      p.espr_compliance ?? '',
-          'Fibre Composition':    p.fibre_composition ?? '',
-          'Durability Score':     p.durability_score ?? '',
-          'Repairability Score':  p.repairability_score ?? '',
-          'Variant SKU':          va.sku ?? '',
-          'Colour':               va.color ?? '',
-          'Size':                 va.size ?? '',
-          'Batch Number':         b.batch_number ?? '',
-          'Production Date':      fmt(b.production_date),
-          'Country of Origin (Batch)': b.country_of_origin ?? '',
-          'CO₂ Footprint (kg)':   b.co2_footprint_kg ?? '',
-          'Recycled Content (%)': b.recycled_content_pct ?? '',
-          'Serial Number':        item.serial_number ?? '',
-          'UPI':                  item.upi ?? '',
-        };
-      });
-
-    const bomRows = [...rows]
-      .sort((a, b) => a.version_number - b.version_number)
-      .flatMap((v) => {
-        let snap = null;
-        try { snap = v.snapshot_data ? JSON.parse(v.snapshot_data) : null; } catch { snap = null; }
-        return (snap?.bom ?? []).map((line) => ({
-          'Version':                  `v${v.version_number}`,
-          'Component Name':           line.component_name ?? '',
-          'Component Category':       line.component_category ?? '',
-          'Fibre Composition':        line.component_fibre_composition ?? '',
-          'Quantity':                 line.quantity ?? '',
-          'Unit':                     line.unit ?? '',
-          'Role':                     line.component_role ?? '',
-          'External CO₂ (per unit)':  line.ext_co2_footprint ?? '',
-          'External Recycled (%)':    line.ext_recycled_content_pct ?? '',
-          'Mandatory':                line.is_mandatory ? 'Yes' : 'No',
-        }));
-      });
-
-    const filename = `dpp-version-history-${(productName ?? dppId).replace(/\s+/g, '-').toLowerCase()}`;
-    exportData(
-      [
-        { name: 'Version Summary',  rows: summaryRows },
-        { name: 'Snapshot Details', rows: snapshotRows },
-        ...(bomRows.length ? [{ name: 'BOM at Publish', rows: bomRows }] : []),
-      ],
-      filename,
-      format
-    );
-  }
-
   return (
     <Card>
-      <div className="flex items-center justify-between">
-        <CardTitle>Version history</CardTitle>
-        {rows.length > 0 && (
-          <ExportDropdown onExport={handleExportVersionHistory} label="Export history" size="sm" />
-        )}
-      </div>
+      <CardTitle>Version history</CardTitle>
       {q.isLoading ? (
         <p className="mt-3 text-sm text-ink-muted">Loading…</p>
       ) : rows.length ? (
@@ -770,6 +680,102 @@ export function DppDetail() {
     exportData(sheets, filename, format);
   }
 
+  function handleExportVersionHistory(format = 'xlsx') {
+    const currentVersion = dpp.current_version;
+    const rowStatus = (v) => {
+      if (v.source === 'approve') return 'Approval snapshot';
+      if (v.version_number === currentVersion)
+        return dpp.status === 'archived' ? 'Archived' : 'Live';
+      return 'Superseded';
+    };
+    const sorted = [...versions].sort((a, b) => a.version_number - b.version_number);
+
+    const passportRows = [
+      { Field: 'Passport ID',     Value: dpp.ID ?? '' },
+      { Field: 'Current version', Value: currentVersion != null ? `v${currentVersion}` : '' },
+      { Field: 'Status',          Value: dpp.status ?? '' },
+      { Field: 'Visibility',      Value: dpp.visibility ?? '' },
+      { Field: 'Approved at',     Value: fmtDate(dpp.approved_at) ?? '' },
+      { Field: 'Published at',    Value: fmtDate(dpp.published_at) ?? '' },
+      { Field: 'Archived at',     Value: fmtDate(dpp.archived_at) ?? '' },
+      { Field: 'Total publishes', Value: String(sorted.filter((v) => v.source !== 'approve').length) },
+    ];
+
+    const summaryRows = sorted.map((v) => ({
+      'Version':       `v${v.version_number}`,
+      'Status':        rowStatus(v),
+      'Event Type':    v.source === 'approve' ? 'Approval snapshot' : 'Publish',
+      'Event Date':    fmtDate(v.snapshot_date) ?? '',
+      'Change Reason': v.change_reason ?? '',
+      'Changed By':    v.changed_by?.display_name ?? '',
+      'Content Hash':  v.content_hash ?? '',
+    }));
+
+    const snapshotRows = sorted.map((v) => {
+      let snap = null;
+      try { snap = v.snapshot_data ? JSON.parse(v.snapshot_data) : null; } catch { snap = null; }
+      const p = snap?.product ?? {};
+      const va = snap?.variant ?? {};
+      const b = snap?.batch ?? {};
+      const it = snap?.item ?? {};
+      return {
+        'Version':                   `v${v.version_number}`,
+        'Status':                    rowStatus(v),
+        'Event Date':                fmtDate(v.snapshot_date) ?? '',
+        'DPP Type':                  snap?.dpp?.dpp_type ?? '',
+        'Visibility at Event':       snap?.dpp?.visibility ?? '',
+        'Product Name':              p.name ?? '',
+        'Brand':                     p.brand ?? '',
+        'Category':                  p.category ?? '',
+        'GTIN':                      p.gtin ?? '',
+        'Country of Origin':         p.country_of_origin ?? '',
+        'ESPR Compliance':           p.espr_compliance ?? '',
+        'Fibre Composition':         p.fibre_composition ?? '',
+        'Durability Score':          p.durability_score ?? '',
+        'Repairability Score':       p.repairability_score ?? '',
+        'Variant SKU':               va.sku ?? '',
+        'Colour':                    va.color ?? '',
+        'Size':                      va.size ?? '',
+        'Batch Number':              b.batch_number ?? '',
+        'Production Date':           fmtDate(b.production_date) ?? '',
+        'Country of Origin (Batch)': b.country_of_origin ?? '',
+        'CO₂ Footprint (kg)':        b.co2_footprint_kg ?? '',
+        'Recycled Content (%)':      b.recycled_content_pct ?? '',
+        'Serial Number':             it.serial_number ?? '',
+        'UPI':                       it.upi ?? '',
+      };
+    });
+
+    const bomRows = sorted.flatMap((v) => {
+      let snap = null;
+      try { snap = v.snapshot_data ? JSON.parse(v.snapshot_data) : null; } catch { snap = null; }
+      return (snap?.bom ?? []).map((line) => ({
+        'Version':                 `v${v.version_number}`,
+        'Component Name':          line.component_name ?? '',
+        'Component Category':      line.component_category ?? '',
+        'Fibre Composition':       line.component_fibre_composition ?? '',
+        'Quantity':                line.quantity ?? '',
+        'Unit':                    line.unit ?? '',
+        'Role':                    line.component_role ?? '',
+        'External CO₂ (per unit)': line.ext_co2_footprint ?? '',
+        'External Recycled (%)':   line.ext_recycled_content_pct ?? '',
+        'Mandatory':               line.is_mandatory ? 'Yes' : 'No',
+      }));
+    });
+
+    const histFilename = `dpp-version-history-${(product?.name ?? dpp.ID).replace(/\s+/g, '-').toLowerCase()}`;
+    exportData(
+      [
+        { name: 'Passport',       rows: passportRows },
+        ...(summaryRows.length  ? [{ name: 'Version Summary',  rows: summaryRows  }] : []),
+        ...(snapshotRows.length ? [{ name: 'Snapshot Details', rows: snapshotRows }] : []),
+        ...(bomRows.length      ? [{ name: 'BOM at Publish',   rows: bomRows      }] : []),
+      ],
+      histFilename,
+      format
+    );
+  }
+
   // DPP-level fields for the header badges and passport-details card (snapshot-aware).
   const viewType = isSnapshot ? (snap.dpp?.dpp_type ?? dpp.dpp_type) : dpp.dpp_type;
   const viewStatus = isSnapshot ? (snap.dpp?.status ?? dpp.status) : dpp.status;
@@ -812,6 +818,11 @@ export function DppDetail() {
 
         <div className="flex flex-wrap items-center justify-end gap-2">
           <ExportDropdown onExport={handleExport} label="Export" />
+          <ExportDropdown
+            onExport={handleExportVersionHistory}
+            label="Export history"
+            disabled={versionsQ.isLoading}
+          />
 
           {/* Version picker — view any saved snapshot read-only. Available to all roles. */}
           <Select
@@ -1164,7 +1175,7 @@ export function DppDetail() {
           )}
 
           {/* ── Version history (US5.9) ── */}
-          <VersionHistoryCard dppId={id} productName={product?.name} />
+          <VersionHistoryCard dppId={id} />
         </div>
 
         <div className="space-y-6">

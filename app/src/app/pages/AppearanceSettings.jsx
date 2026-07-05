@@ -24,6 +24,12 @@ const themes = [
     label: 'Purple',
     description: 'Purple interface theme',
     color: 'bg-purple-600'
+  },
+  {
+    value: 'dark',
+    label: 'Dark',
+    description: 'Dark interface theme',
+    color: 'bg-gray-800'
   }
 ];
 

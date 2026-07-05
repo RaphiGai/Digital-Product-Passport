@@ -53,7 +53,6 @@ export function VariantView() {
   if (!v) return <p className="text-ink-muted">Variant not found.</p>;
 
   const label = [v.color, v.size].filter(Boolean).join(' / ') || v.sku || v.ID;
-  // Effective per-field visibility (saved overrides → catalogue defaults; locked → public).
   const variantVis = mergeVisibility(VARIANT_CATALOGUE, v.field_visibility);
   const productVis = mergeVisibility(PRODUCT_CATALOGUE, p?.field_visibility);
 
@@ -230,7 +229,7 @@ export function VariantView() {
         </Card>
       </div>
 
-      {/* BOM section header + read-only BOM */}
+      {/* BOM — enriched read-only view with sustainability/compliance columns (US4.8) */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-ink">BOM for {label}</h2>
         <div className="flex items-center gap-2">
@@ -240,12 +239,14 @@ export function VariantView() {
             disabled={!bomQ.data?.length}
             size="sm"
           />
-          <Link to={`/products/${pid}/variants/${vid}`}>
-            <Button variant="outline" size="sm">Edit BOM</Button>
-          </Link>
+          <RequireRole role="company_advanced">
+            <Link to={`/products/${pid}/variants/${vid}`}>
+              <Button variant="outline" size="sm">Edit BOM</Button>
+            </Link>
+          </RequireRole>
         </div>
       </div>
-      <BomEditor productId={pid} variantId={vid} readOnly />
+      <BomEditor productId={pid} variantId={vid} readOnly showEnriched />
     </div>
   );
 }

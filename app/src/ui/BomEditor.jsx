@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trash2, Pencil, ExternalLink, Plus, SaveAll, ChevronDown, ChevronRight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -7,7 +7,7 @@ import { useHasRole } from '@/auth/useMe';
 import { Card, CardTitle } from './Card';
 import { Button } from './Button';
 import { Banner } from './Breadcrumb';
-import { EditableVisibilityBadge } from './Badge';
+import { Badge, StatusBadge, EditableVisibilityBadge } from './Badge';
 import { FieldRow, Input, Select } from './Form';
 
 const EMPTY_ROW = {
@@ -22,6 +22,10 @@ const EMPTY_ROW = {
 
 const COLS =
   'grid-cols-[170px_minmax(0,3fr)_150px_80px_64px_minmax(0,2fr)_120px_104px]';
+
+// Enriched read-only view: BOM ID | Component | ESPR | CO₂ | Brand/Mfr | Origin | Sub-comps | DPP source | Certificates | Visible
+const COLS_ENRICHED =
+  'grid-cols-[120px_minmax(0,2fr)_130px_80px_110px_75px_80px_140px_100px_90px]';
 
 function pickComponentDpp(dpps) {
   if (!dpps?.length) return null;
@@ -90,7 +94,7 @@ function removeTechnicalFields(row) {
   return clean;
 }
 
-export function BomEditor({ productId, variantId, readOnly = false }) {
+export function BomEditor({ productId, variantId, readOnly = false, showEnriched = false }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const isAdvanced = useHasRole('company_advanced');
@@ -110,6 +114,53 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
     queryKey: ['Products', 'bom-candidates'],
     queryFn: () => odataList('Products', { orderby: 'name', top: 200 })
   });
+
+  const enrichedQ = useQuery({
+    queryKey: ['ProductBOMs', variantId, 'enriched'],
+    queryFn: () =>
+      odataList('ProductBOMs', {
+        filter: `parent_ID eq '${variantId}'`,
+        top: 200,
+        expand: [
+          'component($select=ID,name,brand,country_of_origin,espr_compliance,substances_of_concern)',
+          'sub_dpp($select=ID,status)',
+        ],
+      }),
+    enabled: readOnly && showEnriched && !!variantId,
+  });
+
+  const enrichedMap = useMemo(() => {
+    const m = new Map();
+    for (const r of enrichedQ.data ?? []) m.set(r.ID, r);
+    return m;
+  }, [enrichedQ.data]);
+
+  const componentIds = useMemo(
+    () => [...new Set((enrichedQ.data ?? []).filter((r) => r.component_ID).map((r) => r.component_ID))],
+    [enrichedQ.data]
+  );
+
+  const documentsQ = useQuery({
+    queryKey: ['Documents', 'certificates', componentIds],
+    queryFn: () =>
+      odataList('Documents', {
+        filter: `(${componentIds.map((id) => `product_ID eq '${id}'`).join(' or ')}) and doc_type eq 'certificate'`,
+        select: ['ID', 'product_ID', 'visibility'],
+        top: 500,
+      }),
+    enabled: readOnly && showEnriched && componentIds.length > 0,
+  });
+
+  const certMap = useMemo(() => {
+    const m = new Map();
+    for (const doc of documentsQ.data ?? []) {
+      if (!m.has(doc.product_ID)) m.set(doc.product_ID, { hasAny: false, hasPublished: false });
+      const entry = m.get(doc.product_ID);
+      entry.hasAny = true;
+      if (doc.visibility === 'public') entry.hasPublished = true;
+    }
+    return m;
+  }, [documentsQ.data]);
 
   const candidates = (products.data ?? []).filter(
     (p) => p.ID !== productId && ['material', 'component', 'packaging'].includes(p.product_type)
@@ -482,152 +533,290 @@ export function BomEditor({ productId, variantId, readOnly = false }) {
       {loading ? (
         <p className="mt-3 text-sm text-ink-muted">Loading BOM…</p>
       ) : draftRows.length > 0 ? (
-        <div className="mt-3 overflow-x-auto">
-          <div className="min-w-[1040px]">
-            <div
-              className={`grid ${COLS} border-b border-black/10 text-xs font-medium uppercase tracking-wide text-ink-muted`}
-            >
-              <span className="border-r border-black/10 px-4 py-2">BOM ID</span>
-              <span className="border-r border-black/10 px-4 py-2">Name</span>
-              <span className="border-r border-black/10 px-3 py-2">DPP source</span>
-              <span className="border-r border-black/10 px-3 py-2 text-right">Quantity</span>
-              <span className="border-r border-black/10 px-3 py-2">Unit</span>
-              <span className="border-r border-black/10 px-3 py-2">Role</span>
-              <span className="border-r border-black/10 px-3 py-2">Visible</span>
-              <span className="px-3 py-2" />
-            </div>
+        readOnly && showEnriched ? (
+          /* ── Enriched read-only view (US4.8) ─────────────────────────────── */
+          <div className="mt-3 overflow-x-auto">
+            <div className="min-w-[1280px]">
+              <div className={`grid ${COLS_ENRICHED} border-b border-black/10 text-xs font-medium uppercase tracking-wide text-ink-muted`}>
+                <span className="border-r border-black/10 px-3 py-2">BOM ID</span>
+                <span className="border-r border-black/10 px-3 py-2">Component</span>
+                <span className="border-r border-black/10 px-3 py-2">ESPR Compliance</span>
+                <span className="border-r border-black/10 px-3 py-2 text-right">CO₂ (kg)</span>
+                <span className="border-r border-black/10 px-3 py-2">Brand</span>
+                <span className="border-r border-black/10 px-3 py-2">Origin</span>
+                <span className="border-r border-black/10 px-3 py-2 text-center">Sub-comps</span>
+                <span className="border-r border-black/10 px-3 py-2">DPP source</span>
+                <span className="border-r border-black/10 px-3 py-2">Certificates</span>
+                <span className="px-3 py-2">Visible</span>
+              </div>
 
-            {visibleRows.map((r) => {
-              const name = r.component_ID ? productName(r.component_ID) : r.component_name;
+              {visibleRows.map((r) => {
+                const name = r.component_ID ? productName(r.component_ID) : r.component_name;
+                const enriched = enrichedMap.get(r.ID);
+                const comp = enriched?.component;
+                const directChildren = draftRows.filter((x) => x.__parentBomId === r.ID).length;
+                const hasSubstances =
+                  comp?.substances_of_concern &&
+                  comp.substances_of_concern.toLowerCase() !== 'none';
+                const cert = certMap.get(r.component_ID ?? '');
 
-              return (
-                <div
-                  key={r.ID}
-                  className={`grid ${COLS} items-center border-b border-black/5`}
-                >
-                  <div className="min-w-0 border-r border-black/10 px-3 py-3">
-                    <div className="truncate font-mono text-xs text-ink-muted" title={r.ID}>
-                      {r.ID}
+                return (
+                  <div key={r.ID} className={`grid ${COLS_ENRICHED} items-center border-b border-black/5 hover:bg-gray-50/40`}>
+                    {/* BOM ID */}
+                    <div className="min-w-0 border-r border-black/10 px-3 py-3">
+                      <div className="truncate font-mono text-xs text-ink-muted" title={r.ID}>{r.ID}</div>
+                      <div className="mt-1 inline-flex rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-ink-muted">
+                        Level {r.__depth + 1}
+                      </div>
                     </div>
-                    <div className="mt-1 inline-flex rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-ink-muted">
-                      Level {r.__depth + 1}
-                    </div>
-                  </div>
 
-                  <div className="min-w-0 border-r border-black/10 py-3 pl-3 pr-3 text-sm font-medium text-ink">
-                    <div className="flex min-w-0 items-center gap-1">
-                      {r.__depth > 0 && (
-                        <span
-                          className="shrink-0"
-                          style={{ width: `${r.__depth * 18}px` }}
-                          aria-hidden="true"
-                        />
-                      )}
-                      {hasChildren(r.ID) ? (
-                        <button
-                          type="button"
-                          onClick={() => toggleCollapsed(r.ID)}
-                          className="shrink-0 rounded p-0.5 text-ink-muted hover:bg-black/5 hover:text-ink"
-                          title={collapsed.has(r.ID) ? 'Expand' : 'Collapse'}
-                          aria-expanded={!collapsed.has(r.ID)}
-                        >
-                          {collapsed.has(r.ID) ? (
-                            <ChevronRight className="h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4" />
+                    {/* Component name + role + qty/unit */}
+                    <div className="min-w-0 border-r border-black/10 py-3 pl-3 pr-3">
+                      <div className="flex min-w-0 items-start gap-1">
+                        {r.__depth > 0 && (
+                          <span className="mt-0.5 shrink-0" style={{ width: `${r.__depth * 18}px` }} aria-hidden="true" />
+                        )}
+                        {hasChildren(r.ID) ? (
+                          <button type="button" onClick={() => toggleCollapsed(r.ID)} className="mt-0.5 shrink-0 rounded p-0.5 text-ink-muted hover:bg-black/5 hover:text-ink" title={collapsed.has(r.ID) ? 'Expand' : 'Collapse'} aria-expanded={!collapsed.has(r.ID)}>
+                            {collapsed.has(r.ID) ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </button>
+                        ) : (
+                          <span className="mt-0.5 w-5 shrink-0" aria-hidden="true" />
+                        )}
+                        <div className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-ink" title={name || undefined}>{name || '—'}</span>
+                          {(r.component_role || r.quantity != null) && (
+                            <span className="block text-xs text-ink-muted">
+                              {[r.component_role, r.quantity != null ? `${r.quantity} ${r.unit ?? ''}`.trim() : null].filter(Boolean).join(' · ')}
+                            </span>
                           )}
-                        </button>
+                          {hasSubstances && (
+                            <span className="block text-xs text-amber-700">⚠ Substances of concern</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ESPR Compliance */}
+                    <div className="border-r border-black/10 px-3 py-3">
+                      {comp?.espr_compliance
+                        ? <StatusBadge status={comp.espr_compliance} />
+                        : <span className="text-xs text-ink-muted">—</span>}
+                    </div>
+
+                    {/* CO₂ */}
+                    <div className="border-r border-black/10 px-3 py-3 text-right text-sm text-ink">
+                      {r.ext_co2_footprint != null
+                        ? Number(r.ext_co2_footprint).toFixed(2)
+                        : <span className="text-xs text-ink-muted">—</span>}
+                    </div>
+
+                    {/* Brand */}
+                    <div className="min-w-0 border-r border-black/10 px-3 py-3">
+                      {comp?.brand
+                        ? <span className="block truncate text-sm text-ink">{comp.brand}</span>
+                        : <span className="text-xs text-ink-muted">—</span>}
+                    </div>
+
+                    {/* Origin (Country) */}
+                    <div className="border-r border-black/10 px-3 py-3">
+                      {comp?.country_of_origin
+                        ? <Badge tone="gray">{comp.country_of_origin}</Badge>
+                        : <span className="text-xs text-ink-muted">—</span>}
+                    </div>
+
+                    {/* Sub-components count */}
+                    <div className="border-r border-black/10 px-3 py-3 text-center">
+                      {directChildren > 0
+                        ? <Badge tone="blue">{directChildren}</Badge>
+                        : <span className="text-xs text-ink-muted">—</span>}
+                    </div>
+
+                    {/* DPP source — same format as standard view */}
+                    <div className="min-w-0 border-r border-black/10 px-3 py-3">
+                      {r.external_dpp_url ? (
+                        <a href={r.external_dpp_url} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1 text-xs text-brand-700 hover:underline">
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                          <span className="truncate">External DPP</span>
+                        </a>
+                      ) : r.sub_dpp_ID ? (
+                        <Link to={`/dpps/${r.sub_dpp_ID}`} className="block truncate text-xs text-brand-700 hover:underline">
+                          Internal DPP
+                        </Link>
                       ) : (
-                        <span className="w-5 shrink-0" aria-hidden="true" />
+                        <span className="text-xs text-amber-600">Internal / no DPP</span>
                       )}
-                      <span className="truncate" title={name || undefined}>
-                        {name || '—'}
-                      </span>
+                    </div>
+
+                    {/* Certificates (uploaded PDFs) */}
+                    <div className="border-r border-black/10 px-3 py-3 text-xs">
+                      {!cert ? (
+                        <span className="text-ink-muted">—</span>
+                      ) : cert.hasPublished ? (
+                        <span className="text-green-700">Published</span>
+                      ) : (
+                        <span className="text-ink-muted">Unpublished</span>
+                      )}
+                    </div>
+
+                    {/* Visible */}
+                    <div className="px-3 py-3">
+                      <EditableVisibilityBadge value={r.visibility ?? 'public'} onChange={() => {}} canEdit={false} />
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* ── Standard view (edit mode or plain read-only) ───────────────── */
+          <div className="mt-3 overflow-x-auto">
+            <div className="min-w-[1040px]">
+              <div
+                className={`grid ${COLS} border-b border-black/10 text-xs font-medium uppercase tracking-wide text-ink-muted`}
+              >
+                <span className="border-r border-black/10 px-4 py-2">BOM ID</span>
+                <span className="border-r border-black/10 px-4 py-2">Name</span>
+                <span className="border-r border-black/10 px-3 py-2">DPP source</span>
+                <span className="border-r border-black/10 px-3 py-2 text-right">Quantity</span>
+                <span className="border-r border-black/10 px-3 py-2">Unit</span>
+                <span className="border-r border-black/10 px-3 py-2">Role</span>
+                <span className="border-r border-black/10 px-3 py-2">Visible</span>
+                <span className="px-3 py-2" />
+              </div>
 
-                  <div className="min-w-0 border-r border-black/10 px-3 py-3">
-                    {r.external_dpp_url ? (
-                      <a
-                        href={r.external_dpp_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex min-w-0 items-center gap-1 text-xs text-brand-700 hover:underline"
-                      >
-                        <ExternalLink className="h-3 w-3 shrink-0" />
-                        <span className="truncate">External DPP</span>
-                      </a>
-                    ) : r.sub_dpp_ID ? (
-                      <Link
-                        to={`/dpps/${r.sub_dpp_ID}`}
-                        className="block truncate text-xs text-brand-700 hover:underline"
-                      >
-                        Internal DPP
-                      </Link>
-                    ) : (
-                      <span className="text-xs text-amber-600">Internal / no DPP</span>
-                    )}
-                  </div>
+              {visibleRows.map((r) => {
+                const name = r.component_ID ? productName(r.component_ID) : r.component_name;
 
-                  <div className="border-r border-black/10 px-3 py-3 text-right text-sm">
-                    {r.quantity ?? '—'}
-                  </div>
+                return (
+                  <div
+                    key={r.ID}
+                    className={`grid ${COLS} items-center border-b border-black/5`}
+                  >
+                    <div className="min-w-0 border-r border-black/10 px-3 py-3">
+                      <div className="truncate font-mono text-xs text-ink-muted" title={r.ID}>
+                        {r.ID}
+                      </div>
+                      <div className="mt-1 inline-flex rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-ink-muted">
+                        Level {r.__depth + 1}
+                      </div>
+                    </div>
 
-                  <div className="border-r border-black/10 px-3 py-3 text-sm">
-                    {r.unit ?? '—'}
-                  </div>
-
-                  <div className="min-w-0 border-r border-black/10 px-3 py-3 text-sm">
-                    <span className="truncate">{r.component_role || '—'}</span>
-                  </div>
-
-                  <div className="min-w-0 border-r border-black/10 px-3 py-3">
-                    <EditableVisibilityBadge
-                      value={r.visibility ?? 'public'}
-                      onChange={() => toggleRowVisibility(r.ID)}
-                      canEdit={!readOnly && isAdvanced}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 px-3 py-3">
-                    {!readOnly && (
-                      <>
-                        {!readOnly && (
+                    <div className="min-w-0 border-r border-black/10 py-3 pl-3 pr-3 text-sm font-medium text-ink">
+                      <div className="flex min-w-0 items-center gap-1">
+                        {r.__depth > 0 && (
+                          <span
+                            className="shrink-0"
+                            style={{ width: `${r.__depth * 18}px` }}
+                            aria-hidden="true"
+                          />
+                        )}
+                        {hasChildren(r.ID) ? (
                           <button
                             type="button"
-                            onClick={() => startAddChild(r)}
-                            className="text-ink-muted hover:text-brand-700"
-                            title="Add sub-component"
+                            onClick={() => toggleCollapsed(r.ID)}
+                            className="shrink-0 rounded p-0.5 text-ink-muted hover:bg-black/5 hover:text-ink"
+                            title={collapsed.has(r.ID) ? 'Expand' : 'Collapse'}
+                            aria-expanded={!collapsed.has(r.ID)}
                           >
-                            <Plus className="h-4 w-4" />
+                            {collapsed.has(r.ID) ? (
+                              <ChevronRight className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
                           </button>
+                        ) : (
+                          <span className="w-5 shrink-0" aria-hidden="true" />
                         )}
+                        <span className="truncate" title={name || undefined}>
+                          {name || '—'}
+                        </span>
+                      </div>
+                    </div>
 
-                        <button
-                          type="button"
-                          onClick={() => startEdit(r)}
-                          className="text-ink-muted hover:text-brand-700"
-                          title="Edit"
+                    <div className="min-w-0 border-r border-black/10 px-3 py-3">
+                      {r.external_dpp_url ? (
+                        <a
+                          href={r.external_dpp_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex min-w-0 items-center gap-1 text-xs text-brand-700 hover:underline"
                         >
-                          <Pencil className="h-4 w-4" />
-                        </button>
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                          <span className="truncate">External DPP</span>
+                        </a>
+                      ) : r.sub_dpp_ID ? (
+                        <Link
+                          to={`/dpps/${r.sub_dpp_ID}`}
+                          className="block truncate text-xs text-brand-700 hover:underline"
+                        >
+                          Internal DPP
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-amber-600">Internal / no DPP</span>
+                      )}
+                    </div>
 
-                        <button
-                          type="button"
-                          onClick={() => deleteRow(r.ID)}
-                          className="text-ink-muted hover:text-red-600"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </>
-                    )}
+                    <div className="border-r border-black/10 px-3 py-3 text-right text-sm">
+                      {r.quantity ?? '—'}
+                    </div>
+
+                    <div className="border-r border-black/10 px-3 py-3 text-sm">
+                      {r.unit ?? '—'}
+                    </div>
+
+                    <div className="min-w-0 border-r border-black/10 px-3 py-3 text-sm">
+                      <span className="truncate">{r.component_role || '—'}</span>
+                    </div>
+
+                    <div className="min-w-0 border-r border-black/10 px-3 py-3">
+                      <EditableVisibilityBadge
+                        value={r.visibility ?? 'public'}
+                        onChange={() => toggleRowVisibility(r.ID)}
+                        canEdit={!readOnly && isAdvanced}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 px-3 py-3">
+                      {!readOnly && (
+                        <>
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              onClick={() => startAddChild(r)}
+                              className="text-ink-muted hover:text-brand-700"
+                              title="Add sub-component"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => startEdit(r)}
+                            className="text-ink-muted hover:text-brand-700"
+                            title="Edit"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => deleteRow(r.ID)}
+                            className="text-ink-muted hover:text-red-600"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )
       ) : (
         <p className="mt-3 py-3 text-sm text-ink-muted">No components yet.</p>
       )}

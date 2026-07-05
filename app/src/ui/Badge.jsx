@@ -3,10 +3,10 @@ import { cn } from '@/lib/cn';
 
 const TONE_CLASSES = {
   green: 'bg-brand-100 text-brand-800',
-  blue: 'bg-blue-100 text-blue-800',
-  amber: 'bg-amber-100 text-amber-800',
-  gray: 'bg-gray-100 text-gray-700',
-  red: 'bg-red-100 text-red-700'
+  blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+  amber: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+  gray: 'bg-gray-100 text-gray-700 dark:text-ink-muted',
+  red: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
 };
 
 /**
@@ -115,7 +115,7 @@ export function EditableVisibilityBadge({ value, onChange, locked, canEdit }) {
         'inline-flex cursor-pointer items-center rounded-full px-2.5 py-0.5 text-xs font-normal ring-1 ring-inset transition-colors',
         isPublic
           ? 'bg-brand-100 text-brand-800 ring-brand-200 hover:bg-brand-200'
-          : 'bg-gray-100 text-gray-700 ring-gray-200 hover:bg-gray-200'
+          : 'bg-gray-100 text-gray-700 dark:text-ink-muted ring-gray-200 dark:ring-white/15 hover:bg-gray-200'
       )}
     >
       {isPublic ? 'Public' : 'Internal'}
