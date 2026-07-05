@@ -7,7 +7,7 @@ const credentials = require('../lib/credentials');
 const passwords = require('../lib/passwords');
 
 // Allowed per-user UI themes (mirrors the AppearanceTheme enum in db/common.cds).
-const APPEARANCE_THEMES = ['green', 'blue', 'purple'];
+const APPEARANCE_THEMES = ['green', 'blue', 'purple', 'dark'];
 
 /**
  * User-management actions for the app-managed authentication (US1.3 / US1.6).

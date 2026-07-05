@@ -122,6 +122,7 @@ type AppearanceTheme : String(20) enum {
   green;
   blue;
   purple;
+  dark;
 }
 
 type BusinessPartnerRole : String(24) enum {
