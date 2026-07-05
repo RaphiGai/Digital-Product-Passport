@@ -152,6 +152,11 @@ entity ProductBOMs : identified, audited {
   component_fibre_composition : String(500);
   quantity         : Decimal(10, 3);
   unit             : String(8);
+  // Consumer visibility of this line's quantity/unit ('1.5 kg'). Default 'internal' —
+  // component amounts are often recipe/BOM IP, so they are hidden on the public materials
+  // tree unless a company_advanced user opts the line into 'public'. Display-only: the
+  // quantity is always used by the CO2/recycled aggregation regardless of this flag.
+  quantity_visibility : Visibility default 'internal';
   component_role   : String(60);
   is_mandatory     : Boolean default true;
   sub_dpp          : Association to DPPs;   // internal DPP of the component (own data)

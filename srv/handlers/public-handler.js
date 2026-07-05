@@ -60,8 +60,10 @@ async function expandBomTree(variantId, productsById, bomsByParent, overrides = 
       brand: componentProduct?.brand || null,
       category: componentProduct?.category || e.component_category || null,
       fibre_composition: componentProduct?.fibre_composition || e.component_fibre_composition || null,
-      quantity: e.quantity,
-      unit: e.unit,
+      // Quantity/unit are shown on the consumer view only when the line is opted into
+      // 'public' (default 'internal'). Aggregation is unaffected (uses e.quantity directly).
+      quantity: e.quantity_visibility === 'public' ? e.quantity : null,
+      unit: e.quantity_visibility === 'public' ? e.unit : null,
       role: e.component_role,
       sub_dpp: null,
       external_dpp_url: e.external_dpp_url || null,

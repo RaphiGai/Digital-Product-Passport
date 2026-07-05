@@ -37,8 +37,12 @@ describe('Product BOM (Products + ProductBOMs)', () => {
 describe('Public consumer DTO with recursive BOM tree', () => {
   test('seeded batch-level DPP exposes nested BOM + aggregation via QR token', async () => {
     const token = tokens.generate();
-    const { DPPs } = cds.entities('dpp');
+    const { DPPs, ProductBOMs } = cds.entities('dpp');
     await UPDATE(DPPs).set({ qr_token: token }).where({ ID: 'dpp-12345' });
+    // Component amounts default to 'internal' (hidden). Opt the cotton line into 'public'
+    // so the consumer DTO exposes its quantity/unit (see bom-quantity-visibility.test.js);
+    // aggregation below is independent of this display-only flag.
+    await UPDATE(ProductBOMs).set({ quantity_visibility: 'public' }).where({ ID: 'bom-tshirt-cotton' });
 
     const { data } = await axios.get(`/public/dpp/${token}`);
 
