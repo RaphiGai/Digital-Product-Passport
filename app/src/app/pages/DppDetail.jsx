@@ -682,94 +682,92 @@ export function DppDetail() {
 
   function handleExportVersionHistory(format = 'xlsx') {
     const currentVersion = dpp.current_version;
+    const sorted = [...versions].sort((a, b) => a.version_number - b.version_number);
+
     const rowStatus = (v) => {
       if (v.source === 'approve') return 'Approval snapshot';
       if (v.version_number === currentVersion)
         return dpp.status === 'archived' ? 'Archived' : 'Live';
       return 'Superseded';
     };
-    const sorted = [...versions].sort((a, b) => a.version_number - b.version_number);
 
+    // Pre-parse all snapshot JSON once so field-comparison rows don't re-parse per cell
+    const snaps = sorted.map((v) => {
+      try { return v.snapshot_data ? JSON.parse(v.snapshot_data) : {}; } catch { return {}; }
+    });
+
+    // Column label per version: "v1", "v2 (approval)", etc.
+    const vCols = sorted.map((v) => `v${v.version_number}${v.source === 'approve' ? ' (approval)' : ''}`);
+
+    // Build a wide row: { Field: label, v1: val, v2: val, … }
+    const wide = (field, fn) => {
+      const row = { Field: field };
+      sorted.forEach((v, i) => { row[vCols[i]] = fn(v, snaps[i]) ?? ''; });
+      return row;
+    };
+
+    // "Who did it" — derived from version records (DPPs has no _by fields)
+    const publishVers = sorted.filter((v) => v.source !== 'approve');
+    const approveVers = sorted.filter((v) => v.source === 'approve');
+    const lastPublish = publishVers[publishVers.length - 1];
+    const lastApprove = approveVers[approveVers.length - 1];
+
+    // ── Sheet 1: Passport ───────────────────────────────────────────────────
     const passportRows = [
       { Field: 'Passport ID',     Value: dpp.ID ?? '' },
       { Field: 'Current version', Value: currentVersion != null ? `v${currentVersion}` : '' },
       { Field: 'Status',          Value: dpp.status ?? '' },
       { Field: 'Visibility',      Value: dpp.visibility ?? '' },
       { Field: 'Approved at',     Value: fmtDate(dpp.approved_at) ?? '' },
+      ...(lastApprove?.changed_by?.display_name
+        ? [{ Field: 'Approved by', Value: lastApprove.changed_by.display_name }] : []),
       { Field: 'Published at',    Value: fmtDate(dpp.published_at) ?? '' },
+      ...(lastPublish?.changed_by?.display_name
+        ? [{ Field: 'Published by', Value: lastPublish.changed_by.display_name }] : []),
       { Field: 'Archived at',     Value: fmtDate(dpp.archived_at) ?? '' },
-      { Field: 'Total publishes', Value: String(sorted.filter((v) => v.source !== 'approve').length) },
+      { Field: 'Total publishes', Value: String(publishVers.length) },
     ];
 
-    const summaryRows = sorted.map((v) => ({
-      'Version':       `v${v.version_number}`,
-      'Status':        rowStatus(v),
-      'Event Type':    v.source === 'approve' ? 'Approval snapshot' : 'Publish',
-      'Event Date':    fmtDate(v.snapshot_date) ?? '',
-      'Change Reason': v.change_reason ?? '',
-      'Changed By':    v.changed_by?.display_name ?? '',
-      'Content Hash':  v.content_hash ?? '',
-    }));
+    // ── Sheet 2: Version Timeline (wide — one column per version) ───────────
+    const timelineRows = [
+      wide('Status',     (v)    => rowStatus(v)),
+      wide('Event type', (v)    => v.source === 'approve' ? 'Approval' : 'Publish'),
+      wide('Event date', (v)    => fmtDate(v.snapshot_date)),
+      wide('Visibility', (v, s) => s?.dpp?.visibility),
+      wide('Changed by', (v)    => v.changed_by?.display_name),
+    ];
 
-    const snapshotRows = sorted.map((v) => {
-      let snap = null;
-      try { snap = v.snapshot_data ? JSON.parse(v.snapshot_data) : null; } catch { snap = null; }
-      const p = snap?.product ?? {};
-      const va = snap?.variant ?? {};
-      const b = snap?.batch ?? {};
-      const it = snap?.item ?? {};
-      return {
-        'Version':                   `v${v.version_number}`,
-        'Status':                    rowStatus(v),
-        'Event Date':                fmtDate(v.snapshot_date) ?? '',
-        'DPP Type':                  snap?.dpp?.dpp_type ?? '',
-        'Visibility at Event':       snap?.dpp?.visibility ?? '',
-        'Product Name':              p.name ?? '',
-        'Brand':                     p.brand ?? '',
-        'Category':                  p.category ?? '',
-        'GTIN':                      p.gtin ?? '',
-        'Country of Origin':         p.country_of_origin ?? '',
-        'ESPR Compliance':           p.espr_compliance ?? '',
-        'Fibre Composition':         p.fibre_composition ?? '',
-        'Durability Score':          p.durability_score ?? '',
-        'Repairability Score':       p.repairability_score ?? '',
-        'Variant SKU':               va.sku ?? '',
-        'Colour':                    va.color ?? '',
-        'Size':                      va.size ?? '',
-        'Batch Number':              b.batch_number ?? '',
-        'Production Date':           fmtDate(b.production_date) ?? '',
-        'Country of Origin (Batch)': b.country_of_origin ?? '',
-        'CO₂ Footprint (kg)':        b.co2_footprint_kg ?? '',
-        'Recycled Content (%)':      b.recycled_content_pct ?? '',
-        'Serial Number':             it.serial_number ?? '',
-        'UPI':                       it.upi ?? '',
-      };
-    });
+    // ── Sheet 3: Field Comparison (wide — one column per version) ───────────
+    const fieldRows = [
+      wide('Product Name',              (v, s) => s?.product?.name),
+      wide('Brand',                     (v, s) => s?.product?.brand),
+      wide('Category',                  (v, s) => s?.product?.category),
+      wide('ESPR Compliance',           (v, s) => s?.product?.espr_compliance),
+      wide('Fibre Composition',         (v, s) => s?.product?.fibre_composition),
+      wide('Country of Origin',         (v, s) => s?.product?.country_of_origin),
+      wide('Durability Score',          (v, s) => s?.product?.durability_score),
+      wide('Repairability Score',       (v, s) => s?.product?.repairability_score),
+      wide('Colour',                    (v, s) => s?.variant?.color),
+      wide('Size',                      (v, s) => s?.variant?.size),
+      wide('CO₂ Footprint (kg)',        (v, s) => s?.batch?.co2_footprint_kg),
+      wide('Recycled Content (%)',      (v, s) => s?.batch?.recycled_content_pct),
+      wide('Production Stage',          (v, s) => s?.batch?.production_stage),
+      wide('Country of Origin (Batch)', (v, s) => s?.batch?.country_of_origin),
+      wide('Serial Number',             (v, s) => s?.item?.serial_number),
+      wide('UPI',                       (v, s) => s?.item?.upi),
+    ];
 
-    const bomRows = sorted.flatMap((v) => {
-      let snap = null;
-      try { snap = v.snapshot_data ? JSON.parse(v.snapshot_data) : null; } catch { snap = null; }
-      return (snap?.bom ?? []).map((line) => ({
-        'Version':                 `v${v.version_number}`,
-        'Component Name':          line.component_name ?? '',
-        'Component Category':      line.component_category ?? '',
-        'Fibre Composition':       line.component_fibre_composition ?? '',
-        'Quantity':                line.quantity ?? '',
-        'Unit':                    line.unit ?? '',
-        'Role':                    line.component_role ?? '',
-        'External CO₂ (per unit)': line.ext_co2_footprint ?? '',
-        'External Recycled (%)':   line.ext_recycled_content_pct ?? '',
-        'Mandatory':               line.is_mandatory ? 'Yes' : 'No',
-      }));
-    });
+    // ── Filename: "Product Name version history YYYY-MM-DD HH-MM" ───────────
+    const now = new Date();
+    const datePart = now.toISOString().slice(0, 10);
+    const timePart = now.toTimeString().slice(0, 5).replace(':', '-');
+    const histFilename = `${product?.name ?? dpp.ID} version history ${datePart} ${timePart}`;
 
-    const histFilename = `dpp-version-history-${(product?.name ?? dpp.ID).replace(/\s+/g, '-').toLowerCase()}`;
     exportData(
       [
-        { name: 'Passport',       rows: passportRows },
-        ...(summaryRows.length  ? [{ name: 'Version Summary',  rows: summaryRows  }] : []),
-        ...(snapshotRows.length ? [{ name: 'Snapshot Details', rows: snapshotRows }] : []),
-        ...(bomRows.length      ? [{ name: 'BOM at Publish',   rows: bomRows      }] : []),
+        { name: 'Passport',          rows: passportRows },
+        ...(sorted.length ? [{ name: 'Version Timeline', rows: timelineRows }] : []),
+        ...(sorted.length ? [{ name: 'Field Comparison', rows: fieldRows    }] : []),
       ],
       histFilename,
       format

@@ -14,8 +14,8 @@ import {
   Settings,
   FileUp,
   Activity,
-  ChevronLeft, // Added for collapse button
-  Menu        // Added for expand button
+  ChevronLeft,
+  Menu
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useMe } from '@/auth/useMe';

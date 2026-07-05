@@ -1,12 +1,11 @@
 import { useState, useRef, useMemo, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { Upload, X, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Upload, X, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, Clock } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/ui/Button';
 import { callUnboundAction } from '@/api/client';
 import { parseTemplateSheet, getPreviewColumns } from '@/lib/importTemplates';
-import { saveImportEntry } from '@/lib/importHistory';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -62,23 +61,24 @@ function IssueTag({ severity }) {
  *   onImported?: () => void
  * }} props
  */
-export function ImportWizard({ type, label, size = 'md', onImported }) {
-  const [open, setOpen]           = useState(false);
-  const [step, setStep]           = useState('upload'); // upload | preview | done
-  const [rows, setRows]           = useState([]);
+export function ImportWizard({ type, label, size = 'md', onImported, autoOpen = false, onClose }) {
+  const [open, setOpen]             = useState(autoOpen);
+  const [step, setStep]             = useState('upload'); // upload | preview | done
+  const [rows, setRows]             = useState([]);
+  const [fileName, setFileName]     = useState('');
   const [parseError, setParseError] = useState(null);
-  const [issues, setIssues]       = useState([]);
-  const [validated, setValidated] = useState(false);
-  const [result, setResult]       = useState(null);
-  const [busy, setBusy]           = useState(false);
-  const fileRef                   = useRef(null);
-  const qc                        = useQueryClient();
+  const [issues, setIssues]         = useState([]);
+  const [validated, setValidated]   = useState(false);
+  const [result, setResult]         = useState(null);
+  const [busy, setBusy]             = useState(false);
+  const fileRef                     = useRef(null);
 
   const displayLabel = label ?? `Import ${TYPE_LABEL[type] ?? type}`;
 
   function reset() {
     setStep('upload');
     setRows([]);
+    setFileName('');
     setParseError(null);
     setIssues([]);
     setValidated(false);
@@ -90,6 +90,7 @@ export function ImportWizard({ type, label, size = 'md', onImported }) {
   function close() {
     setOpen(false);
     reset();
+    onClose?.();
   }
 
   // ── File parsing ──────────────────────────────────────────────────────
@@ -99,6 +100,7 @@ export function ImportWizard({ type, label, size = 'md', onImported }) {
     setParseError(null);
     setIssues([]);
     setValidated(false);
+    setFileName(file.name ?? '');
     try {
       const ab = await file.arrayBuffer();
       const wb = XLSX.read(ab, { type: 'array' });
@@ -150,37 +152,24 @@ export function ImportWizard({ type, label, size = 'md', onImported }) {
     }
   }, [type, rows]);
 
-  const commitImport = useCallback(async () => {
+  const stageForReview = useCallback(async () => {
     setBusy(true);
     try {
-      const res = await callUnboundAction(ACTION[type], {
+      const res = await callUnboundAction('stageImport', {
+        entity_type: type,
         rows: JSON.stringify(rows),
-        dryRun: false,
+        file_name: fileName,
       });
       const parsedIssues = typeof res.errors === 'string' ? JSON.parse(res.errors) : (res.errors ?? []);
-      setResult({ ...res, parsedIssues });
+      setResult({ id: res.id, total: res.total, created: res.valid, skipped: res.skipped, parsedIssues });
       setStep('done');
-      if (INVALIDATE[type]) {
-        qc.invalidateQueries({ queryKey: [INVALIDATE[type]] });
-      }
-      const errorCount = parsedIssues.filter((i) => i.severity === 'error').length;
-      saveImportEntry({
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        category: type,
-        total: res.total ?? rows.length,
-        created: res.created ?? 0,
-        skipped: res.skipped ?? 0,
-        errorCount,
-        status: (res.created ?? 0) === 0 ? 'failed' : errorCount > 0 ? 'partial' : 'success',
-      });
       onImported?.();
     } catch (e) {
       setIssues([{ row: 0, field: '', message: e.message, severity: 'error' }]);
     } finally {
       setBusy(false);
     }
-  }, [type, rows, qc, onImported]);
+  }, [type, rows, fileName, onImported]);
 
   // ── Derived values ────────────────────────────────────────────────────
 
@@ -225,7 +214,7 @@ export function ImportWizard({ type, label, size = 'md', onImported }) {
     <>
       {triggerBtn}
       <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-6">
-        <div className="w-full max-w-3xl rounded-xl bg-white shadow-2xl">
+        <div className="w-full max-w-3xl rounded-xl bg-card shadow-2xl">
 
           {/* Header */}
           <div className="flex items-center justify-between border-b border-black/8 px-6 py-4">
@@ -244,7 +233,7 @@ export function ImportWizard({ type, label, size = 'md', onImported }) {
                 </p>
               )}
               {step === 'done' && (
-                <p className="mt-0.5 text-xs text-ink-muted">Import complete.</p>
+                <p className="mt-0.5 text-xs text-ink-muted">Staged for review.</p>
               )}
             </div>
             <button
@@ -411,14 +400,14 @@ export function ImportWizard({ type, label, size = 'md', onImported }) {
             {/* ── Step: done ── */}
             {step === 'done' && result && (
               <div className="py-4 text-center">
-                <CheckCircle2 className="mx-auto h-10 w-10 text-green-500" />
-                <h3 className="mt-3 text-base font-semibold text-ink">Import complete</h3>
+                <Clock className="mx-auto h-10 w-10 text-brand-600" />
+                <h3 className="mt-3 text-base font-semibold text-ink">Submitted for review</h3>
                 <p className="mt-1 text-sm text-ink-muted">
-                  <span className="font-medium text-green-700">{result.created}</span> record{result.created !== 1 ? 's' : ''} created
+                  <span className="font-medium text-green-700">{result.created}</span> valid row{result.created !== 1 ? 's' : ''} staged
                   {result.skipped > 0 && (
-                    <>, <span className="font-medium text-amber-700">{result.skipped}</span> skipped</>
+                    <>, <span className="font-medium text-amber-700">{result.skipped}</span> skipped due to errors</>
                   )}
-                  {' '}out of <span className="font-medium">{result.total}</span> total rows.
+                  {'. '}A company advanced user can approve or reject on the Import approvals page.
                 </p>
                 {result.parsedIssues?.length > 0 && (
                   <div className="mt-4 max-h-40 overflow-y-auto rounded-lg border border-black/8 text-left">
@@ -437,6 +426,15 @@ export function ImportWizard({ type, label, size = 'md', onImported }) {
                     ))}
                   </div>
                 )}
+                <div className="mt-5">
+                  <Link
+                    to="/import"
+                    className="text-sm font-medium text-brand-600 hover:underline"
+                    onClick={close}
+                  >
+                    View import approvals →
+                  </Link>
+                </div>
               </div>
             )}
           </div>
@@ -467,14 +465,14 @@ export function ImportWizard({ type, label, size = 'md', onImported }) {
 
               {step === 'preview' && validated && (
                 <Button
-                  onClick={commitImport}
+                  onClick={stageForReview}
                   disabled={busy || validCount === 0}
                 >
                   {busy
-                    ? 'Importing…'
+                    ? 'Submitting…'
                     : validCount === 0
                       ? 'No valid rows'
-                      : `Import ${validCount} row${validCount !== 1 ? 's' : ''}`
+                      : `Submit ${validCount} row${validCount !== 1 ? 's' : ''} for review`
                   }
                 </Button>
               )}
@@ -529,18 +527,20 @@ export function ImportDropdown({ options, label = 'Import', size = 'md', onImpor
 
   return (
     <div ref={ref} className="relative">
-      {/* Wizard modal — rendered when a type is selected */}
+      {/* Wizard modal — rendered when a type is selected, auto-opens immediately */}
       {activeType && (
         <ImportWizard
           key={activeType}
           type={activeType}
           label={options.find((o) => o.key === activeType)?.label ?? label}
           size={size}
-          onImported={() => { setActiveType(null); onImported?.(); }}
+          autoOpen
+          onImported={onImported}
+          onClose={() => setActiveType(null)}
         />
       )}
 
-      {/* Trigger button — hidden while a wizard is active */}
+      {/* Trigger button — shown only when no wizard is active */}
       {!activeType && (
         options.length === 1 ? (
           <button
@@ -562,7 +562,7 @@ export function ImportDropdown({ options, label = 'Import', size = 'md', onImpor
             </button>
 
             {open && (
-              <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-lg border border-black/10 bg-white py-1 shadow-lg">
+              <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-lg border border-black/10 bg-card py-1 shadow-lg">
                 {options.map((opt) => (
                   <button
                     key={opt.key}
