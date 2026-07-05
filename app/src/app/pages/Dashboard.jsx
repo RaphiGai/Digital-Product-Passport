@@ -120,7 +120,7 @@ const warnings = useQuery({
         label="Warnings"
         value={warnings.data ?? '—'}
         hint="Active compliance issues"
-        to="/compliance/warnings"
+        to="/compliance"
       />
       </div>
 
