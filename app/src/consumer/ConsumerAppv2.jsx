@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ShieldCheck,
   Leaf,
@@ -22,11 +22,10 @@ import {
   Copy,
   Printer,
   ShoppingBag,
-  Megaphone, ChevronRight, CheckCircle2
+  Megaphone,
+  ChevronDown
 } from 'lucide-react';
 import { MARKETING_LINK_LABEL } from '@/lib/fieldCatalogue';
-
-
 
 /**
  * Public consumer view (no auth). Opened from a QR scan at /public/dpp/:token.
@@ -257,36 +256,19 @@ function Passport({ dpp }) {
   const story = p.storytelling?.length > 0 ? p.storytelling : null;
   const marketing = dpp.marketing ?? [];
 
-  const steps = useMemo(
-    () => [
-      {
-        id: 'intro',
-        title: 'Meet the product',
-        subtitle: 'Start your product journey',
-        icon: ShoppingBag,
-        content: (
-          <JourneyPanel title="Product identity" icon={ShoppingBag}>
-            <KeyVal label="Brand" value={p.brand} />
-            <KeyVal label="Category" value={p.category} />
-            <KeyVal label="Model" value={p.model} />
-            <KeyVal label="Colour" value={v.color} />
-            <KeyVal label="Size" value={v.size} />
-            <KeyVal label="SKU" value={v.sku} />
-            <KeyVal label="Description" value={p.description} />
-          </JourneyPanel>
-        )
-      },
-      {
-        id: 'story',
-        title: 'Discover the story',
-        subtitle: 'Why this product exists',
-        icon: Sparkles,
-        content: (
-          <JourneyPanel title="Product story" icon={Sparkles}>
+  return (
+    <div className="min-h-screen bg-canvas">
+      <Hero product={p} variant={v} espr={p.espr_compliance} />
+
+      <main className="mx-auto max-w-5xl px-4 pb-12">
+        <Stats co2={co2} recycled={recycled} origin={origin} />
+
+        <div className="mt-6 space-y-3">
+          <AccordionSection icon={Sparkles} title="Product story" defaultOpen>
             {story ? (
               <div className="grid gap-3 md:grid-cols-2">
                 {story.map((s, i) => (
-                  <div key={i} className="rounded-2xl bg-[#f0f8ed] p-4">
+                  <div key={i} className="rounded-2xl bg-brand-50/60 p-4">
                     {s.title && <p className="text-sm font-semibold text-ink">{s.title}</p>}
                     {s.body && <p className="mt-1 text-sm leading-relaxed text-ink-muted">{s.body}</p>}
                   </div>
@@ -295,27 +277,19 @@ function Passport({ dpp }) {
             ) : (
               <p className="text-sm text-ink-muted">No product story available.</p>
             )}
-          </JourneyPanel>
-        )
-      },
-      {
-        id: 'impact',
-        title: 'Check the impact',
-        subtitle: 'CO₂, recycled content and origin',
-        icon: Leaf,
-        content: (
-          <JourneyPanel title="Sustainability score" icon={Leaf}>
-            <Stats co2={co2} recycled={recycled} origin={origin} />
-          </JourneyPanel>
-        )
-      },
-      {
-        id: 'materials',
-        title: 'Inspect materials',
-        subtitle: 'Composition and substances',
-        icon: Layers,
-        content: (
-          <JourneyPanel title="Materials & composition" icon={Layers}>
+          </AccordionSection>
+
+          <AccordionSection icon={ShoppingBag} title="Product details" defaultOpen>
+            <KeyVal label="Brand" value={p.brand} />
+            <KeyVal label="Category" value={p.category} />
+            <KeyVal label="Model" value={p.model} />
+            <KeyVal label="Colour" value={v.color} />
+            <KeyVal label="Size" value={v.size} />
+            <KeyVal label="SKU" value={v.sku} />
+            <KeyVal label="Description" value={p.description} />
+          </AccordionSection>
+
+          <AccordionSection icon={Layers} title="Materials & composition">
             <KeyVal label="Fibre composition" value={p.fibre_composition} />
             <KeyVal label="Substances of concern" value={p.substances_of_concern} />
             <KeyVal label="Country of origin" value={origin} />
@@ -323,204 +297,75 @@ function Passport({ dpp }) {
             {b.production_date && <KeyVal label="Produced" value={deDate(b.production_date)} />}
 
             {dpp.materials?.length > 0 && (
-              <div className="mt-5 border-t border-black/5 pt-5">
+              <div className="mt-4 border-t border-black/5 pt-4">
                 <Materials items={dpp.materials} />
               </div>
             )}
-          </JourneyPanel>
-        )
-      },
-      {
-        id: 'care',
-        title: 'Extend lifetime',
-        subtitle: 'Care, repair and reuse',
-        icon: Repeat,
-        content: (
-          <JourneyPanel title="Care, repair, reuse & end-of-life" icon={Repeat}>
-            {hasCareInfo(p) ? (
+          </AccordionSection>
+
+          {(p.durability_score != null || p.repairability_score != null) && (
+            <AccordionSection icon={Gauge} title="Durability & repairability">
+              <ScoreBar label="Durability" score={p.durability_score} />
+              <ScoreBar label="Repairability" score={p.repairability_score} />
+            </AccordionSection>
+          )}
+
+          {hasCareInfo(p) && (
+            <AccordionSection icon={Repeat} title="Care, repair, reuse & end-of-life">
               <div className="grid gap-4 md:grid-cols-2">
                 <CareBlock icon={Droplets} label="Care & washing" text={p.care_instructions} videoUrl={p.care_video_url} productsUrl={p.care_products_url} />
                 <CareBlock icon={Wrench} label="Repair" text={p.repair_instructions} videoUrl={p.repair_video_url} productsUrl={p.repair_products_url} />
                 <CareBlock icon={Repeat} label="Reuse" text={p.reuse_instructions} videoUrl={p.reuse_video_url} productsUrl={p.reuse_products_url} />
                 <CareBlock icon={Trash2} label="End-of-life" text={p.disposal_instructions} videoUrl={p.disposal_video_url} productsUrl={p.disposal_products_url} />
               </div>
-            ) : (
-              <p className="text-sm text-ink-muted">No care information available.</p>
-            )}
-          </JourneyPanel>
-        )
-      },
-      {
-        id: 'proof',
-        title: 'Verify proof',
-        subtitle: 'Documents and authenticity',
-        icon: FileCheck,
-        content: (
-          <JourneyPanel title="Proof & authenticity" icon={FileCheck}>
-            {dpp.documents?.length > 0 && (
-              <div className="mb-5">
-                <h3 className="mb-3 text-sm font-semibold text-ink">Certificates & documents</h3>
-                <ul className="space-y-2">
-                  {dpp.documents.map((d) => (
-                    <li key={d.id}>
-                      <a
-                        href={d.download_url}
-                        download={d.file_name || true}
-                        className="flex items-center justify-between gap-2 rounded-xl border border-black/5 bg-white px-3 py-2.5 text-sm font-medium text-ink transition hover:bg-gray-50"
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <Download className="h-4 w-4 shrink-0 text-ink-muted" />
-                          <span className="truncate">{d.title || d.file_name}</span>
-                        </span>
-                        <span className="shrink-0 text-xs text-ink-muted">
-                          {[DOC_TYPE_LABEL[d.doc_type] ?? d.doc_type, fmtSize(d.file_size)].filter(Boolean).join(' · ')}
-                        </span>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            </AccordionSection>
+          )}
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <Identification ident={dpp.identification} product={dpp.product} />
-              <Authenticity dpp={dpp} />
-            </div>
-          </JourneyPanel>
-        )
-      },
-      {
-        id: 'discover',
-        title: 'Unlock extras',
-        subtitle: 'Brand content and services',
-        icon: Megaphone,
-        content: (
-          <JourneyPanel title="Discover more" icon={Megaphone}>
-            {marketing.length > 0 ? (
+          {dpp.documents?.length > 0 && (
+            <AccordionSection icon={FileCheck} title="Certificates & documents">
+              <ul className="space-y-2">
+                {dpp.documents.map((d) => (
+                  <li key={d.id}>
+                    <a
+                      href={d.download_url}
+                      download={d.file_name || true}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition hover:bg-gray-50"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Download className="h-4 w-4 shrink-0 text-ink-muted" />
+                        <span className="truncate">{d.title || d.file_name}</span>
+                      </span>
+                      <span className="shrink-0 text-xs text-ink-muted">
+                        {[DOC_TYPE_LABEL[d.doc_type] ?? d.doc_type, fmtSize(d.file_size)].filter(Boolean).join(' · ')}
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </AccordionSection>
+          )}
+
+          <AccordionSection icon={Fingerprint} title="Identification">
+            <Identification ident={dpp.identification} product={dpp.product} />
+          </AccordionSection>
+
+          <AccordionSection icon={ShieldCheck} title="Authenticity">
+            <Authenticity dpp={dpp} />
+          </AccordionSection>
+
+          {marketing.length > 0 && (
+            <AccordionSection icon={Megaphone} title="Discover more">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {marketing.map((m, i) => (
                   <MarketingCard key={i} link={m} />
                 ))}
               </div>
-            ) : (
-              <p className="text-sm text-ink-muted">No marketing content available.</p>
-            )}
-          </JourneyPanel>
-        )
-      },
-      {
-        id: 'share',
-        title: 'Complete journey',
-        subtitle: 'Save or share the passport',
-        icon: Share2,
-        content: (
-          <JourneyPanel title="Share passport" icon={Share2}>
+            </AccordionSection>
+          )}
+
+          <AccordionSection icon={Share2} title="Share passport">
             <ShareActions token={token} />
-          </JourneyPanel>
-        )
-      }
-    ],
-    [dpp, p, v, b, co2, recycled, origin, story, marketing, token]
-  );
-
-  const [activeIndex, setActiveIndex] = useState(0);
-  const activeStep = steps[activeIndex];
-  const progress = Math.round(((activeIndex + 1) / steps.length) * 100);
-
-  return (
-    <div className="min-h-screen bg-[#f7faf5]">
-      <Hero product={p} variant={v} espr={p.espr_compliance} />
-
-      <main className="mx-auto max-w-6xl px-4 pb-12">
-        <section className="-mt-6 rounded-[2rem] bg-white p-4 shadow-xl md:p-6">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-brand-700">
-                Investigation journey
-              </p>
-              <h2 className="mt-1 text-xl font-semibold text-ink md:text-2xl">
-                Explore this product step by step
-              </h2>
-            </div>
-
-            <div className="hidden rounded-full bg-[#eef8ea] px-4 py-2 text-sm font-semibold text-brand-700 md:block">
-              {progress}% complete
-            </div>
-          </div>
-
-          <div className="h-2 overflow-hidden rounded-full bg-[#edf2e8]">
-            <div
-              className="h-full rounded-full bg-brand-600 transition-all duration-500 ease-out"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-
-          <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
-            {steps.map((step, index) => {
-              const Icon = step.icon;
-              const active = index === activeIndex;
-              const done = index < activeIndex;
-
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  onClick={() => setActiveIndex(index)}
-                  className={[
-                    'group relative flex min-w-[180px] items-center gap-3 rounded-2xl border p-3 text-left transition-all duration-300',
-                    active
-                      ? 'scale-[1.02] border-brand-600 bg-[#eef8ea] shadow-md'
-                      : done
-                        ? 'border-brand-100 bg-white'
-                        : 'border-black/5 bg-white hover:-translate-y-0.5 hover:shadow-sm'
-                  ].join(' ')}
-                >
-                  <span
-                    className={[
-                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition',
-                      active
-                        ? 'bg-brand-600 text-white'
-                        : done
-                          ? 'bg-brand-100 text-brand-700'
-                          : 'bg-[#f3f5f0] text-ink-muted'
-                    ].join(' ')}
-                  >
-                    {done ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-                  </span>
-
-                  <span>
-                    <span className="block text-sm font-semibold text-ink">{step.title}</span>
-                    <span className="block text-xs text-ink-muted">{step.subtitle}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="mt-6 animate-[fadeIn_0.35s_ease-out]">
-          {activeStep.content}
-        </section>
-
-        <div className="mt-6 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => setActiveIndex((i) => Math.max(0, i - 1))}
-            disabled={activeIndex === 0}
-            className="rounded-full border border-black/10 bg-white px-5 py-2 text-sm font-medium text-ink shadow-sm transition hover:bg-gray-50 disabled:opacity-40"
-          >
-            Back
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveIndex((i) => Math.min(steps.length - 1, i + 1))}
-            disabled={activeIndex === steps.length - 1}
-            className="inline-flex items-center gap-2 rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:opacity-40"
-          >
-            Next step
-            <ChevronRight className="h-4 w-4" />
-          </button>
+          </AccordionSection>
         </div>
 
         <footer className="mt-10 text-center text-xs text-ink-muted">
@@ -531,22 +376,35 @@ function Passport({ dpp }) {
     </div>
   );
 }
-function JourneyPanel({ icon: Icon, title, children }) {
-  return (
-    <section className="rounded-[2rem] border border-black/5 bg-white p-5 shadow-sm md:p-8">
-      <div className="mb-5 flex items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#eef8ea] text-brand-700">
-          <Icon className="h-5 w-5" />
-        </span>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-brand-700">
-            Investigation step
-          </p>
-          <h2 className="text-2xl font-semibold text-ink">{title}</h2>
-        </div>
-      </div>
+function AccordionSection({ icon: Icon, title, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
 
-      {children}
+  return (
+    <section className="overflow-hidden rounded-3xl border border-black/5 bg-card shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+      >
+        <span className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+            <Icon className="h-4 w-4" />
+          </span>
+          <span className="text-base font-semibold text-ink">{title}</span>
+        </span>
+
+        <ChevronDown
+          className={`h-5 w-5 shrink-0 text-ink-muted transition-transform ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+
+      {open && (
+        <div className="border-t border-black/5 px-5 pb-5 pt-4">
+          {children}
+        </div>
+      )}
     </section>
   );
 }
@@ -555,21 +413,21 @@ function Hero({ product, variant, espr }) {
   const image = variant.image_data || variant.image_url;
 
   return (
-    <header className="relative overflow-hidden bg-gradient-to-br from-[#edf8e9] via-[#f7fbf3] to-white">
+    <header className="relative overflow-hidden bg-gradient-to-br from-[#eaf7e7] via-[#dff2d8] to-[#f6fbf4] text-ink">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.18),transparent_35%)]" />
 
-      <div className="relative mx-auto grid max-w-6xl gap-8 px-4 pb-16 pt-8 md:grid-cols-[1fr_0.9fr] md:items-center md:pb-20 md:pt-14">
+      <div className="relative mx-auto grid max-w-6xl gap-7 px-4 py-7 md:grid-cols-[1.05fr_0.95fr] md:items-center md:py-12">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-widest text-brand-700 shadow-sm">
+          <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand-700 shadow-sm">
             <ShieldCheck className="h-4 w-4" />
             Digital Product Passport
           </div>
 
-          <h1 className="mt-5 text-4xl font-semibold leading-tight text-ink md:text-6xl">
+          <h1 className="mt-5 text-3xl font-semibold leading-tight md:text-5xl">
             {product.name ?? 'Product'}
           </h1>
 
-          <p className="mt-4 max-w-xl text-base leading-relaxed text-ink-muted md:text-lg">
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink-muted md:text-base">
             {product.description ||
               [product.brand, product.category, product.model].filter(Boolean).join(' · ')}
           </p>
@@ -578,26 +436,26 @@ function Hero({ product, variant, espr }) {
             {[product.brand, product.category, product.model, variant.color, variant.size, variant.sku]
               .filter(Boolean)
               .map((x) => (
-                <span key={x} className="rounded-full bg-white px-3 py-1 text-xs font-medium text-ink shadow-sm">
+                <span key={x} className="rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-ink shadow-sm">
                   {x}
                 </span>
               ))}
           </div>
 
           {espr && (
-            <span className="mt-6 inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm">
-              <BadgeCheck className="h-4 w-4" />
+            <span className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm">
+              <BadgeCheck className="h-3.5 w-3.5" />
               {ESPR_LABEL[espr] ?? espr}
             </span>
           )}
         </div>
 
         {image && (
-          <div className="rounded-[2rem] bg-white p-3 shadow-xl transition duration-500 hover:-translate-y-1 hover:rotate-1">
+          <div className="relative">
             <img
               src={image}
               alt={product.name ?? 'Product'}
-              className="aspect-[4/3] w-full rounded-[1.5rem] object-cover md:aspect-[4/5]"
+              className="mx-auto aspect-[4/3] max-h-72 w-full rounded-[2rem] border border-white object-cover shadow-xl md:aspect-[4/5] md:max-h-[460px]"
             />
           </div>
         )}
@@ -616,85 +474,18 @@ function Stats({ co2, recycled, origin }) {
   if (!tiles.length) return null;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
+    <section className="mt-5 grid gap-3 sm:grid-cols-3">
       {tiles.map((t, i) => {
         const Icon = t.icon;
         return (
-          <div key={i} className="rounded-[1.75rem] bg-[#f7faf5] p-5">
+          <div key={i} className="rounded-3xl border border-black/5 bg-card p-5 shadow-sm">
             <Icon className="h-5 w-5 text-brand-600" />
-            <p className="mt-4 text-2xl font-semibold text-ink">{t.value}</p>
-            <p className="mt-1 text-xs font-medium uppercase tracking-widest text-ink-muted">{t.label}</p>
+            <p className="mt-3 text-xl font-semibold text-ink">{t.value}</p>
+            <p className="mt-1 text-xs uppercase tracking-wide text-ink-muted">{t.label}</p>
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function MarketingSectionCard({ icon: Icon, title, subtitle, children }) {
-  return (
-    <section className="rounded-[2rem] bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#edf8e9] text-brand-700">
-          <Icon className="h-5 w-5" />
-        </span>
-        <div>
-          <h2 className="text-lg font-semibold text-ink">{title}</h2>
-          <p className="text-sm text-ink-muted">{subtitle}</p>
-        </div>
-      </div>
-
-      <div>{children}</div>
     </section>
-  );
-}
-
-function MarketingCard({ link }) {
-  const image = link.image_data || link.image_url;
-  const href = safeHref(link.url);
-  const typeLabel = MARKETING_LINK_LABEL[link.link_type] ?? link.link_type;
-  const isVideo = link.media_type === 'video';
-
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="group overflow-hidden rounded-3xl border border-black/5 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-    >
-      {image && (
-        <div className="relative">
-          <img src={image} alt={link.title || ''} className="aspect-[16/10] w-full object-cover" />
-          {isVideo && (
-            <span className="absolute inset-0 flex items-center justify-center bg-black/20">
-              <PlayCircle className="h-11 w-11 text-white drop-shadow" />
-            </span>
-          )}
-        </div>
-      )}
-
-      <div className="p-4">
-        {typeLabel && (
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-600">
-            {typeLabel}
-          </p>
-        )}
-
-        <h3 className="mt-1 line-clamp-2 text-sm font-semibold text-ink">
-          {link.title}
-        </h3>
-
-        {link.subtitle && (
-          <p className="mt-1 line-clamp-2 text-sm text-ink-muted">
-            {link.subtitle}
-          </p>
-        )}
-
-        <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-700">
-          {isVideo ? 'Watch' : 'Open'} <ExternalLink className="h-3.5 w-3.5" />
-        </span>
-      </div>
-    </a>
   );
 }
 
@@ -710,7 +501,121 @@ function Section({ icon: Icon, title, children, className = '' }) {
   );
 }
 
+/**
+ * Image/video-only marketing tile for the side rails + mobile "Featured" block. The whole
+ * tile is the hyperlink; the title/subtitle sit as an overlay and a video adds a play
+ * badge. Falls back to a compact link row when the link has no image.
+ */
+function MarketingTile({ link }) {
+  const image = link.image_data || link.image_url;
+  const href = safeHref(link.url);
+  const isVideo = link.media_type === 'video';
 
+  if (!image) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center justify-between gap-2 rounded-lg border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-gray-50"
+      >
+        <span className="truncate">{link.title}</span>
+        <ExternalLink className="h-4 w-4 shrink-0 text-ink-muted" />
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="relative block overflow-hidden rounded-xl border border-black/5 shadow-sm transition-transform hover:-translate-y-0.5"
+    >
+      <img src={image} alt={link.title || ''} className="aspect-[4/3] w-full object-cover print:hidden" />
+      {isVideo && (
+        <span className="absolute inset-0 flex items-center justify-center bg-black/20">
+          <PlayCircle className="h-9 w-9 text-white drop-shadow" />
+        </span>
+      )}
+      {(link.title || link.subtitle) && (
+        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-3 pb-2 pt-6">
+          {link.title && <span className="block truncate text-xs font-semibold text-white">{link.title}</span>}
+          {link.subtitle && <span className="block truncate text-[11px] text-white/85">{link.subtitle}</span>}
+        </span>
+      )}
+    </a>
+  );
+}
+
+/** A desktop-only (lg+) sticky side rail of image/video marketing tiles. */
+function MarketingRail({ links }) {
+  return (
+    <aside className="hidden w-56 shrink-0 pt-8 lg:block">
+      <div className="sticky top-6 space-y-4">
+        {links.map((m, i) => (
+          <MarketingTile key={i} link={m} />
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+/**
+ * Marketing/advertising tile (US5.8). With an image or video thumbnail it renders as a
+ * media card — the thumbnail alternates left/right (`flip`) and the whole card is the
+ * hyperlink, so the consumer view doubles as a marketing surface. A video tile adds a
+ * play overlay. Without an image it falls back to the compact link row.
+ */
+function MarketingCard({ link, flip }) {
+  const image = link.image_data || link.image_url;
+  const typeLabel = MARKETING_LINK_LABEL[link.link_type] ?? link.link_type;
+  const isVideo = link.media_type === 'video';
+
+  if (!image) {
+    return (
+      <a
+        href={safeHref(link.url)}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center justify-between gap-2 rounded-lg border border-black/5 px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-gray-50"
+      >
+        <span className="min-w-0">
+          <span className="block truncate">{link.title}</span>
+          {link.subtitle && <span className="block truncate text-xs font-normal text-ink-muted">{link.subtitle}</span>}
+        </span>
+        <ExternalLink className="h-4 w-4 shrink-0 text-ink-muted" />
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={safeHref(link.url)}
+      target="_blank"
+      rel="noreferrer"
+      className={`flex items-stretch gap-4 overflow-hidden rounded-xl border border-black/5 transition-colors hover:bg-gray-50 ${flip ? 'flex-row-reverse' : 'flex-row'}`}
+    >
+      {/* Thumbnails are hidden in the printed PDF so large images don't bloat the output. */}
+      <div className="relative h-24 w-24 shrink-0 sm:h-28 sm:w-28 print:hidden">
+        <img src={image} alt={link.title} className="h-full w-full object-cover" />
+        {isVideo && (
+          <span className="absolute inset-0 flex items-center justify-center bg-black/20">
+            <PlayCircle className="h-8 w-8 text-white drop-shadow" />
+          </span>
+        )}
+      </div>
+      <div className={`flex min-w-0 flex-col justify-center py-3 ${flip ? 'pl-4' : 'pr-4'}`}>
+        <span className="text-[11px] font-medium uppercase tracking-wide text-brand-600">{typeLabel}</span>
+        <span className="mt-0.5 text-sm font-semibold text-ink">{link.title}</span>
+        {link.subtitle && <span className="mt-0.5 text-sm text-ink-muted">{link.subtitle}</span>}
+        <span className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-brand-700">
+          {isVideo ? 'Watch' : 'Discover'} <ExternalLink className="h-3.5 w-3.5" />
+        </span>
+      </div>
+    </a>
+  );
+}
 
 function KeyVal({ label, value }) {
   if (!value) return null;
