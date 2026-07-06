@@ -34,7 +34,7 @@ const isPubliclyVisible = (dpp) =>
  * apply only at the top level (the finished good's batch) → an empty map is
  * passed to recursion.
  */
-async function expandBomTree(variantId, productsById, bomsByParent, overrides = new Map(), depth = 0, visited = new Set()) {
+async function expandBomTree(variantId, productsById, bomsByParent, overrides = new Map(), depth = 0, visited = new Set(), partnersById = new Map(), supplierByProductId = new Map()) {
   if (depth > MAX_DEPTH) return [];
   if (visited.has(variantId)) return [];
   visited.add(variantId);
@@ -52,6 +52,12 @@ async function expandBomTree(variantId, productsById, bomsByParent, overrides = 
     // aggregation (aggregator.js) is deliberately NOT affected — display-only flag.
     if (e.visibility === 'internal') continue;
     const componentProduct = productsById.get(e.component_ID);
+
+    // Supplier: internal components only — derived from the component product's batch data.
+    const supplier = e.component_ID
+      ? (supplierByProductId.get(e.component_ID) ?? null)
+      : null;
+
     const node = {
       component_ID: e.component_ID,
       // Fall back to the line's free-text fields for external components (no internal product).
@@ -65,6 +71,7 @@ async function expandBomTree(variantId, productsById, bomsByParent, overrides = 
       quantity: e.quantity_visibility === 'public' ? e.quantity : null,
       unit: e.quantity_visibility === 'public' ? e.unit : null,
       role: e.component_role,
+      supplier,
       sub_dpp: null,
       external_dpp_url: e.external_dpp_url || null,
       components: [],
@@ -101,6 +108,7 @@ async function expandBomTree(variantId, productsById, bomsByParent, overrides = 
       for (const sv of subVariants) {
         const subNodes = await expandBomTree(
           sv.ID, productsById, bomsByParent, new Map(), depth + 1, new Set(visited),
+          partnersById, supplierByProductId,
         );
         if (subNodes.length) node.components.push(...subNodes);
       }
@@ -286,7 +294,7 @@ async function loadPublicDocuments(dpp) {
 }
 
 async function loadDPPContext(dpp) {
-  const { Products, ProductVariants, Batches, ProductItems, ProductBOMs, BatchComponents, ProductCategories } = cds.entities('dpp');
+  const { Products, ProductVariants, Batches, ProductItems, ProductBOMs, BatchComponents, ProductCategories, BusinessPartners } = cds.entities('dpp');
 
   const product = await SELECT.one.from(Products).where({ ID: dpp.product_ID });
 
@@ -314,13 +322,47 @@ async function loadDPPContext(dpp) {
   }
 
   const owningOrgId = product?.owning_organization_ID;
-  const [allProducts, allBoms] = await Promise.all([
+  const [allProducts, allBoms, partnerRows] = await Promise.all([
     owningOrgId
       ? SELECT.from(Products).where({ owning_organization_ID: owningOrgId })
       : SELECT.from(Products),
     SELECT.from(ProductBOMs),
+    // Load all partners regardless of org: batches and BOM edges can reference partners
+    // from any org (e.g. seed data cross-org), and this is a public consumer view.
+    SELECT.from(BusinessPartners).columns(['ID', 'name']),
   ]);
   const productsById = new Map(allProducts.map((p) => [p.ID, p]));
+
+  // Map partner ID → name for BOM supplier display.
+  const partnersById = new Map(partnerRows.map((p) => [p.ID, p.name]));
+
+  // For internal BOM components: derive supplier from the component product's batch data.
+  const supplierByProductId = new Map();
+  if (allProducts.length) {
+    const variantRows = await SELECT.from(ProductVariants)
+      .columns(['ID', 'product_ID'])
+      .where({ product_ID: { in: allProducts.map((p) => p.ID) } });
+    const variantIds = variantRows.map((v) => v.ID);
+    if (variantIds.length) {
+      const batchRows = await SELECT.from(Batches)
+        .columns(['variant_ID', 'supplier_ID'])
+        .where({ variant_ID: { in: variantIds } });
+      const variantToProduct = new Map(variantRows.map((v) => [v.ID, v.product_ID]));
+      for (const b of batchRows) {
+        if (!b.supplier_ID) continue;
+        const pid = variantToProduct.get(b.variant_ID);
+        if (pid && !supplierByProductId.has(pid)) {
+          const name = partnersById.get(b.supplier_ID);
+          if (name) supplierByProductId.set(pid, name);
+        }
+      }
+    }
+  }
+  // TEMP DIAGNOSTIC — remove after verifying supplier works
+  LOG.info('[supplier-debug] owningOrgId=%s partners=%d variantsByProduct=%d supplierMap=%o',
+    owningOrgId, partnerRows.length,
+    allProducts.length,
+    Object.fromEntries(supplierByProductId));
 
   // Resolve category codes → display names ("Textiles") so the consumer view and the
   // BOM materials tree show the human-readable category, not the raw code. The product
@@ -338,12 +380,12 @@ async function loadDPPContext(dpp) {
 
   let materialsTree = [];
   if (variant) {
-    materialsTree = await expandBomTree(variant.ID, productsById, bomsByParent, overrides);
+    materialsTree = await expandBomTree(variant.ID, productsById, bomsByParent, overrides, 0, new Set(), partnersById, supplierByProductId);
   } else {
     const variants = await SELECT.from(ProductVariants)
       .columns(['ID']).where({ product_ID: dpp.product_ID });
     for (const v of variants) {
-      const nodes = await expandBomTree(v.ID, productsById, bomsByParent, overrides);
+      const nodes = await expandBomTree(v.ID, productsById, bomsByParent, overrides, 0, new Set(), partnersById, supplierByProductId);
       if (nodes.length) { materialsTree = nodes; break; }
     }
   }

@@ -166,6 +166,7 @@ entity ProductBOMs : identified, audited {
   // per the BOM unit (per kg for g/kg lines, per piece for pcs lines).
   ext_co2_footprint        : Decimal(10, 4);
   ext_recycled_content_pct : Decimal(5, 2);
+  ext_espr_compliance : ESPRComplianceStatus;          // ESPR compliance for external components (no internal product record)
   status           : BOMStatus default 'active';
   // Consumer visibility of this component in the public materials tree.
   // 'internal' ⇒ the component (and its sub-DPP link) is omitted from the consumer view;

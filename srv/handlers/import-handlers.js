@@ -445,6 +445,18 @@ module.exports = (srv) => {
       if (recycled !== null && (recycled < 0 || recycled > 100))
         err(allIssues, i, 'recycled_content_pct', 'Recycled content must be 0–100.');
 
+      // ESPR compliance (optional, external components only).
+      const esprRaw = str(r.espr_compliance);
+      let extEspr = null;
+      if (esprRaw) {
+        if (!isExternal)
+          warn(allIssues, i, 'espr_compliance', 'ESPR compliance is only applicable to external components — ignored.');
+        else if (!ESPR_STATUSES.has(esprRaw))
+          err(allIssues, i, 'espr_compliance', `ESPR compliance must be one of: ${[...ESPR_STATUSES].join(', ')}.`);
+        else
+          extEspr = esprRaw;
+      }
+
       // Duplicate edge check.
       const compRef = compProduct ? compProduct.ID : compName;
       if (parentVariant && compRef) {
@@ -467,6 +479,7 @@ module.exports = (srv) => {
           quantity:                qty,
           unit:                    str(r.unit),
           external_dpp_url:        str(r.external_dpp_url) || null,
+          ext_espr_compliance:     extEspr,
           ext_co2_footprint:       co2,
           ext_recycled_content_pct: recycled,
           status:                  'active',
