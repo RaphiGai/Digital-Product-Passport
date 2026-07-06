@@ -17,6 +17,7 @@ const EMPTY_ROW = {
   unit: 'g',
   quantity_visibility: 'internal',
   component_role: '',
+  ext_espr_compliance: '',
   dpp_source: 'internal',
   external_dpp_url: ''
 };
@@ -24,9 +25,9 @@ const EMPTY_ROW = {
 const COLS =
   'grid-cols-[170px_minmax(0,3fr)_150px_80px_64px_minmax(0,2fr)_120px_104px]';
 
-// Enriched read-only view: BOM ID | Component | ESPR | CO₂ | Brand/Mfr | Origin | Sub-comps | DPP source | Certificates | Visible
+// Enriched read-only view: BOM ID | Component | ESPR | CO₂ | Brand/Mfr | Origin | Supplier | Sub-comps | DPP source | Certificates | Visible
 const COLS_ENRICHED =
-  'grid-cols-[120px_minmax(0,2fr)_130px_80px_110px_75px_80px_140px_100px_90px]';
+  'grid-cols-[120px_minmax(0,2fr)_130px_80px_110px_75px_minmax(0,1fr)_80px_140px_100px_90px]';
 
 function pickComponentDpp(dpps) {
   if (!dpps?.length) return null;
@@ -116,6 +117,7 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
     queryFn: () => odataList('Products', { orderby: 'name', top: 200 })
   });
 
+
   const enrichedQ = useQuery({
     queryKey: ['ProductBOMs', variantId, 'enriched'],
     queryFn: () =>
@@ -141,24 +143,120 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
     [enrichedQ.data]
   );
 
+  // For internal BOM components: derive supplier from the component product's batch data.
+  const componentSupplierQ = useQuery({
+    queryKey: ['ComponentSuppliers', componentIds],
+    queryFn: async () => {
+      const variants = await odataList('ProductVariants', {
+        filter: componentIds.map((id) => `product_ID eq '${id}'`).join(' or '),
+        select: ['ID', 'product_ID'],
+        top: 500,
+      });
+      if (!variants.length) return new Map();
+      const variantIds = variants.map((v) => v.ID);
+      const batches = await odataList('Batches', {
+        filter: variantIds.map((id) => `variant_ID eq '${id}'`).join(' or '),
+        expand: ['supplier($select=ID,name)'],
+        select: ['variant_ID', 'supplier_ID'],
+        top: 500,
+      });
+      const variantToProduct = new Map(variants.map((v) => [v.ID, v.product_ID]));
+      const result = new Map();
+      for (const b of batches) {
+        if (!b.supplier?.name) continue;
+        const pid = variantToProduct.get(b.variant_ID);
+        if (pid && !result.has(pid)) result.set(pid, b.supplier.name);
+      }
+      return result;
+    },
+    enabled: readOnly && showEnriched && componentIds.length > 0,
+  });
+
+  // For internal BOM components: derive CO2 from the component product's batch data.
+  const componentCO2Q = useQuery({
+    queryKey: ['ComponentCO2', componentIds],
+    queryFn: async () => {
+      const variants = await odataList('ProductVariants', {
+        filter: componentIds.map((id) => `product_ID eq '${id}'`).join(' or '),
+        select: ['ID', 'product_ID'],
+        top: 500,
+      });
+      if (!variants.length) return new Map();
+      const variantIds = variants.map((v) => v.ID);
+      const batches = await odataList('Batches', {
+        filter: variantIds.map((id) => `variant_ID eq '${id}'`).join(' or '),
+        select: ['variant_ID', 'co2_footprint_kg'],
+        top: 500,
+      });
+      const variantToProduct = new Map(variants.map((v) => [v.ID, v.product_ID]));
+      const result = new Map();
+      for (const b of batches) {
+        if (b.co2_footprint_kg == null) continue;
+        const pid = variantToProduct.get(b.variant_ID);
+        if (pid && !result.has(pid)) result.set(pid, b.co2_footprint_kg);
+      }
+      return result;
+    },
+    enabled: readOnly && showEnriched && componentIds.length > 0,
+  });
+
+  // Documents can be anchored to a product OR a batch. Fetch both so that certificates
+  // added at the batch level of a component DPP are picked up.
   const documentsQ = useQuery({
     queryKey: ['Documents', 'certificates', componentIds],
-    queryFn: () =>
-      odataList('Documents', {
-        filter: `(${componentIds.map((id) => `product_ID eq '${id}'`).join(' or ')}) and doc_type eq 'certificate'`,
-        select: ['ID', 'product_ID', 'visibility'],
+    queryFn: async () => {
+      // Step 1: resolve variant → batch IDs for component products.
+      const variants = await odataList('ProductVariants', {
+        filter: componentIds.map((id) => `product_ID eq '${id}'`).join(' or '),
+        select: ['ID', 'product_ID'],
         top: 500,
-      }),
+      });
+      const variantToProduct = new Map(variants.map((v) => [v.ID, v.product_ID]));
+      const variantIds = variants.map((v) => v.ID);
+
+      const batchToProduct = new Map();
+      if (variantIds.length) {
+        const batches = await odataList('Batches', {
+          filter: variantIds.map((id) => `variant_ID eq '${id}'`).join(' or '),
+          select: ['ID', 'variant_ID'],
+          top: 500,
+        });
+        for (const b of batches) {
+          const pid = variantToProduct.get(b.variant_ID);
+          if (pid) batchToProduct.set(b.ID, pid);
+        }
+      }
+
+      // Step 2: query Documents by product_ID OR batch_ID of component products.
+      const filters = [
+        ...componentIds.map((id) => `product_ID eq '${id}'`),
+        ...[...batchToProduct.keys()].map((id) => `batch_ID eq '${id}'`),
+      ];
+      if (!filters.length) return [];
+
+      const docs = await odataList('Documents', {
+        filter: `(${filters.join(' or ')}) and doc_type eq 'certificate'`,
+        select: ['ID', 'product_ID', 'batch_ID', 'visibility'],
+        top: 500,
+      });
+
+      // Normalise: ensure every doc has product_ID resolved (batch-level docs via batchToProduct).
+      return docs.map((d) => ({
+        ...d,
+        product_ID: d.product_ID || batchToProduct.get(d.batch_ID) || null,
+      }));
+    },
     enabled: readOnly && showEnriched && componentIds.length > 0,
   });
 
   const certMap = useMemo(() => {
     const m = new Map();
     for (const doc of documentsQ.data ?? []) {
-      if (!m.has(doc.product_ID)) m.set(doc.product_ID, { hasAny: false, hasPublished: false });
+      if (!doc.product_ID) continue;
+      if (!m.has(doc.product_ID)) m.set(doc.product_ID, { published: 0, unpublished: 0 });
       const entry = m.get(doc.product_ID);
-      entry.hasAny = true;
-      if (doc.visibility === 'public') entry.hasPublished = true;
+      if (doc.visibility === 'public') entry.published += 1;
+      else entry.unpublished += 1;
     }
     return m;
   }, [documentsQ.data]);
@@ -247,6 +345,7 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
       unit: r.unit ?? 'g',
       quantity_visibility: r.quantity_visibility ?? 'internal',
       component_role: r.component_role ?? '',
+      ext_espr_compliance: r.ext_espr_compliance ?? '',
       dpp_source: r.external_dpp_url ? 'external' : 'internal',
       external_dpp_url: r.external_dpp_url ?? ''
     });
@@ -393,6 +492,7 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
       unit: row.unit || null,
       quantity_visibility: row.quantity_visibility || 'internal',
       component_role: row.component_role || null,
+      ext_espr_compliance: isExternal ? (row.ext_espr_compliance || null) : null,
       is_mandatory: true,
       status: 'active',
       sub_dpp_ID: null,
@@ -547,6 +647,7 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
                 <span className="border-r border-black/10 px-3 py-2 text-right">CO₂ (kg)</span>
                 <span className="border-r border-black/10 px-3 py-2">Brand</span>
                 <span className="border-r border-black/10 px-3 py-2">Origin</span>
+                <span className="border-r border-black/10 px-3 py-2">Supplier</span>
                 <span className="border-r border-black/10 px-3 py-2 text-center">Sub-comps</span>
                 <span className="border-r border-black/10 px-3 py-2">DPP source</span>
                 <span className="border-r border-black/10 px-3 py-2">Certificates</span>
@@ -602,16 +703,24 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
 
                     {/* ESPR Compliance */}
                     <div className="border-r border-black/10 px-3 py-3">
-                      {comp?.espr_compliance
-                        ? <StatusBadge status={comp.espr_compliance} />
-                        : <span className="text-xs text-ink-muted">—</span>}
+                      {(() => {
+                        const status = r.component_ID ? comp?.espr_compliance : r.ext_espr_compliance;
+                        return status
+                          ? <StatusBadge status={status} />
+                          : <span className="text-xs text-ink-muted">—</span>;
+                      })()}
                     </div>
 
-                    {/* CO₂ */}
+                    {/* CO₂: internal → derived from component's batch; external → manual override */}
                     <div className="border-r border-black/10 px-3 py-3 text-right text-sm text-ink">
-                      {r.ext_co2_footprint != null
-                        ? Number(r.ext_co2_footprint).toFixed(2)
-                        : <span className="text-xs text-ink-muted">—</span>}
+                      {(() => {
+                        const val = r.component_ID
+                          ? componentCO2Q.data?.get(r.component_ID)
+                          : r.ext_co2_footprint;
+                        return val != null
+                          ? Number(val).toFixed(2)
+                          : <span className="text-xs text-ink-muted">—</span>;
+                      })()}
                     </div>
 
                     {/* Brand */}
@@ -626,6 +735,18 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
                       {comp?.country_of_origin
                         ? <Badge tone="gray">{comp.country_of_origin}</Badge>
                         : <span className="text-xs text-ink-muted">—</span>}
+                    </div>
+
+                    {/* Supplier: internal components only — derived from the component product's batch data */}
+                    <div className="min-w-0 border-r border-black/10 px-3 py-3">
+                      {(() => {
+                        const name = r.component_ID
+                          ? componentSupplierQ.data?.get(r.component_ID)
+                          : null;
+                        return name
+                          ? <span className="block truncate text-sm text-ink">{name}</span>
+                          : <span className="text-xs text-ink-muted">—</span>;
+                      })()}
                     </div>
 
                     {/* Sub-components count */}
@@ -655,10 +776,15 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
                     <div className="border-r border-black/10 px-3 py-3 text-xs">
                       {!cert ? (
                         <span className="text-ink-muted">—</span>
-                      ) : cert.hasPublished ? (
-                        <span className="text-green-700">Published</span>
                       ) : (
-                        <span className="text-ink-muted">Unpublished</span>
+                        <div className="flex flex-col gap-0.5">
+                          {cert.published > 0 && (
+                            <span className="text-green-700">{cert.published} public</span>
+                          )}
+                          {cert.unpublished > 0 && (
+                            <span className="text-ink-muted">{cert.unpublished} internal</span>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -835,7 +961,10 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
               <Select
                 id="bom-source"
                 value={row.dpp_source}
-                onChange={set('dpp_source')}
+                onChange={(e) => setRow((prev) => ({
+                  ...prev,
+                  dpp_source: e.target.value,
+                }))}
                 options={[
                   { value: 'internal', label: "Internal DPP (component's own)" },
                   { value: 'external', label: 'External DPP (supplier)' }
@@ -931,6 +1060,23 @@ export function BomEditor({ productId, variantId, readOnly = false, showEnriched
                 maxLength={100}
               />
             </FieldRow>
+
+            {row.dpp_source === 'external' && (
+              <FieldRow label="ESPR Compliance" htmlFor="bom-espr" className="md:col-span-2">
+                <Select
+                  id="bom-espr"
+                  value={row.ext_espr_compliance}
+                  onChange={set('ext_espr_compliance')}
+                  options={[
+                    { value: '', label: '— not set' },
+                    { value: 'draft', label: 'Draft' },
+                    { value: 'in_review', label: 'In review' },
+                    { value: 'compliant', label: 'Compliant' },
+                    { value: 'non_compliant', label: 'Non-compliant' },
+                  ]}
+                />
+              </FieldRow>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 border-t border-black/5 pt-5">

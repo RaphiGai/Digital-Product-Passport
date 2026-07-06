@@ -109,7 +109,7 @@ const TEMPLATES = {
       { header: 'Product Name *',        hint: 'Must match an existing product name',                      example: 'Eco Classic Jacket' },
       { header: 'Variant SKU *',         hint: 'Must match an existing variant SKU',                       example: 'ECO-JKT-BLK-M' },
       { header: 'Batch Number *',        hint: 'Unique, max 40 characters',                               example: '2026-06-A' },
-      { header: 'Production Date',       hint: 'YYYY-MM-DD (optional)',                                   example: '2026-06-01' },
+      { header: 'Production Date',       hint: 'YYYY-MM-DD (optional)',                                   example: '2026-06-01', type: 'date' },
       { header: 'Country of Origin',     hint: 'ISO-2 code, e.g. DE, PT, CN (optional)',                  example: 'PT' },
       { header: 'Production Stage',      hint: 'e.g. Cut & Sew (optional)',                               example: 'Cut & Sew' },
       { header: 'Factory Name',          hint: 'Business partner name (optional)',                        example: 'Textile Factory Lisboa' },
@@ -146,8 +146,9 @@ const TEMPLATES = {
       { header: 'Component Role',          hint: 'Role in assembly (optional)',                                   example: 'Main fabric' },
       { header: 'Quantity *',              hint: 'Number greater than 0. Must be a whole number for pcs.',       example: '1.5' },
       { header: 'Unit *',                  hint: 'g | kg | pcs | %',                                            example: 'kg' },
-      { header: 'CO2 Footprint (kg)',      hint: 'CO₂ override for external components (optional)',              example: '' },
-      { header: 'Recycled Content (%)',    hint: 'Recycled content override for external components (optional)', example: '' },
+      { header: 'ESPR Compliance',       hint: 'draft | in_review | compliant | non_compliant (optional, external only)',  example: 'in_review' },
+      { header: 'CO2 Footprint (kg)',    hint: 'CO₂ override for external components (optional)',                           example: '' },
+      { header: 'Recycled Content (%)',  hint: 'Recycled content override for external components (optional)',              example: '' },
     ],
     fieldMap: {
       'Parent Product Name *':       'parent_product_name',
@@ -160,6 +161,7 @@ const TEMPLATES = {
       'Component Role':              'component_role',
       'Quantity *':                  'quantity',
       'Unit *':                      'unit',
+      'ESPR Compliance':             'espr_compliance',
       'CO2 Footprint (kg)':          'co2_footprint_kg',
       'Recycled Content (%)':        'recycled_content_pct',
     },
@@ -207,6 +209,25 @@ function autoWidthAoa(ws, rows) {
   ws['!cols'] = widths.map((w) => ({ wch: w }));
 }
 
+/**
+ * Pre-format a column's data cells (rows 3–202) as Text (@).
+ * Uses real empty-string cells (t:'s') instead of stubs so xlsx actually writes
+ * the format record into the file. Excel then stores whatever the user types as a
+ * literal string and never auto-converts it to a date serial number.
+ */
+function applyTextColFormat(ws, colIdx) {
+  const DATA_ROWS = 200;
+  for (let r = 3; r <= 2 + DATA_ROWS; r++) {
+    const addr = XLSX.utils.encode_cell({ r: r - 1, c: colIdx });
+    if (!ws[addr]) ws[addr] = { t: 's', v: '', z: '@' };
+    else ws[addr].z = '@';
+  }
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  range.e.r = Math.max(range.e.r, 1 + DATA_ROWS);
+  range.e.c = Math.max(range.e.c, colIdx);
+  ws['!ref'] = XLSX.utils.encode_range(range);
+}
+
 export function downloadTemplate(key) {
   const tpl = TEMPLATES[key];
   if (!tpl) throw new Error(`Unknown template key: ${key}`);
@@ -215,6 +236,10 @@ export function downloadTemplate(key) {
   // Row 1 = headers, row 2 = format hints, row 3+ = your data
   const ws = XLSX.utils.aoa_to_sheet([headers, hints]);
   autoWidthAoa(ws, [headers, hints]);
+  // Pre-format date columns as Text so Excel never auto-converts typed values.
+  tpl.columns.forEach((col, i) => {
+    if (col.type === 'date') applyTextColFormat(ws, i);
+  });
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, tpl.name);
   XLSX.writeFile(wb, `${tpl.filename}.xlsx`);
@@ -234,7 +259,9 @@ export function parseTemplateSheet(key, worksheet) {
   const tpl = TEMPLATES[key];
   if (!tpl) throw new Error(`Unknown template key: ${key}`);
 
-  const raw = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+  // raw:false returns the display string (w) for each cell rather than the raw value (v),
+  // which prevents Excel date serials from reaching the import handler as numbers.
+  const raw = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false });
 
   // Need at least a header row
   if (!raw.length) return { rows: [], headers: [] };
