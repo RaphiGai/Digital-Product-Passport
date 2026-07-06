@@ -619,7 +619,7 @@ export function DppDetail() {
       fv('Model',                 product.model),
       fv('GTIN',                  product.gtin),
       fv('UPC',                   product.upc),
-      fv('EIN',                   product.ein),
+      fv('EAN',                   product.ean),
       fv('Fibre composition',     product.fibre_composition),
       fv('Country of origin',     product.country_of_origin),
       fv('Substances of concern', product.substances_of_concern),
@@ -1071,7 +1071,7 @@ export function DppDetail() {
               <Row label="Model" value={product?.model} change={changed('product.model')} />
               <Row label="GTIN" value={product?.gtin} change={changed('product.gtin')} />
               <Row label="UPC" value={product?.upc} change={changed('product.upc')} />
-              <Row label="EIN" value={product?.ein} change={changed('product.ein')} />
+              <Row label="EAN" value={product?.ean} change={changed('product.ean')} />
               <Row label="Fibre composition" value={product?.fibre_composition} change={changed('product.fibre_composition')} />
               <Row label="Country of origin" value={product?.country_of_origin} change={changed('product.country_of_origin')} />
               <Row label="Substances of concern" value={product?.substances_of_concern} change={changed('product.substances_of_concern')} />

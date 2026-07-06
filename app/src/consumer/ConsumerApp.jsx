@@ -852,7 +852,7 @@ const cap = (v) => (v ? String(v).replace(/_/g, ' ').replace(/^\w/, (c) => c.toU
 
 /**
  * Product identification & traceability (US6.11). Renders only the fields present.
- * Product identifiers (GTIN/UPC/EIN) and lifecycle fields (type/status) arrive via the
+ * Product identifiers (GTIN/UPC/EAN) and lifecycle fields (type/status) arrive via the
  * visibility-filtered product section — internal by default, opt-in public per field.
  */
 function Identification({ ident, product }) {
@@ -862,7 +862,7 @@ function Identification({ ident, product }) {
     ['Product ID', ident?.product_id],
     ['GTIN', p.gtin],
     ['UPC', p.upc],
-    ['EIN', p.ein],
+    ['EAN', p.ean ?? p.ein], // p.ein: frozen consumer snapshots published before the ean rename
     ['Batch number', ident?.batch_number],
     ['Serial number', ident?.serial_number],
     ['UPI', ident?.upi],

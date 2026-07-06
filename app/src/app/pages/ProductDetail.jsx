@@ -340,7 +340,7 @@ export function ProductDetail() {
       Model: ep.model ?? '',
       GTIN: ep.gtin ?? '',
       UPC: ep.upc ?? '',
-      EIN: ep.ein ?? '',
+      EAN: ep.ean ?? '',
       Status: ep.status ?? '',
       'Country of Origin': ep.country_of_origin ?? '',
       Description: ep.description ?? '',
@@ -453,7 +453,7 @@ export function ProductDetail() {
             <Row label="Category" value={p.category?.name} visibility={vis.category} />
             <Row label="GTIN" value={p.gtin} visibility={vis.gtin} />
             <Row label="UPC" value={p.upc} visibility={vis.upc} />
-            <Row label="EIN" value={p.ein} visibility={vis.ein} />
+            <Row label="EAN" value={p.ean} visibility={vis.ean} />
             <Row label="Description" value={p.description} visibility={vis.description} />
           </div>
         </Card>

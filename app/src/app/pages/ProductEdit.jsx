@@ -41,7 +41,7 @@ export function ProductEdit() {
     model: 70,
     gtin: 14,
     upc: 20,
-    ein: 20,
+    ean: 20,
     description: 500,
     fibre_composition: 500,
     substances_of_concern: 500,
@@ -89,7 +89,7 @@ export function ProductEdit() {
         model: p.model ?? '',
         gtin: p.gtin ?? '',
         upc: p.upc ?? '',
-        ein: p.ein ?? '',
+        ean: p.ean ?? '',
         description: p.description ?? '',
         fibre_composition: p.fibre_composition ?? '',
         substances_of_concern: p.substances_of_concern ?? '',
@@ -177,7 +177,7 @@ export function ProductEdit() {
           model: form.model || null,
           gtin: form.gtin || null,
           upc: form.upc || null,
-          ein: form.ein || null,
+          ean: form.ean || null,
           description: form.description || null,
           fibre_composition: form.fibre_composition || null,
           substances_of_concern: form.substances_of_concern || null,
@@ -305,8 +305,8 @@ export function ProductEdit() {
           <FieldRow label="UPC" visibilityControl={visCtl('upc')} htmlFor="upc" hint="Universal Product Code (optional).">
             <Input id="upc" value={form.upc} onChange={set('upc')} maxLength={LIMITS.upc} />
           </FieldRow>
-          <FieldRow label="EIN" visibilityControl={visCtl('ein')} htmlFor="ein" hint="EIN product number (optional).">
-            <Input id="ein" value={form.ein} onChange={set('ein')} maxLength={LIMITS.ein} />
+          <FieldRow label="EAN" visibilityControl={visCtl('ean')} htmlFor="ean" hint="European Article Number (optional).">
+            <Input id="ean" value={form.ean} onChange={set('ean')} maxLength={LIMITS.ean} />
           </FieldRow>
           <FieldRow
             label="Description"
