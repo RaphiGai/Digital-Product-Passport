@@ -21,7 +21,7 @@ describe('field-visibility — stored overrides', () => {
   });
 
   test('product identifiers & lifecycle fields default internal, opt-in public', () => {
-    const section = { gtin: 'G', upc: 'U', ein: 'E', product_type: 'finished', status: 'published' };
+    const section = { gtin: 'G', upc: 'U', ean: 'E', product_type: 'finished', status: 'published' };
     // No stored map → all five dropped.
     const hidden = applyFieldVisibility(section, 'product', null);
     for (const k of Object.keys(section)) expect(hidden).not.toHaveProperty(k);

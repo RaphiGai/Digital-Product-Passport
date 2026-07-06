@@ -29,7 +29,7 @@ const CATALOGUES = {
     description: { vis: 'public', locked: false },
     gtin: { vis: 'internal', locked: false },
     upc: { vis: 'internal', locked: false },
-    ein: { vis: 'internal', locked: false },
+    ean: { vis: 'internal', locked: false },
     product_type: { vis: 'internal', locked: false },
     status: { vis: 'internal', locked: false }, // product lifecycle — opt-in only
     fibre_composition: { vis: 'public', locked: true }, // EU Textile Reg 1007/2011

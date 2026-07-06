@@ -169,7 +169,7 @@ module.exports = (srv) => {
           model:                 str(r.model)              || null,
           gtin:                  str(r.gtin)               || null,
           upc:                   str(r.upc)                || null,
-          ein:                   str(r.ein)                || null,
+          ean:                   str(r.ean ?? r.ein)       || null, // r.ein: legacy import column name
           status:                str(r.status),
           country_of_origin:     str(r.country_of_origin).toUpperCase().slice(0, 2),
           description:           str(r.description)        || null,

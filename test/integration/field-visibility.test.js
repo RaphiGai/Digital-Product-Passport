@@ -114,7 +114,7 @@ describe('Per-field overrides', () => {
   test('product identifiers & lifecycle fields are internal by default and can be revealed', async () => {
     // Default → none of them reach the consumer DTO.
     let { data } = await getPublic(await attachToken('dpp-12345'));
-    for (const k of ['gtin', 'upc', 'ein', 'product_type', 'status']) {
+    for (const k of ['gtin', 'upc', 'ean', 'product_type', 'status']) {
       expect(data.product).not.toHaveProperty(k);
     }
 
@@ -128,7 +128,7 @@ describe('Per-field overrides', () => {
     expect(data.product.product_type).toBe('finished');
     expect(data.product.status).toBeTruthy();
     expect(data.product).not.toHaveProperty('upc');
-    expect(data.product).not.toHaveProperty('ein');
+    expect(data.product).not.toHaveProperty('ean');
   });
 });
 

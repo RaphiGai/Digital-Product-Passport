@@ -131,7 +131,7 @@ function toConsumerDTO(dpp, ctx) {
           // Identifiers + lifecycle — internal by default (catalogue), opt-in public.
           gtin: ctx.product.gtin,
           upc: ctx.product.upc,
-          ein: ctx.product.ein,
+          ean: ctx.product.ean,
           product_type: ctx.product.product_type,
           status: ctx.product.status,
           fibre_composition: ctx.product.fibre_composition,

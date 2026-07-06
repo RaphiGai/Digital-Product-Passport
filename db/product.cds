@@ -43,7 +43,7 @@ entity Products : identified, audited {
   description           : String(500);
   gtin                  : GTIN;
   upc                   : String(20);                        // Universal Product Code — optional, internal by default
-  ein                   : String(20);                        // EIN product number — optional, internal by default
+  ean                   : String(20);                        // European Article Number — optional, internal by default
   fibre_composition     : String(500);
   care_instructions     : String(500);
   repair_instructions   : String(500);
