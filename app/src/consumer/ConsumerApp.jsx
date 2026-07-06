@@ -431,9 +431,9 @@ function Passport({ dpp }) {
     <div className="min-h-screen bg-[#f7faf5]">
       <Hero product={p} variant={v} espr={p.espr_compliance} />
 
-      <main className="mx-auto max-w-6xl px-4 pb-12">
-        <section className="-mt-6 rounded-[2rem] bg-white p-4 shadow-xl md:p-6">
-          <div className="mb-5 flex items-center justify-between gap-4">
+      <main className="mx-auto max-w-6xl px-4 pb-12 pt-2 md:pt-0">
+        <section className="mt-3 rounded-[2rem] bg-white p-4 pt-6 shadow-xl md:-mt-6 md:p-6">
+          <div className="mb-5 flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-brand-700">
                 Investigation journey
@@ -455,47 +455,51 @@ function Passport({ dpp }) {
             />
           </div>
 
-          <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
-            {steps.map((step, index) => {
-              const Icon = step.icon;
-              const active = index === activeIndex;
-              const done = index < activeIndex;
+          <div className="-mx-2 mt-5 overflow-x-auto px-2 py-2">
+            <div className="flex gap-3">
+              {steps.map((step, index) => {
+                const Icon = step.icon;
+                const active = index === activeIndex;
+                const done = index < activeIndex;
 
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  onClick={() => setActiveIndex(index)}
-                  className={[
-                    'group relative flex min-w-[180px] items-center gap-3 rounded-2xl border p-3 text-left transition-all duration-300',
-                    active
-                      ? 'scale-[1.02] border-brand-600 bg-[#eef8ea] shadow-md'
-                      : done
-                        ? 'border-brand-100 bg-white'
-                        : 'border-black/5 bg-white hover:-translate-y-0.5 hover:shadow-sm'
-                  ].join(' ')}
-                >
-                  <span
+                return (
+                  <button
+                    key={step.id}
+                    type="button"
+                    onClick={() => setActiveIndex(index)}
                     className={[
-                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition',
+                      'group relative flex min-w-[180px] items-center gap-3 rounded-2xl border p-3 text-left transition-all duration-300',
                       active
-                        ? 'bg-brand-600 text-white'
+                        ? 'border-brand-600 bg-[#eef8ea] shadow-md'
                         : done
-                          ? 'bg-brand-100 text-brand-700'
-                          : 'bg-[#f3f5f0] text-ink-muted'
+                          ? 'border-brand-100 bg-white'
+                          : 'border-black/5 bg-white hover:-translate-y-0.5 hover:shadow-sm'
                     ].join(' ')}
                   >
-                    {done ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
-                  </span>
+                    <span
+                      className={[
+                        'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition',
+                        active
+                          ? 'bg-brand-600 text-white'
+                          : done
+                            ? 'bg-brand-100 text-brand-700'
+                            : 'bg-[#f3f5f0] text-ink-muted'
+                      ].join(' ')}
+                    >
+                      {done ? <CheckCircle2 className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
+                    </span>
 
-                  <span>
-                    <span className="block text-sm font-semibold text-ink">{step.title}</span>
-                    <span className="block text-xs text-ink-muted">{step.subtitle}</span>
-                  </span>
-                </button>
-              );
-            })}
+                    <span>
+                      <span className="block text-sm font-semibold text-ink">{step.title}</span>
+                      <span className="block text-xs text-ink-muted">{step.subtitle}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+
         </section>
 
         <section className="mt-6 animate-[fadeIn_0.35s_ease-out]">
