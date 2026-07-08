@@ -37,10 +37,31 @@ module.exports = (srv) => {
     const email = (req.data.email || '').trim();
     const displayName = (req.data.displayName || '').trim();
     const role = req.data.role;
+    const businessPartnerId = (req.data.businessPartnerId || '').trim() || null;
 
     if (!username || !email) req.reject(400, 'Username and email are required.');
     if (!APP_ROLES.includes(role)) {
       req.reject(400, 'Invalid role. Please choose a valid user role.');
+    }
+
+    // business_partner accounts act FOR a partner: the link is mandatory, must
+    // point into the caller's own organization, and is meaningless on company roles.
+    if (role === 'business_partner') {
+      if (!businessPartnerId) {
+        req.reject(400, 'Please select the business partner this account belongs to.');
+      }
+      const { BusinessPartners } = cds.entities('dpp');
+      const partner = await SELECT.one.from(BusinessPartners)
+        .columns('ID', 'owning_organization_ID', 'archived')
+        .where({ ID: businessPartnerId });
+      if (!partner || partner.owning_organization_ID !== callerOrgId) {
+        req.reject(404, 'Business partner not found.');
+      }
+      if (partner.archived) {
+        req.reject(400, 'This business partner is archived. Please reactivate it before creating an account.');
+      }
+    } else if (businessPartnerId) {
+      req.reject(400, 'A business partner can only be linked to a business partner account.');
     }
 
     // Uniqueness: username is global; email is unique within the caller's org.
@@ -64,6 +85,7 @@ module.exports = (srv) => {
       display_name: displayName || username,
       organization_ID: callerOrgId,      // forced into caller's own org
       role,
+      business_partner_ID: role === 'business_partner' ? businessPartnerId : null,
       external_user_id: username,         // lets resolveAppUserInline match the login principal
       active: true,
       password_hash: passwordHash,

@@ -83,6 +83,12 @@ module.exports = (srv) => {
   srv.before('*', async (req) => {
     if (req.event === 'READ' && req.path === '$metadata') return;
     await authHelpers.requireActiveUser(req);
+    // External partner logins are locked to their portal surface (assigned
+    // documents + own session) BEFORE the company-role write gate applies.
+    if (authHelpers.isBusinessPartner(req)) {
+      authHelpers.enforceBusinessPartnerScope(req);
+      return;
+    }
     if (authHelpers.isWriteEvent(req)) {
       authHelpers.requireRole(req, 'company_advanced');
     }
@@ -98,8 +104,23 @@ module.exports = (srv) => {
   // Documents anchor on EITHER product or batch (XOR), so a single tenant path can't
   // express the filter — apply an explicit OR. Parenthesized so it composes correctly
   // with any client $filter (which `.where()` appends to with AND).
+  // business_partner logins instead see ONLY the documents assigned to their linked
+  // partner (this also gates the media download GET Documents(ID)/content).
   srv.before('READ', 'Documents', async (req) => {
     const orgId = await authHelpers.requireActiveUser(req);
+    if (authHelpers.isBusinessPartner(req)) {
+      const partnerId = authHelpers.requirePartnerLink(req);
+      // Fail closed on association traversal: $expand, $select, $filter and $orderby
+      // over the product/batch/assigned_partner associations are all resolved INSIDE
+      // this Documents READ event, so the per-entity scope gate never sees them. Left
+      // open they leak (directly or as a value oracle via $filter) internal
+      // product/batch fields the myAssignedDocuments() DTO deliberately withholds.
+      // The partner portal reads only own scalar columns; it gets its product/batch
+      // context from myAssignedDocuments() instead.
+      authHelpers.rejectDocumentAssociationAccess(req);
+      req.query.where('assigned_partner_ID =', partnerId);
+      return;
+    }
     req.query.where(
       '(product.owning_organization_ID =', orgId,
       'or batch.variant.product.owning_organization_ID =', orgId, ')'
@@ -186,9 +207,18 @@ module.exports = (srv) => {
   srv.before(['CREATE', 'UPDATE'], 'Users', async (req) => {
     const callerOrgId = await authHelpers.requireActiveUser(req);
     // Role can be changed via PATCH (promote/demote read-only ↔ full) but must
-    // stay a valid app role.
+    // stay a COMPANY role. business_partner accounts require a partner link and
+    // are therefore created exclusively via the createUser action.
     if (req.data.role !== undefined && !['company_advanced', 'company_user'].includes(req.data.role)) {
       req.reject(400, 'Invalid role. Please choose a valid user role.');
+    }
+    // The partner link is set only by createUser (which writes the underlying DB
+    // entity, bypassing this projection). Reject any attempt to set/redirect it
+    // via raw OData: an unchecked FK here would let an admin repoint a partner
+    // login onto a foreign-organization partner and read/alter that org's
+    // documents (the Documents scope is anchored on assigned_partner_ID alone).
+    if (req.data.business_partner_ID !== undefined && req.data.business_partner_ID !== null) {
+      req.reject(403, 'The business partner link can only be set when the account is created.');
     }
     if (req.data.organization_ID === undefined && req.event === 'CREATE') {
       req.data.organization_ID = callerOrgId;

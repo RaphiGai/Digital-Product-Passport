@@ -111,14 +111,18 @@ module.exports = (srv) => {
     const dpps = await SELECT.from(DPPs).where({ product_ID: { in: productIds } });
 
     // Documents — metadata columns ONLY (never the LargeBinary content stream). Tenant
-    // safety is transitive via the org-scoped product/batch IN-lists.
-    const productDocs = await SELECT.from(Documents)
-      .columns('ID', 'product_ID', 'batch_ID', 'doc_type', 'valid_until')
-      .where({ product_ID: { in: productIds } });
+    // safety is transitive via the org-scoped product/batch IN-lists. file_name is
+    // pulled to skip partner-assigned PLACEHOLDER rows (metadata created, file not yet
+    // uploaded): a placeholder is a pending request, not evidence, and must not count
+    // as documentation coverage.
+    const hasFile = (d) => !!d.file_name;
+    const productDocs = (await SELECT.from(Documents)
+      .columns('ID', 'product_ID', 'batch_ID', 'doc_type', 'valid_until', 'file_name')
+      .where({ product_ID: { in: productIds } })).filter(hasFile);
     const batchDocs = batchIds.length
-      ? await SELECT.from(Documents)
-          .columns('ID', 'product_ID', 'batch_ID', 'doc_type', 'valid_until')
-          .where({ batch_ID: { in: batchIds } })
+      ? (await SELECT.from(Documents)
+          .columns('ID', 'product_ID', 'batch_ID', 'doc_type', 'valid_until', 'file_name')
+          .where({ batch_ID: { in: batchIds } })).filter(hasFile)
       : [];
 
     // Grouping maps.

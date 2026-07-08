@@ -35,6 +35,9 @@ service DPPService @(
     tenantId         : String;
     mustResetPassword: Boolean;
     appearanceTheme  : String;
+    // Set for role = business_partner only: the linked BusinessPartners row.
+    businessPartnerId   : String;
+    businessPartnerName : String;
   };
 
   // Results of the user-management actions. Temp passwords are returned ONCE to
@@ -60,8 +63,15 @@ service DPPService @(
   // user-management actions flip it).
   entity Users as projection on db.Users {
     ID, email, display_name, organization, role, external_user_id, active,
-    username, must_reset_password
+    username, must_reset_password, business_partner
   };
+  // must_reset_password: flipped only by the user-management actions.
+  // NOTE: business_partner is intentionally NOT @readonly — @readonly makes CAP
+  // silently DROP the field on write, which would mask the attempt. It is guarded
+  // with an explicit 403 in srv/dpp-service.js instead: the link is set only by
+  // createUser (which writes the DB entity directly, bypassing this projection);
+  // repointing it via raw OData would let an admin redirect a partner login onto a
+  // foreign-org partner and read/alter that org's documents.
   annotate Users with { must_reset_password @readonly; }
 
   entity BusinessPartners      as projection on db.BusinessPartners;
@@ -171,7 +181,9 @@ service DPPService @(
   // before('*') gate). changePassword and updateProfile are callable by any active
   // user on their OWN account (NOT write events), so read-only company_user can both
   // complete the forced first-login change and maintain their own name/email.
-  action createUser(username : String(60), email : db.EmailAddr, displayName : String(120), role : db.UserRole) returns NewUserResult;
+  // businessPartnerId is REQUIRED for (and restricted to) role = business_partner:
+  // it links the login account to the BusinessPartners row it acts for.
+  action createUser(username : String(60), email : db.EmailAddr, displayName : String(120), role : db.UserRole, businessPartnerId : String(36)) returns NewUserResult;
   action resetUserPassword(userId : String) returns TempPasswordResult;
   action changePassword(currentPassword : String, newPassword : String) returns Boolean;
   action updateProfile(displayName : String(120), email : db.EmailAddr, appearanceTheme : String(20)) returns Boolean;
@@ -207,4 +219,12 @@ service DPPService @(
   // JSON string { generated_at, dpps: [{ dpp, product, variant, batch, item, validation }] }.
   // Read-only and intentionally NOT in auth-helpers.WRITE_EVENTS → company_user may read.
   function validationOverview() returns LargeString;
+
+  // ----- Partner portal feed — see srv/handlers/document-handlers.js -----
+  // business_partner-only: the documents assigned to the caller's linked business
+  // partner incl. their product/batch context, as a JSON string
+  // { generated_at, documents: [{ ID, title, doc_type, …, has_file, expired,
+  //   level, product, batch }] }. Read-only (NOT in auth-helpers.WRITE_EVENTS) and
+  //   in auth-helpers.PARTNER_ALLOWED_EVENTS so partner logins may call it.
+  function myAssignedDocuments() returns LargeString;
 }

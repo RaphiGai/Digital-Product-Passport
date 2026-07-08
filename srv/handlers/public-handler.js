@@ -6,6 +6,7 @@ const QRCode = require('qrcode');
 const tokens = require('../lib/token');
 const { aggregate, firstItemDpp } = require('../lib/aggregator');
 const { applyFieldVisibility, isFieldPublic } = require('../lib/field-visibility');
+const { publicCustomFields } = require('../lib/custom-fields');
 
 const MAX_DEPTH = 8;
 
@@ -125,11 +126,21 @@ function toConsumerDTO(dpp, ctx) {
     try { storytelling = JSON.parse(ctx.product.storytelling); } catch { storytelling = []; }
   }
 
+  // User-defined additional fields carry their own per-entry visibility — only 'public'
+  // entries (with a non-empty value) reach the consumer. Attached AFTER the catalogue
+  // filter: they are per-row data, not part of the static field catalogue.
+  const withCustomFields = (section, row) => {
+    if (!section) return section;
+    const cf = publicCustomFields(row.custom_fields);
+    if (cf.length) section.custom_fields = cf;
+    return section;
+  };
+
   // Per-field consumer visibility: a company_advanced user can mark individual fields
   // 'internal' (stored per entity in field_visibility). Such fields are dropped from
   // the section; regulatory-locked fields are always kept (see srv/lib/field-visibility.js).
   const product = ctx.product
-    ? applyFieldVisibility(
+    ? withCustomFields(applyFieldVisibility(
         {
           name: ctx.product.name,
           brand: ctx.product.brand,
@@ -164,11 +175,11 @@ function toConsumerDTO(dpp, ctx) {
         },
         'product',
         ctx.product.field_visibility,
-      )
+      ), ctx.product)
     : null;
 
   const variant = ctx.variant
-    ? applyFieldVisibility(
+    ? withCustomFields(applyFieldVisibility(
         {
           color: ctx.variant.color,
           size: ctx.variant.size,
@@ -179,11 +190,11 @@ function toConsumerDTO(dpp, ctx) {
         },
         'variant',
         ctx.variant.field_visibility,
-      )
+      ), ctx.variant)
     : null;
 
   const batch = ctx.batch
-    ? applyFieldVisibility(
+    ? withCustomFields(applyFieldVisibility(
         {
           batch_number: ctx.batch.batch_number,
           production_date: ctx.batch.production_date,
@@ -193,7 +204,7 @@ function toConsumerDTO(dpp, ctx) {
         },
         'batch',
         ctx.batch.field_visibility,
-      )
+      ), ctx.batch)
     : null;
 
   // Identification & traceability (US6.11). Identifiers (dpp/product/serial/UPI) are
@@ -279,6 +290,9 @@ async function loadPublicDocuments(dpp) {
     rows = rows.concat(batchRows);
   }
   const base = process.env.PUBLIC_BASE_URL || '';
+  // Placeholder rows (partner-assigned, no file uploaded yet) have no binary —
+  // hide them from the consumer list instead of showing a dead download link.
+  rows = rows.filter((d) => d.file_name);
   return rows.map((d) => ({
     id: d.ID,
     doc_type: d.doc_type,

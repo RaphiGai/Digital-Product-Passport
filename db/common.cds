@@ -115,6 +115,10 @@ type MarketingPlacement : String(16) enum {
 type UserRole : String(20) enum {
   company_advanced;
   company_user;
+  // External supplier/partner login: sees ONLY the documents assigned to its
+  // linked BusinessPartners row (see Users.business_partner) and may update
+  // just their file + validity data. Enforced in srv/handlers/auth-helpers.js.
+  business_partner;
 }
 
 // Per-user UI colour theme (self-service, see Users.appearance_theme).

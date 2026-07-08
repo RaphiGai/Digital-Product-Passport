@@ -73,6 +73,11 @@ entity Products : identified, audited {
   // null/absent ⇒ the field catalogue default applies. Enforced in srv/handlers/public-handler.js
   // via srv/lib/field-visibility.js; regulatory-locked fields are never hidden.
   field_visibility      : LargeString;
+  // User-defined additional fields as a JSON array [{label, value, visibility}] — lets a
+  // company extend the passport with future/one-off attributes without a schema change.
+  // Each entry carries its OWN visibility ('internal'|'public'), independent of the static
+  // field catalogue. Validated/canonicalized in srv/lib/custom-fields.js.
+  custom_fields         : LargeString;
 
   variants : Association to many ProductVariants on variants.product = $self;
 }
@@ -91,6 +96,7 @@ entity ProductVariants : identified, audited {
   image_data : LargeString;                   // uploaded product image as a base64 data URL (preferred over image_url)
   status   : VariantStatus default 'active';
   field_visibility : LargeString;             // per-field consumer visibility map (see Products.field_visibility)
+  custom_fields    : LargeString;             // user-defined additional fields (see Products.custom_fields)
 
   batches : Association to many Batches    on batches.variant = $self;
   bom     : Composition of many ProductBOMs on bom.parent     = $self;
@@ -114,6 +120,7 @@ entity Batches : identified, audited {
   recycled_content_pct : Decimal(5, 2);
   status               : BatchStatus default 'draft';
   field_visibility     : LargeString;          // per-field consumer visibility map (see Products.field_visibility)
+  custom_fields        : LargeString;          // user-defined additional fields (see Products.custom_fields)
 
   items : Association to many ProductItems on items.batch = $self;
 }
@@ -212,6 +219,13 @@ entity Documents : identified, audited {
   issuer      : String(200);
   issue_date  : Date;
   valid_until : Date;
+
+  // Optional: the business partner responsible for providing/renewing this
+  // document. Assigned by company_advanced; the partner's login account (role
+  // business_partner, see db/org.cds Users.business_partner) then sees the row
+  // on its portal page and may upload/replace the file. A document may be
+  // created WITHOUT a file as a placeholder when a partner is assigned.
+  assigned_partner : Association to BusinessPartners;
 
   // Native media stream — the binary lives in `content`; CAP serves it via
   // GET Documents(ID)/content and accepts uploads via PUT to the same path.

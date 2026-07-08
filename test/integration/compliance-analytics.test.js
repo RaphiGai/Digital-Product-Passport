@@ -20,11 +20,13 @@ const EXPECTED = ['certificate', 'test_report', 'declaration_of_conformity'];
 
 beforeAll(async () => {
   const { Documents } = cds.entities('dpp');
+  // file_name is set: the evidence rollup counts only documents that actually have an
+  // uploaded file (partner-assigned placeholders without a file are pending, not evidence).
   await INSERT.into(Documents).entries([
-    { ID: 'doc-test-cert', product_ID: 'prod-tshirt-classic', doc_type: 'certificate', title: 'Test cert', valid_until: null },
-    { ID: 'doc-test-tr', product_ID: 'prod-tshirt-classic', doc_type: 'test_report', title: 'Test report', valid_until: '2030-01-01' },
-    { ID: 'doc-test-doc', product_ID: 'prod-tshirt-classic', doc_type: 'declaration_of_conformity', title: 'Test DoC', valid_until: '2030-01-01' },
-    { ID: 'doc-test-exp', product_ID: 'prod-jacket-denim', doc_type: 'certificate', title: 'Expired cert', valid_until: '2000-01-01' }
+    { ID: 'doc-test-cert', product_ID: 'prod-tshirt-classic', doc_type: 'certificate', title: 'Test cert', valid_until: null, file_name: 'cert.pdf' },
+    { ID: 'doc-test-tr', product_ID: 'prod-tshirt-classic', doc_type: 'test_report', title: 'Test report', valid_until: '2030-01-01', file_name: 'tr.pdf' },
+    { ID: 'doc-test-doc', product_ID: 'prod-tshirt-classic', doc_type: 'declaration_of_conformity', title: 'Test DoC', valid_until: '2030-01-01', file_name: 'doc.pdf' },
+    { ID: 'doc-test-exp', product_ID: 'prod-jacket-denim', doc_type: 'certificate', title: 'Expired cert', valid_until: '2000-01-01', file_name: 'exp.pdf' }
   ]);
 });
 
@@ -92,6 +94,24 @@ describe('Compliance analytics (US9.x)', () => {
     expect(p.has_certificate).toBe(true);
     expect(p.evidence_class).toBe('complete');
     expect(p.declared_not_evidenced).toBe(false); // it is compliant AND complete
+  });
+
+  test('a file-less placeholder document does NOT count as evidence', async () => {
+    const { Documents } = cds.entities('dpp');
+    // A partner-assigned placeholder (metadata only, no file uploaded yet) for a type
+    // the product would otherwise be MISSING. It must not lift coverage.
+    await INSERT.into(Documents).entries([
+      { ID: 'doc-test-ph', product_ID: 'prod-jacket-denim', doc_type: 'test_report', title: 'Awaiting partner', valid_until: '2030-01-01', file_name: null }
+    ]);
+    try {
+      const data = parse(await call({}, alice));
+      const p = data.by_product.find((r) => r.product_id === 'prod-jacket-denim');
+      // The placeholder test_report is ignored; only the (expired) certificate remains.
+      expect(p.covered_types).toBe(0);
+      expect(p.evidence_class).toBe('expired_only');
+    } finally {
+      await DELETE.from(Documents).where({ ID: 'doc-test-ph' });
+    }
   });
 
   test('a product whose only doc is expired is classified expired_only', async () => {

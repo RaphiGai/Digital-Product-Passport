@@ -2,6 +2,7 @@
 
 const { createHash } = require('crypto');
 const { resolve, CATALOGUES } = require('./field-visibility'); // leaf lib module (no handler imports)
+const { customFieldsHashMap } = require('./custom-fields'); // leaf lib module (no handler imports)
 
 /**
  * Deterministic content hashing + field diffing for DPP snapshots (drift detection).
@@ -77,7 +78,15 @@ function normalizeForHash(snap) {
   // Per-field visibility: compare the EFFECTIVE maps, not the raw stored JSON strings.
   if (n && typeof n === 'object') {
     for (const kind of ['product', 'variant', 'batch']) {
-      if (isObj(n[kind])) n[kind].field_visibility = effectiveVisibilityMap(kind, n[kind].field_visibility);
+      if (!isObj(n[kind])) continue;
+      n[kind].field_visibility = effectiveVisibilityMap(kind, n[kind].field_visibility);
+      // User-defined additional fields: normalize the stored JSON string to an object
+      // keyed by label ("value · visibility") so the diff yields one path per field and
+      // row order cannot flap the hash. DROP the key when empty — snapshots captured
+      // before the column existed must keep hashing identically (no mass drift-revert).
+      const cf = customFieldsHashMap(n[kind].custom_fields);
+      if (cf) n[kind].custom_fields = cf;
+      else delete n[kind].custom_fields;
     }
   }
   return n;
@@ -171,6 +180,25 @@ function walkDiff(prev, cur, path, out) {
         out.push({
           path: `${path}.${k}`,
           label: `Field visibility · ${humanize(k)}`,
+          old: short(p[k]),
+          new: short(c[k])
+        });
+      }
+    }
+    return;
+  }
+  // User-defined additional fields (normalized to {label: 'value · visibility'} maps):
+  // one readable entry per field label instead of generic recursion, whose humanized
+  // labels would be indistinguishable from real data fields.
+  if (path.endsWith('custom_fields')) {
+    const p = isObj(prev) ? prev : {};
+    const c = isObj(cur) ? cur : {};
+    for (const k of new Set([...Object.keys(p), ...Object.keys(c)])) {
+      if (out.length >= 60) return;
+      if ((p[k] ?? null) !== (c[k] ?? null)) {
+        out.push({
+          path: `${path}.${k}`,
+          label: `Additional field · ${k}`,
           old: short(p[k]),
           new: short(c[k])
         });

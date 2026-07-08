@@ -47,6 +47,10 @@ entity Users : identified {
   role             : UserRole not null;
   external_user_id : String(120);
   active           : Boolean default true;
+  // For role = business_partner ONLY: the BusinessPartners row this external
+  // account acts for. Such accounts see/edit nothing but the Documents assigned
+  // to this partner (enforced in srv/handlers/auth-helpers.js + document-handlers.js).
+  business_partner : Association to BusinessPartners;
   // Per-user UI colour theme (self-service via the updateProfile action). green | blue | purple.
   appearance_theme : AppearanceTheme default 'green';
 

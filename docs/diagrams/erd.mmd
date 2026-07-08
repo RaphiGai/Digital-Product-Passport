@@ -1,130 +1,52 @@
-%%{init: {'theme':'neutral', 'themeVariables': { 'fontSize': '13px'}}}%%
+%%{init: {'theme':'neutral', 'themeVariables': { 'fontSize': '14px'}}}%%
+%% Semantic data model — entities and their relationships ONLY (deliberately
+%% attribute-free). Field-level detail lives in technical-data-model.mmd.
+%% State: main, July 2026 (17 entities; the Demo branch adds 3 catalogue entities).
 erDiagram
 
-    %% Organisation layer
-    Organisation     ||--o{ User              : "owns"
-    Organisation     ||--o{ Business_Partner  : "owns"
-    Organisation     ||--o{ Product           : "owns"
+    %% ---------- Organisation layer ----------
+    Organisation     ||--o{ User               : "owns"
+    Organisation     ||--o{ Business_Partner   : "owns"
+    Organisation     ||--o{ Product            : "owns"
     Business_Partner ||--o{ Business_Partner_Role : "has roles"
+    Business_Partner |o--o{ User               : "portal login for"
 
-    %% Product layer
-    Product          ||--o{ Product_Variant   : "has variants"
-    Product_Variant  ||--o{ Batch             : "produced in"
-    Batch            ||--o{ Product_Item      : "serialised into"
-    Business_Partner ||--o{ Batch             : "manufactured by"
-    Business_Partner ||--o{ Batch             : "supplied by"
-    Product_Variant  ||--o{ Product_BOM       : "consumes"
-    Product_BOM      }o--|| Product           : "uses as component"
+    %% ---------- Product layer ----------
+    Product_Category |o--o{ Product            : "categorises"
+    Product          ||--o{ Product_Variant    : "has variants"
+    Product_Variant  ||--o{ Batch              : "produced in"
+    Batch            ||--o{ Product_Item       : "serialised into"
+    Business_Partner |o--o{ Batch              : "manufactures"
+    Business_Partner |o--o{ Batch              : "supplies"
 
-    %% Passport layer
-    Product          ||--o{ Product_Passport  : "described by"
-    Batch            ||--o{ Product_Passport  : "narrowed to"
-    Product_Variant  ||--o{ Product_Passport  : "variant shown on"
-    Product_Item     ||--|| Product_Passport  : "carries unique DPP"
-    Product_Passport ||--o{ QR_Code           : "QR history"
-    Product_BOM      }o--o| Product_Passport  : "sub-DPP"
-    Product_Passport ||--o{ DPP_Marketing_Link : "shows ad/info"
-    Organisation     ||--o{ DPP_Marketing_Link : "org-wide campaign"
+    %% Bill of materials (variant-level recipe)
+    Product_Variant  ||--o{ Product_BOM        : "consumes"
+    Product_BOM      }o--o| Product            : "uses as component"
 
-    Organisation {
-        text Identifier              PK
-        text Legal_name
-        text Trade_name
-        text Country
-        text Global_Location_Number
-        text Tenant_key              UK
-    }
+    %% Per-batch component sourcing
+    Batch            ||--o{ Batch_Component    : "sources per batch"
+    Product_BOM      ||--o{ Batch_Component    : "instantiates BOM line"
+    Batch_Component  }o--o| Business_Partner   : "supplied by"
+    Batch_Component  }o--o| Batch              : "component batch"
+    Batch_Component  }o--o| Product_Passport   : "component sub-DPP"
 
-    User {
-        text Identifier              PK
-        text Email
-        text Display_name
-        text Role
-    }
+    %% Documents (certificates and proofs — product- OR batch-level, XOR)
+    Product          |o--o{ Document           : "evidence for"
+    Batch            |o--o{ Document           : "evidence for"
+    Business_Partner |o--o{ Document           : "assigned to"
 
-    Business_Partner {
-        text Identifier              PK
-        text Name
-        text Country
-        text Contact_person
-        text External_identifier
-    }
+    %% ---------- Passport layer ----------
+    Product          ||--o{ Product_Passport   : "described by"
+    Product_Variant  |o--o{ Product_Passport   : "variant shown on"
+    Batch            |o--o{ Product_Passport   : "narrowed to"
+    Product_Item     |o--|| Product_Passport   : "carries unique DPP"
+    Product_Passport ||--o{ QR_Code            : "QR history"
+    Product_BOM      }o--o| Product_Passport   : "sub-DPP"
+    Product_Passport ||--o{ DPP_Version        : "immutable versions"
+    User             |o--o{ DPP_Version        : "changed by"
+    Product_Passport |o--o{ DPP_Marketing_Link : "shows ad/info"
+    Organisation     ||--o{ DPP_Marketing_Link : "owns (tenant scope)"
 
-    Business_Partner_Role {
-        text Identifier              PK
-        text Role_type
-    }
-
-    Product {
-        text Identifier              PK
-        text Product_type
-        text Name
-        text Brand
-        text Category
-        text Global_Trade_Item_Number UK
-        text Fibre_composition
-        text Country_of_origin
-        text ESPR_compliance_state
-    }
-
-    Product_Variant {
-        text Identifier              PK
-        text Colour
-        text Size
-        text Stock_Keeping_Unit      UK
-        number Weight
-    }
-
-    Batch {
-        text Identifier              PK
-        text Batch_number            UK
-        date Production_date
-        text Country_of_origin
-        text Production_stage
-        number CO2_footprint
-        number Recycled_content
-    }
-
-    Product_Item {
-        text Identifier              PK
-        text Serial_number           UK
-        text UPI                     UK
-        date Manufacturing_date
-        text Status
-    }
-
-    Product_BOM {
-        text Identifier              PK
-        number Quantity
-        text Unit
-        text Component_role
-        boolean Mandatory
-        text External_supplier_DPP_URL
-    }
-
-    Product_Passport {
-        text Identifier              PK
-        text Passport_type
-        text Status
-        text Visibility
-        text Signed_token            UK
-        text Public_link
-        text Storytelling
-    }
-
-    QR_Code {
-        text Identifier              PK
-        text Encoded_value
-        text Lifecycle_status
-    }
-
-    DPP_Marketing_Link {
-        text Identifier              PK
-        text Link_type
-        text Title
-        text URL
-        number Display_order
-        boolean Active
-        date Valid_from
-        date Valid_to
-    }
+    %% ---------- Import staging ----------
+    Organisation     |o--o{ Pending_Import     : "staged imports"
+    User             |o--o{ Pending_Import     : "created / reviewed by"

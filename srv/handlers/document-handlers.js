@@ -1,7 +1,10 @@
 'use strict';
 
 const cds = require('@sap/cds');
-const { requireOwningOrg } = require('./auth-helpers');
+const {
+  requireOwningOrg, requireActiveUser, requireRole,
+  isBusinessPartner, requirePartnerLink
+} = require('./auth-helpers');
 const dppHandlers = require('./dpp-handlers'); // for reevaluateDrift (one-way require)
 
 /** DPPs whose snapshot embeds these documents (product- or batch-anchored). */
@@ -40,10 +43,41 @@ async function guardExistingOwner(req, id) {
   else if (row.batch_ID) await requireOwningOrg(req, 'Batches', row.batch_ID, BATCH_OWNER_PATH);
 }
 
-/** Verify any product/batch target named in req.data is owned by the caller. */
+/** Verify any product/batch/partner target named in req.data is owned by the caller. */
 async function guardTargetOwner(req) {
   if (req.data.product_ID) await requireOwningOrg(req, 'Products', req.data.product_ID);
   if (req.data.batch_ID) await requireOwningOrg(req, 'Batches', req.data.batch_ID, BATCH_OWNER_PATH);
+  if (req.data.assigned_partner_ID) await requireOwningOrg(req, 'BusinessPartners', req.data.assigned_partner_ID);
+}
+
+// Fields a business_partner login may write on its assigned documents: the file
+// itself plus issuer/validity of the renewed certificate. Everything identifying
+// the document (title, type, anchor, visibility, assignment) stays with the
+// company. ID + the server-stamped audit fields (dpp-service.js) pass through.
+const PARTNER_EDITABLE = new Set([
+  'content', 'mime_type', 'file_name', 'file_size',
+  'issuer', 'issue_date', 'valid_until',
+  'ID', 'lastChange', 'changedBy_ID'
+]);
+
+/**
+ * business_partner UPDATE guard: the target document must be assigned to the
+ * caller's linked partner, and only PARTNER_EDITABLE fields may change.
+ * Covers both the metadata PATCH and the media-stream PUT.
+ */
+async function guardPartnerUpdate(req, id) {
+  const partnerId = requirePartnerLink(req);
+  if (!id) req.reject(400, 'A record key is required for this operation.');
+  const { Documents } = cds.entities('dpp');
+  const row = await SELECT.one.from(Documents).columns('assigned_partner_ID').where({ ID: id });
+  if (!row) req.reject(404, 'Document not found.');
+  if (row.assigned_partner_ID !== partnerId) {
+    req.reject(403, "You don't have permission to access this item.");
+  }
+  const illegal = Object.keys(req.data).filter((k) => !PARTNER_EDITABLE.has(k));
+  if (illegal.length) {
+    req.reject(403, 'You can only update the file, issuer and validity dates of your assigned documents.');
+  }
 }
 
 module.exports = (srv) => {
@@ -62,9 +96,18 @@ module.exports = (srv) => {
 
   // UPDATE: covers metadata PATCH AND the media-stream PUT (which CAP routes here as
   // an UPDATE on Documents(ID)). Guard the existing owner, plus any new target if the
-  // document is being re-pointed to a different product/batch.
+  // document is being re-pointed to a different product/batch. business_partner
+  // logins get the narrower assigned-document + field-allowlist guard instead.
+  // Resolve the caller FIRST: entity-specific before handlers can run ahead of the
+  // central before('*') gate (see dpp-service.js), so the role may not be set yet —
+  // branching on an unresolved role would skip the partner allowlist.
   srv.before('UPDATE', Documents, async (req) => {
+    await requireActiveUser(req);
     const id = keyFromReq(req);
+    if (isBusinessPartner(req)) {
+      await guardPartnerUpdate(req, id);
+      return;
+    }
     if (id) await guardExistingOwner(req, id);
     await guardTargetOwner(req);
   });
@@ -127,6 +170,15 @@ module.exports = (srv) => {
     }
   });
 
+  // NOTE: the "a file-less document must have an assigned partner" placeholder rule is
+  // enforced in the frontend (DocumentManager / PartnerDocuments), NOT here. The data
+  // model deliberately allows a bare metadata row whose binary is uploaded later via a
+  // separate media PUT (which does not set file_name), so a server-side "no file ⇒
+  // partner required" guard would reject that legitimate two-step flow. A file-less row
+  // is already handled safely everywhere it matters: filtered off the consumer passport
+  // (public-handler.js), surfaced as "upload pending" in the partner portal, and — since
+  // the compliance evidence rollup now skips file-less rows — no longer miscounted.
+
   // DELETE: the central read OR-filter does not apply to DELETE, so guard explicitly.
   // Removing the row drops the BLOB with it.
   srv.before('DELETE', Documents, async (req) => {
@@ -155,5 +207,92 @@ module.exports = (srv) => {
     if (d && (d.productId || d.batchId)) {
       await dppHandlers.reevaluateDrift(await dppIdsForDoc(d.productId, d.batchId));
     }
+  });
+
+  // ----- Partner portal feed (business_partner role) -----
+  // One call returns everything the partner page needs: the documents assigned
+  // to the caller's linked partner PLUS the product/batch context they belong
+  // to — so partner accounts never need read access to Products/Batches/
+  // ProductVariants themselves (those entities stay blocked by the central
+  // business_partner scope gate). JSON string, same contract style as
+  // validationOverview.
+  srv.on('myAssignedDocuments', async (req) => {
+    await requireActiveUser(req);
+    requireRole(req, 'business_partner');
+    const partnerId = requirePartnerLink(req);
+
+    const db = cds.entities('dpp');
+    const docs = await SELECT.from(db.Documents)
+      .columns('ID', 'title', 'doc_type', 'issuer', 'issue_date', 'valid_until',
+               'file_name', 'mime_type', 'file_size', 'product_ID', 'batch_ID', 'lastChange')
+      .where({ assigned_partner_ID: partnerId })
+      .orderBy('valid_until', 'title');
+
+    // Resolve product context: directly for product docs, via variant for batch docs.
+    const batchIds = [...new Set(docs.map((d) => d.batch_ID).filter(Boolean))];
+    const batches = batchIds.length
+      ? await SELECT.from(db.Batches)
+          .columns('ID', 'batch_number', 'production_date', 'variant_ID')
+          .where({ ID: batchIds })
+      : [];
+    const batchById = new Map(batches.map((b) => [b.ID, b]));
+
+    const variantIds = [...new Set(batches.map((b) => b.variant_ID).filter(Boolean))];
+    const variants = variantIds.length
+      ? await SELECT.from(db.ProductVariants)
+          .columns('ID', 'color', 'size', 'sku', 'product_ID')
+          .where({ ID: variantIds })
+      : [];
+    const variantById = new Map(variants.map((v) => [v.ID, v]));
+
+    const productIds = [...new Set([
+      ...docs.map((d) => d.product_ID),
+      ...variants.map((v) => v.product_ID)
+    ].filter(Boolean))];
+    const products = productIds.length
+      ? await SELECT.from(db.Products)
+          .columns('ID', 'name', 'brand', 'model', 'product_type', 'description')
+          .where({ ID: productIds })
+      : [];
+    const productById = new Map(products.map((p) => [p.ID, p]));
+
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = docs.map((d) => {
+      const batch = (d.batch_ID && batchById.get(d.batch_ID)) || null;
+      const variant = (batch && batch.variant_ID && variantById.get(batch.variant_ID)) || null;
+      const productId = d.product_ID || (variant && variant.product_ID) || null;
+      const product = (productId && productById.get(productId)) || null;
+      return {
+        ID: d.ID,
+        title: d.title,
+        doc_type: d.doc_type,
+        issuer: d.issuer,
+        issue_date: d.issue_date,
+        valid_until: d.valid_until,
+        file_name: d.file_name,
+        mime_type: d.mime_type,
+        file_size: d.file_size,
+        lastChange: d.lastChange,
+        has_file: !!d.file_name,
+        expired: !!(d.valid_until && String(d.valid_until) < today),
+        level: d.batch_ID ? 'batch' : 'product',
+        product: product ? {
+          ID: product.ID,
+          name: product.name,
+          brand: product.brand,
+          model: product.model,
+          product_type: product.product_type,
+          description: product.description
+        } : null,
+        batch: batch ? {
+          ID: batch.ID,
+          batch_number: batch.batch_number,
+          production_date: batch.production_date,
+          variant: variant ? { color: variant.color, size: variant.size, sku: variant.sku } : null
+        } : null
+      };
+    });
+
+    return JSON.stringify({ generated_at: new Date().toISOString(), documents: rows });
   });
 };

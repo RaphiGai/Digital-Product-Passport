@@ -3,6 +3,7 @@
 const cds = require('@sap/cds');
 const { getUserOrg, requireOwningOrg } = require('./auth-helpers');
 const { assertHttpUrls } = require('../lib/url-validate');
+const { normalizeCustomFields } = require('../lib/custom-fields');
 const dppHandlers = require('./dpp-handlers'); // for reevaluateDrift (one-way require)
 
 // Product URL fields rendered as <a href> on the public consumer page — must be http(s).
@@ -15,6 +16,14 @@ function rejectCrossOrgWrite(req, fieldValue, callerOrgId) {
   if (fieldValue !== undefined && fieldValue !== callerOrgId) {
     req.reject(403, 'Cannot assign records to a different organization.');
   }
+}
+
+// Validate + canonicalize a written `custom_fields` JSON payload (Products/Variants/Batches).
+function checkCustomFields(req) {
+  if (req.data.custom_fields === undefined) return;
+  const res = normalizeCustomFields(req.data.custom_fields);
+  if (!res.ok) req.reject(400, res.message);
+  req.data.custom_fields = res.json;
 }
 
 const keyOf = (req) => {
@@ -101,6 +110,7 @@ module.exports = (srv) => {
     }
     // Consumer-facing URLs must be http(s) — block stored javascript:/data: XSS.
     assertHttpUrls(req, req.data, PRODUCT_URL_FIELDS);
+    checkCustomFields(req);
   });
 
   srv.before('CREATE', BusinessPartners, async (req) => {
@@ -121,6 +131,7 @@ module.exports = (srv) => {
     if (weight_g != null && weight_g <= 0) {
       req.reject(400, 'Weight must be a positive number (in grams).');
     }
+    checkCustomFields(req);
   });
 
   srv.before(['CREATE', 'UPDATE'], Batches, (req) => {
@@ -131,6 +142,7 @@ module.exports = (srv) => {
     if (recycled_content_pct != null && (recycled_content_pct < 0 || recycled_content_pct > 100)) {
       req.reject(400, 'Recycled content must be between 0 and 100 %.');
     }
+    checkCustomFields(req);
   });
 
   // ----- BOM integrity: self-loop, quantity bounds, acyclic graph (US4.11) -----

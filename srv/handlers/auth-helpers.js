@@ -3,7 +3,13 @@
 const cds = require('@sap/cds');
 const LOG = cds.log('dpp/auth');
 
-const APP_ROLES = ['company_advanced', 'company_user'];
+const APP_ROLES = ['company_advanced', 'company_user', 'business_partner'];
+
+// Everything a business_partner login may do. External partner accounts are
+// locked to their portal page: the assigned-documents feed, updating those
+// documents (file + validity), and their own session/profile actions. Any
+// other entity or action is rejected in enforceBusinessPartnerScope below.
+const PARTNER_ALLOWED_EVENTS = new Set(['me', 'myAssignedDocuments', 'changePassword', 'updateProfile']);
 
 const WRITE_EVENTS = new Set([
   'CREATE', 'UPDATE', 'DELETE', 'UPSERT',
@@ -113,6 +119,26 @@ async function resolveAppUserInline(req) {
     return;
   }
 
+  // A business_partner login is only as active as the partner it acts for:
+  // archiving the BusinessPartner (or an account whose link went missing) must
+  // revoke portal access on the next request, mirroring createUser's refusal to
+  // onboard against an archived partner.
+  if (userRow.role === 'business_partner') {
+    if (!userRow.business_partner_ID) {
+      req.user._appInactive = true;
+      LOG.warn('business_partner account without partner link');
+      return;
+    }
+    const { BusinessPartners } = cds.entities('dpp');
+    const partner = await SELECT.one.from(BusinessPartners)
+      .columns('ID', 'archived').where({ ID: userRow.business_partner_ID });
+    if (!partner || partner.archived) {
+      req.user._appInactive = true;
+      LOG.warn('business_partner account linked to a missing or archived partner');
+      return;
+    }
+  }
+
   req.user._roles = { [userRow.role]: 1 };
   req.user.roles = [userRow.role];
   const originalIs = typeof req.user.is === 'function' ? req.user.is.bind(req.user) : () => false;
@@ -122,6 +148,7 @@ async function resolveAppUserInline(req) {
   req.user.attr.tenant = org.tenant_id;
   req.user._appOrgId = org.ID;
   req.user._appUserId = userRow.ID;   // acting Users row — used to stamp audit fields
+  req.user._appPartnerId = userRow.business_partner_ID || null; // linked BusinessPartners row (business_partner role)
 }
 
 /**
@@ -153,6 +180,86 @@ function requireRole(req, ...roles) {
 
 function isWriteEvent(req) {
   return WRITE_EVENTS.has(req.event);
+}
+
+function isBusinessPartner(req) {
+  return getAppRole(req) === 'business_partner';
+}
+
+/**
+ * Fail-closed allowlist for business_partner logins, called from the central
+ * `srv.before('*')` gate for every request of such an account. Permits ONLY:
+ *  - the unbound events in PARTNER_ALLOWED_EVENTS (portal feed + own session),
+ *  - READ/UPDATE on Documents — further narrowed to the documents assigned to
+ *    the linked partner by the READ filter in srv/dpp-service.js and the
+ *    field-allowlist UPDATE guard in srv/handlers/document-handlers.js.
+ * Everything else (all other entities, navigations, actions) is rejected.
+ */
+function enforceBusinessPartnerScope(req) {
+  if (PARTNER_ALLOWED_EVENTS.has(req.event)) return;
+  const targetName = req.target && req.target.name;
+  const entityName = targetName ? String(targetName).split('.').pop() : null;
+  if (entityName === 'Documents' && (req.event === 'READ' || req.event === 'UPDATE')) return;
+  LOG.warn('business_partner scope violation blocked', { event: req.event, target: targetName || null });
+  req.reject(403, "You don't have permission to perform this action.");
+}
+
+/**
+ * The BusinessPartners row a business_partner login acts for. Fail-closed:
+ * rejects when the account has no partner link (misconfigured account).
+ */
+function requirePartnerLink(req) {
+  const partnerId = req.user && req.user._appPartnerId;
+  if (!partnerId) {
+    LOG.warn('business_partner account without partner link');
+    req.reject(403, 'Your account is not linked to a business partner. Please contact your administrator.');
+  }
+  return partnerId;
+}
+
+/** True if an OData column ref navigates an association (ref path longer than 1). */
+function refCrossesAssociation(col) {
+  if (!col) return false;
+  if (col.expand) return true;
+  const ref = col.ref;
+  return Array.isArray(ref) && ref.length > 1;
+}
+
+/** True if an xpr/where token references an association path (ref length > 1). */
+function whereCrossesAssociation(tokens) {
+  if (!Array.isArray(tokens)) return false;
+  return tokens.some((t) => {
+    if (!t || typeof t !== 'object') return false;
+    if (Array.isArray(t.ref) && t.ref.length > 1) return true;
+    if (Array.isArray(t.xpr) && whereCrossesAssociation(t.xpr)) return true;
+    if (t.args && whereCrossesAssociation(Array.isArray(t.args) ? t.args : [t.args])) return true;
+    return false;
+  });
+}
+
+/**
+ * Fail-closed guard for a business_partner Documents READ: reject any query that
+ * traverses an association (via $expand, $select, $filter or $orderby) — those
+ * are resolved inside the Documents READ event and would otherwise expose
+ * internal product/batch fields (directly, or as a value oracle through $filter).
+ * Partner logins may read only Documents' own scalar columns.
+ */
+function rejectDocumentAssociationAccess(req) {
+  const sel = req.query && req.query.SELECT;
+  if (!sel) return;
+  const cols = sel.columns;
+  if (Array.isArray(cols) && cols.some(refCrossesAssociation)) {
+    LOG.warn('business_partner association access blocked', { via: 'select/expand' });
+    req.reject(403, "You don't have permission to perform this action.");
+  }
+  if (whereCrossesAssociation(sel.where)) {
+    LOG.warn('business_partner association access blocked', { via: 'filter' });
+    req.reject(403, "You don't have permission to perform this action.");
+  }
+  if (Array.isArray(sel.orderBy) && sel.orderBy.some(refCrossesAssociation)) {
+    LOG.warn('business_partner association access blocked', { via: 'orderby' });
+    req.reject(403, "You don't have permission to perform this action.");
+  }
 }
 
 /**
@@ -192,5 +299,9 @@ module.exports = {
   requireActiveUser,
   requireRole,
   isWriteEvent,
+  isBusinessPartner,
+  enforceBusinessPartnerScope,
+  requirePartnerLink,
+  rejectDocumentAssociationAccess,
   requireOwningOrg
 };
