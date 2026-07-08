@@ -12,10 +12,12 @@ import {
 import { useUpdate } from '@/api/hooks';
 import { useHasRole } from '@/auth/useMe';
 import { BATCH_CATALOGUE, catalogueByKey, mergeVisibility } from '@/lib/fieldCatalogue';
+import { parseCustomFields, serializeCustomFields, validateCustomFields } from '@/lib/customFields';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { FormSection, FieldRow, Input, Select, CountrySelect } from '@/ui/Form';
+import { CustomFieldsEditor } from '@/ui/CustomFieldsEditor';
 import { DocumentManager } from '@/ui/DocumentManager';
 
 function SortButton({ label, column, sort, onSort }) {
@@ -126,7 +128,8 @@ export function BatchEdit() {
             ? ''
             : String(b.co2_footprint_kg).replace('.', ','),
         recycled_content_pct: b.recycled_content_pct ?? '',
-        status: b.status ?? 'draft'
+        status: b.status ?? 'draft',
+        custom_fields: parseCustomFields(b.custom_fields)
       });
 
       setFieldVis(mergeVisibility(BATCH_CATALOGUE, b.field_visibility));
@@ -265,6 +268,12 @@ export function BatchEdit() {
       }
     }
 
+    const cfError = validateCustomFields(form.custom_fields);
+    if (cfError) {
+      setMsg({ kind: 'error', text: cfError });
+      return;
+    }
+
     update.mutate(
       {
         key: bid,
@@ -284,6 +293,7 @@ export function BatchEdit() {
               ? Number(form.recycled_content_pct)
               : null,
           status: form.status,
+          custom_fields: serializeCustomFields(form.custom_fields),
           field_visibility: JSON.stringify(fieldVis ?? {})
         }
       },
@@ -516,6 +526,17 @@ export function BatchEdit() {
               ]}
             />
           </FieldRow>
+        </FormSection>
+
+        <FormSection
+          title="Additional fields"
+          description="Your own name/value fields for this batch. Each field has its own Public/Internal setting — Public fields appear on the consumer passport."
+        >
+          <CustomFieldsEditor
+            rows={form.custom_fields}
+            onChange={(rows) => setForm((f) => ({ ...f, custom_fields: rows }))}
+            canEditVisibility={isAdvanced}
+          />
         </FormSection>
 
         <div className="flex justify-end gap-3 border-t border-black/5 pt-5">

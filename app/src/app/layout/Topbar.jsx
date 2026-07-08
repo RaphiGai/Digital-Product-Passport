@@ -65,6 +65,9 @@ export function Topbar() {
             <div className="border-b border-black/5 px-3 py-2">
               <p className="truncate text-sm font-medium text-ink">{me?.displayName ?? 'Signed in'}</p>
               {me?.role && <p className="truncate text-xs text-ink-muted">{me.role}</p>}
+              {me?.businessPartnerName && (
+                <p className="truncate text-xs text-ink-muted">{me.businessPartnerName}</p>
+              )}
               {me?.tenantId && <p className="truncate text-xs text-ink-muted">{me.tenantId}</p>}
             </div>
             <Link

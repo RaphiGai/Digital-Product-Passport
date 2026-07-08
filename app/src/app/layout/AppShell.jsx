@@ -1,10 +1,15 @@
 import { useEffect } from 'react';
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { useMe } from '@/auth/useMe';
 import { ApiError } from '@/api/client';
 import { AccountNotActivated } from '@/app/pages/AccountNotActivated';
+
+// The only routes a business_partner login may visit — everything else redirects
+// to the partner portal. Mirrors the server-side scope gate (auth-helpers.js),
+// which blocks all other reads/writes anyway; this just keeps the UX clean.
+const PARTNER_PATHS = ['/partner-documents', '/profile', '/appearance'];
 
 /**
  * Authenticated shell. Resolves me() once. With the app-managed auth, a 401 (no
@@ -14,6 +19,7 @@ import { AccountNotActivated } from '@/app/pages/AccountNotActivated';
  */
 export function AppShell() {
   const { data: me, isLoading, error } = useMe();
+  const location = useLocation();
 
   // Apply the user's saved colour theme app-wide (server value is the source of
   // truth; localStorage is kept in sync only for an instant, flash-free apply on
@@ -44,6 +50,13 @@ export function AppShell() {
   }
 
   if (me?.mustResetPassword) return <Navigate to="/login" replace />;
+
+  if (
+    me?.role === 'business_partner' &&
+    !PARTNER_PATHS.some((p) => location.pathname === p || location.pathname.startsWith(`${p}/`))
+  ) {
+    return <Navigate to="/partner-documents" replace />;
+  }
 
   return (
     <div className="flex h-full">

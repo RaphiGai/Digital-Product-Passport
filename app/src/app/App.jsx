@@ -33,6 +33,7 @@ import { SustainabilityAnalytics } from './pages/SustainabilityAnalytics';
 import { ComplianceAnalytics } from './pages/ComplianceAnalytics';
 import { BatchCreate } from './pages/BatchCreate';
 import { Validation } from './pages/Validation';
+import { PartnerDocuments } from './pages/PartnerDocuments';
 import ComplianceCenter from '@/app/pages/ComplianceCenter';
 
 
@@ -85,6 +86,10 @@ export function App() {
 
           <Route path="/profile" element={<ProfileSettings />} />
           <Route path="/appearance" element={<AppearanceSettings />} />
+
+          {/* Partner portal — the single page business_partner logins are locked to
+              (AppShell redirects them here from every other route). */}
+          <Route path="partner-documents" element={<PartnerDocuments />} />
 
           <Route path="/validation" element={<Validation />} />
 

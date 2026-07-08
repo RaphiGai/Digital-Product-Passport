@@ -13,6 +13,7 @@ import {
   FileBarChart,
   Settings,
   FileUp,
+  FileText,
   Activity,
   ChevronLeft,
   Menu
@@ -50,10 +51,18 @@ const NAV = [
   }
 ];
 
+// business_partner logins are locked to their portal — the sidebar shows only that.
+const PARTNER_NAV = [
+  {
+    items: [{ to: '/partner-documents', label: 'My documents', icon: FileText }]
+  }
+];
+
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(true); // State to manage open/close
   const { data: me } = useMe();
   const isAdvanced = me?.role === 'company_advanced';
+  const nav = me?.role === 'business_partner' ? PARTNER_NAV : NAV;
 
   return (
     <aside 
@@ -85,7 +94,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-6 px-3 py-2 overflow-y-auto overflow-x-hidden">
-        {NAV.map((group, i) => {
+        {nav.map((group, i) => {
           const items = group.items.filter((it) => !it.adminOnly || isAdvanced);
           if (items.length === 0) return null;
           return (

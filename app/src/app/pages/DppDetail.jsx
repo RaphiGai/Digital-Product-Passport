@@ -12,6 +12,7 @@ import { RequireRole } from '@/auth/RequireRole';
 import { DocumentManager } from '@/ui/DocumentManager';
 import { MarketingLinksManager } from '@/ui/MarketingLinksManager';
 import { printLabels } from '@/lib/printLabels';
+import { parseCustomFields } from '@/lib/customFields';
 import { exportData } from '@/lib/exportExcel';
 import { ExportDropdown } from '@/ui/ExportDropdown';
 import { ValidationReport } from '@/ui/ValidationReport';
@@ -1082,6 +1083,9 @@ export function DppDetail() {
               <Row label="Durability score" value={product?.durability_score != null ? `${deNum(product.durability_score, 1)} / 10` : null} change={changed('product.durability_score')} />
               <Row label="Repairability score" value={product?.repairability_score != null ? `${deNum(product.repairability_score, 1)} / 10` : null} change={changed('product.repairability_score')} />
               <Row label="ESPR compliance" value={product?.espr_compliance} change={changed('product.espr_compliance')} />
+              {parseCustomFields(product?.custom_fields).map((f) => (
+                <Row key={f.label} label={f.label} value={f.value} change={changed(`product.custom_fields.${f.label}`)} />
+              ))}
             </div>
           </Card>
 
@@ -1106,6 +1110,9 @@ export function DppDetail() {
                 <Row label="SKU" value={variant.sku} change={changed('variant.sku')} />
                 <Row label="GTIN" value={variant.gtin} change={changed('variant.gtin')} />
                 <Row label="Weight" value={withUnit(variant.weight_g, 'g', 0)} change={changed('variant.weight_g')} />
+                {parseCustomFields(variant.custom_fields).map((f) => (
+                  <Row key={f.label} label={f.label} value={f.value} change={changed(`variant.custom_fields.${f.label}`)} />
+                ))}
               </div>
             </Card>
           )}
@@ -1129,6 +1136,9 @@ export function DppDetail() {
                 {product?.product_type !== 'finished' && (
                   <Row label="Recycled content" value={withUnit(batch.recycled_content_pct, '%', 2)} change={changed('batch.recycled_content_pct')} />
                 )}
+                {parseCustomFields(batch.custom_fields).map((f) => (
+                  <Row key={f.label} label={f.label} value={f.value} change={changed(`batch.custom_fields.${f.label}`)} />
+                ))}
                 <Row label="Status" value={<StatusBadge status={batch.status} />} />
               </div>
             </Card>

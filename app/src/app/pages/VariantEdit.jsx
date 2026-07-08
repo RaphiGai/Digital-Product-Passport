@@ -5,10 +5,12 @@ import { odataGet, odataList, ApiError } from '@/api/client';
 import { useUpdate } from '@/api/hooks';
 import { useHasRole } from '@/auth/useMe';
 import { VARIANT_CATALOGUE, catalogueByKey, mergeVisibility } from '@/lib/fieldCatalogue';
+import { parseCustomFields, serializeCustomFields, validateCustomFields } from '@/lib/customFields';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { FormSection, FieldRow, Input, Select } from '@/ui/Form';
+import { CustomFieldsEditor } from '@/ui/CustomFieldsEditor';
 import { ImageUpload } from '@/ui/ImageUpload';
 import { BomEditor } from '@/ui/BomEditor';
 
@@ -74,7 +76,8 @@ export function VariantEdit() {
         weight_g: v.weight_g ?? '',
         image_url: v.image_url ?? '',
         image_data: v.image_data ?? '',
-        status: v.status ?? 'active'
+        status: v.status ?? 'active',
+        custom_fields: parseCustomFields(v.custom_fields)
       });
       setFieldVis(mergeVisibility(VARIANT_CATALOGUE, v.field_visibility));
     }
@@ -109,6 +112,12 @@ export function VariantEdit() {
       return;
     }
 
+    const cfError = validateCustomFields(form.custom_fields);
+    if (cfError) {
+      setMsg({ kind: 'error', text: cfError });
+      return;
+    }
+
     update.mutate(
       {
         key: vid,
@@ -120,6 +129,7 @@ export function VariantEdit() {
           image_url: form.image_url?.trim() || null,
           image_data: form.image_data || null,
           status: form.status,
+          custom_fields: serializeCustomFields(form.custom_fields),
           field_visibility: JSON.stringify(fieldVis ?? {})
         }
       },
@@ -290,6 +300,17 @@ export function VariantEdit() {
               ]}
             />
           </FieldRow>
+        </FormSection>
+
+        <FormSection
+          title="Additional fields"
+          description="Your own name/value fields for this variant. Each field has its own Public/Internal setting — Public fields appear on the consumer passport."
+        >
+          <CustomFieldsEditor
+            rows={form.custom_fields}
+            onChange={(rows) => setForm((f) => ({ ...f, custom_fields: rows }))}
+            canEditVisibility={isAdvanced}
+          />
         </FormSection>
 
         <div className="flex justify-end gap-3 border-t border-black/5 pt-5">

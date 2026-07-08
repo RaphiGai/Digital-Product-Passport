@@ -14,7 +14,7 @@ const ALLOWED_MIME = ['application/pdf', 'image/png', 'image/jpeg'];
 const ACCEPT = 'application/pdf,image/png,image/jpeg';
 const MAX_BYTES = 20 * 1024 * 1024;
 
-const EMPTY_FORM = { doc_type: 'certificate', title: '', visibility: 'internal', issuer: '', issue_date: '', valid_until: '' };
+const EMPTY_FORM = { doc_type: 'certificate', title: '', visibility: 'internal', issuer: '', issue_date: '', valid_until: '', assigned_partner_ID: '' };
 
 const fmtSize = (b) =>
   b == null ? '' : b < 1024 ? `${b} B` : b < 1048576 ? `${Math.round(b / 1024)} KB` : `${(b / 1048576).toFixed(1)} MB`;
@@ -57,11 +57,28 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
 
   const docsQ = useQuery({
     queryKey: ['Documents', scope, ownerId],
-    queryFn: () => odataList('Documents', { filter, orderby: 'issue_date desc', top: 200 }),
+    queryFn: () =>
+      odataList('Documents', {
+        filter,
+        orderby: 'issue_date desc',
+        top: 200,
+        expand: ['assigned_partner($select=ID,name)']
+      }),
     enabled: !!ownerId
   });
   const rows = docsQ.data ?? [];
   const expiredCount = rows.filter((d) => isExpired(d.valid_until)).length;
+
+  // Active partners for the "responsible partner" assignment (edit mode only).
+  const partnersQ = useQuery({
+    queryKey: ['BusinessPartners', 'for-doc-assign'],
+    queryFn: () => odataList('BusinessPartners', { filter: 'archived eq false', orderby: 'name', top: 500 }),
+    enabled: !readOnly
+  });
+  const partnerOptions = [
+    { value: '', label: '— No partner assigned —' },
+    ...(partnersQ.data ?? []).map((p) => ({ value: p.ID, label: p.name }))
+  ];
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -99,7 +116,8 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
         visibility: form.visibility,
         issuer: form.issuer.trim() || null,
         issue_date: form.issue_date || null,
-        valid_until: form.valid_until || null
+        valid_until: form.valid_until || null,
+        assigned_partner_ID: form.assigned_partner_ID || null
       };
       const fileMeta = selectedFile
         ? { file_name: selectedFile.name, mime_type: selectedFile.type || 'application/octet-stream', file_size: selectedFile.size }
@@ -114,12 +132,16 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
       const id = newId();
       const fk = scope === 'product' ? { product_ID: ownerId } : { batch_ID: ownerId };
       await odataCreate('Documents', { ID: id, ...fk, ...meta, ...fileMeta });
-      try {
-        await odataUploadMedia('Documents', id, 'content', selectedFile);
-      } catch (e) {
-        // Roll back the metadata row so a failed upload leaves no empty record.
-        await odataDelete('Documents', id).catch(() => {});
-        throw e;
+      // No file yet = a placeholder for the assigned partner to fill (allowed
+      // only with a partner, see submit()).
+      if (selectedFile) {
+        try {
+          await odataUploadMedia('Documents', id, 'content', selectedFile);
+        } catch (e) {
+          // Roll back the metadata row so a failed upload leaves no empty record.
+          await odataDelete('Documents', id).catch(() => {});
+          throw e;
+        }
       }
       return id;
     },
@@ -151,7 +173,8 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
       visibility: d.visibility ?? 'internal',
       issuer: d.issuer ?? '',
       issue_date: d.issue_date ?? '',
-      valid_until: d.valid_until ?? ''
+      valid_until: d.valid_until ?? '',
+      assigned_partner_ID: d.assigned_partner_ID ?? d.assigned_partner?.ID ?? ''
     });
   };
 
@@ -161,8 +184,14 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
       setMsg({ kind: 'error', text: 'Title is required.' });
       return;
     }
-    if (!editingId && !selectedFile) {
-      setMsg({ kind: 'error', text: 'Please choose a file.' });
+    // A file-less row is allowed only as a placeholder for an assigned partner,
+    // who then uploads the document via the partner portal. This must hold on
+    // create AND edit: a document that already has no file must keep a partner
+    // (or gain a file now), otherwise it becomes an orphan nobody can fill.
+    const editingDoc = editingId ? rows.find((d) => d.ID === editingId) : null;
+    const willHaveFile = !!selectedFile || (editingDoc ? !!editingDoc.file_name : false);
+    if (!willHaveFile && !form.assigned_partner_ID) {
+      setMsg({ kind: 'error', text: 'Please choose a file, or assign a business partner who will upload it.' });
       return;
     }
     if (form.issue_date && form.valid_until && form.valid_until <= form.issue_date) {
@@ -219,9 +248,20 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
                       Expired
                     </Badge>
                   )}
+                  {!d.file_name && (
+                    <Badge tone="amber" className="gap-1 font-normal" title="No file uploaded yet — waiting for the assigned partner.">
+                      <Upload className="h-3 w-3" />
+                      Upload pending
+                    </Badge>
+                  )}
                 </div>
                 <div className="truncate text-xs text-ink-muted">
-                  {[DOC_TYPE_LABEL[d.doc_type] ?? d.doc_type, d.issuer, fmtSize(d.file_size)].filter(Boolean).join(' · ')}
+                  {[
+                    DOC_TYPE_LABEL[d.doc_type] ?? d.doc_type,
+                    d.issuer,
+                    fmtSize(d.file_size),
+                    d.assigned_partner?.name && `Partner: ${d.assigned_partner.name}`
+                  ].filter(Boolean).join(' · ')}
                   {d.valid_until && (
                     <span className={isExpired(d.valid_until) ? 'font-medium text-red-600' : undefined}>
                       {` · valid until ${fmtDate(d.valid_until)}`}
@@ -367,6 +407,15 @@ export function DocumentManager({ scope, ownerId, readOnly = false, title = 'Doc
                   { value: 'public', label: 'Public', hint: 'Downloadable on the consumer passport' }
                 ]}
               />
+            </FieldRow>
+
+            <FieldRow
+              label="Responsible business partner"
+              htmlFor="doc-partner"
+              className="md:col-span-2"
+              hint="Optional. The assigned partner sees this document on its partner-portal page and can upload or renew the file — you may then leave the file empty as a placeholder."
+            >
+              <Select id="doc-partner" value={form.assigned_partner_ID} onChange={set('assigned_partner_ID')} options={partnerOptions} />
             </FieldRow>
 
             <FieldRow label="Issuer" htmlFor="doc-issuer">

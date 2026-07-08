@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { odataGet, odataList } from '@/api/client';
 import { mergeVisibility, VARIANT_CATALOGUE, PRODUCT_CATALOGUE } from '@/lib/fieldCatalogue';
+import { parseCustomFields } from '@/lib/customFields';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
@@ -135,6 +136,9 @@ export function VariantView() {
               visibility="internal"
             />
             <InfoRow label="Status" value={<StatusBadge status={v.status} />} visibility="internal" />
+            {parseCustomFields(v.custom_fields).map((f) => (
+              <InfoRow key={f.label} label={f.label} value={f.value} visibility={f.visibility} />
+            ))}
           </div>
         </Card>
 

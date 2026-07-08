@@ -12,10 +12,12 @@ import {
   catalogueByKey,
   mergeVisibility
 } from '@/lib/fieldCatalogue';
+import { parseCustomFields, serializeCustomFields, validateCustomFields } from '@/lib/customFields';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { FormSection, FieldRow, Input, Textarea, RadioCards, CountrySelect, Select } from '@/ui/Form';
+import { CustomFieldsEditor } from '@/ui/CustomFieldsEditor';
 import { DocumentManager } from '@/ui/DocumentManager';
 
 export function ProductEdit() {
@@ -110,7 +112,8 @@ export function ProductEdit() {
         disposal_products_url: p.disposal_products_url ?? '',
         status: p.status ?? 'draft',
         espr_compliance: p.espr_compliance ?? 'draft',
-        storytelling
+        storytelling,
+        custom_fields: parseCustomFields(p.custom_fields)
       });
       setFieldVis(mergeVisibility(PRODUCT_CATALOGUE, p.field_visibility));
     }
@@ -163,6 +166,11 @@ export function ProductEdit() {
         return;
       }
     }
+    const cfError = validateCustomFields(form.custom_fields);
+    if (cfError) {
+      setMsg({ kind: 'error', text: cfError });
+      return;
+    }
     const story = form.storytelling
       .map((s) => ({ title: s.title.trim(), body: s.body.trim() }))
       .filter((s) => s.title || s.body);
@@ -199,6 +207,7 @@ export function ProductEdit() {
           status: form.status,
           espr_compliance: form.espr_compliance,
           storytelling: story.length ? JSON.stringify(story) : null,
+          custom_fields: serializeCustomFields(form.custom_fields),
           field_visibility: JSON.stringify(fieldVis ?? {})
         }
       },
@@ -446,6 +455,17 @@ export function ProductEdit() {
               + Add story block
             </Button>
           </div>
+        </FormSection>
+
+        <FormSection
+          title="Additional fields"
+          description="Your own name/value fields for information the standard fields don’t cover (e.g. upcoming ESPR requirements). Each field has its own Public/Internal setting — Public fields appear on the consumer passport."
+        >
+          <CustomFieldsEditor
+            rows={form.custom_fields}
+            onChange={(rows) => setForm((f) => ({ ...f, custom_fields: rows }))}
+            canEditVisibility={isAdvanced}
+          />
         </FormSection>
 
         <FormSection title="Product status" description="Internal only.">

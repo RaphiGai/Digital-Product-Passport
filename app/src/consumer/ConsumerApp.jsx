@@ -273,6 +273,13 @@ function Passport({ dpp }) {
             <KeyVal label="Size" value={v.size} />
             <KeyVal label="SKU" value={v.sku} />
             <KeyVal label="Description" value={p.description} />
+            {/* User-defined additional fields marked Public (product + variant level) */}
+            {(p.custom_fields ?? []).map((f) => (
+              <KeyVal key={`p-${f.label}`} label={f.label} value={f.value} />
+            ))}
+            {(v.custom_fields ?? []).map((f) => (
+              <KeyVal key={`v-${f.label}`} label={f.label} value={f.value} />
+            ))}
           </JourneyPanel>
         )
       },
@@ -321,6 +328,10 @@ function Passport({ dpp }) {
             <KeyVal label="Country of origin" value={origin} />
             {b.batch_number && <KeyVal label="Production batch" value={b.batch_number} />}
             {b.production_date && <KeyVal label="Produced" value={deDate(b.production_date)} />}
+            {/* User-defined additional fields marked Public (batch level) */}
+            {(b.custom_fields ?? []).map((f) => (
+              <KeyVal key={`b-${f.label}`} label={f.label} value={f.value} />
+            ))}
 
             {dpp.materials?.length > 0 && (
               <div className="mt-5 border-t border-black/5 pt-5">

@@ -154,7 +154,8 @@ export const ESPR_STATUSES = [
 /** App user roles for the Settings → user management screen. */
 export const USER_ROLES = [
   { value: 'company_user', label: 'User (read-only)', hint: 'Can view everything in the organisation, but cannot edit.' },
-  { value: 'company_advanced', label: 'Advanced (full access)', hint: 'Full access, incl. creating/managing users.' }
+  { value: 'company_advanced', label: 'Advanced (full access)', hint: 'Full access, incl. creating/managing users.' },
+  { value: 'business_partner', label: 'Business partner (external)', hint: 'External partner login: sees only its assigned documents and can upload/renew them.' }
 ];
 
 /**

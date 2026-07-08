@@ -8,7 +8,7 @@
  * This file exports nothing at runtime; it only carries types for tooling.
  */
 
-/** @typedef {'company_advanced' | 'company_user'} UserRole */
+/** @typedef {'company_advanced' | 'company_user' | 'business_partner'} UserRole */
 
 /**
  * @typedef {Object} MeInfo
@@ -19,6 +19,8 @@
  * @property {string} organizationId
  * @property {string} tenantId
  * @property {boolean} mustResetPassword
+ * @property {string | null} [businessPartnerId]   set for role business_partner only
+ * @property {string | null} [businessPartnerName] set for role business_partner only
  */
 
 /**
@@ -32,6 +34,7 @@
  * @property {boolean} active
  * @property {boolean} must_reset_password
  * @property {string} [organization_ID]
+ * @property {string} [business_partner_ID] linked partner (role business_partner only)
  */
 
 /** @typedef {'finished' | 'material' | 'component' | 'packaging'} ProductType */

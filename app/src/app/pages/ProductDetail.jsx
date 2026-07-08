@@ -5,6 +5,7 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
 import { odataGet, odataList } from '@/api/client';
 import { useAction } from '@/api/hooks';
 import { mergeVisibility, PRODUCT_CATALOGUE } from '@/lib/fieldCatalogue';
+import { parseCustomFields } from '@/lib/customFields';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
@@ -402,6 +403,8 @@ export function ProductDetail() {
   const variants = p.variants ?? [];
   // Effective per-field visibility (saved overrides → catalogue defaults; locked → public).
   const vis = mergeVisibility(PRODUCT_CATALOGUE, p.field_visibility);
+  // User-defined additional fields — each entry carries its own visibility.
+  const customFields = parseCustomFields(p.custom_fields);
 
   return (
     <div className="space-y-6">
@@ -596,6 +599,18 @@ export function ProductDetail() {
           </div>
         </Card>
       </div>
+
+      {/* User-defined additional fields (per-entry visibility) */}
+      {customFields.length > 0 && (
+        <Card>
+          <CardTitle>Additional fields</CardTitle>
+          <div className="mt-2">
+            {customFields.map((f) => (
+              <Row key={f.label} label={f.label} value={f.value} visibility={f.visibility} />
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Certificates & documents (read-only; managed via product edit) */}
       <DocumentManager scope="product" ownerId={id} readOnly />

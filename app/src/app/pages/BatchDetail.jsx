@@ -5,6 +5,7 @@ import { Printer } from 'lucide-react';
 import { odataGet, odataList, odataUpdate, callAction, ApiError } from '@/api/client';
 import { printLabels } from '@/lib/printLabels';
 import { mergeVisibility, BATCH_CATALOGUE, VARIANT_CATALOGUE, PRODUCT_CATALOGUE } from '@/lib/fieldCatalogue';
+import { parseCustomFields } from '@/lib/customFields';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
@@ -396,6 +397,9 @@ return (
             />
           )}
           <InfoRow label="Status" value={<StatusBadge status={b.status} />} visibility="internal" />
+          {parseCustomFields(b.custom_fields).map((f) => (
+            <InfoRow key={f.label} label={f.label} value={f.value} visibility={f.visibility} />
+          ))}
         </div>
       </Card>
 

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { KeyRound, UserX, UserCheck } from 'lucide-react';
 import { odataList, ApiError } from '@/api/client';
 import { useUnboundAction } from '@/api/hooks';
@@ -10,11 +11,11 @@ import { Button } from '@/ui/Button';
 import { Banner } from '@/ui/Breadcrumb';
 import { DataTable } from '@/ui/Table';
 import { StatusBadge } from '@/ui/Badge';
-import { FormSection, FieldRow, Input, RadioCards } from '@/ui/Form';
+import { FormSection, FieldRow, Input, RadioCards, Select } from '@/ui/Form';
 import { PageHeader } from './ComingSoon';
 
 const USERS_KEY = [['Users']];
-const EMPTY = { username: '', email: '', displayName: '', role: 'company_user' };
+const EMPTY = { username: '', email: '', displayName: '', role: 'company_user', businessPartnerId: '' };
 const roleLabel = (r) => USER_ROLES.find((o) => o.value === r)?.label ?? r;
 
 function SortButton({ label, column, sort, onSort }) {
@@ -34,16 +35,51 @@ function SortButton({ label, column, sort, onSort }) {
 
 export function Settings() {
   const { data: me } = useMe();
+  // /settings?partner=<id> (from Partner detail "Create login account") preselects
+  // the business-partner role with that partner.
+  const [searchParams] = useSearchParams();
+  const prefillPartnerId = searchParams.get('partner') || '';
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['Users'],
-    queryFn: () => odataList('Users', { orderby: 'username', top: 200 }),
+    queryFn: () =>
+      odataList('Users', {
+        orderby: 'username',
+        top: 200,
+        expand: ['business_partner($select=ID,name)']
+      }),
     enabled: me?.role === 'company_advanced'
   });
 
-  const [form, setForm] = useState(EMPTY);
+  // Active partners for the business-partner account link.
+  const { data: partners } = useQuery({
+    queryKey: ['BusinessPartners', 'for-user-link'],
+    queryFn: () => odataList('BusinessPartners', { filter: 'archived eq false', orderby: 'name', top: 500 }),
+    enabled: me?.role === 'company_advanced'
+  });
+
+  const [form, setForm] = useState(
+    prefillPartnerId
+      ? { ...EMPTY, role: 'business_partner', businessPartnerId: prefillPartnerId }
+      : EMPTY
+  );
   const [error, setError] = useState('');
   const [notice, setNotice] = useState(/** @type {{title:string, temp:string} | null} */ (null));
+
+  // A prefilled ?partner=<id> may be stale (partner archived/deleted since the link
+  // was made, a bookmark, a hand-edited URL): once the active-partner list loads,
+  // drop a selection that isn't in it, so the dropdown and the value can't disagree
+  // (an invisible value would otherwise pass the required check and fail server-side).
+  useEffect(() => {
+    if (!partners || !form.businessPartnerId) return;
+    if (!partners.some((p) => p.ID === form.businessPartnerId)) {
+      setForm((f) => ({ ...f, businessPartnerId: '' }));
+      if (prefillPartnerId) {
+        setError('The selected business partner is no longer available. Please pick one from the list.');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partners]);
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState({ column: 'USERNAME', direction: 'asc' });
@@ -105,6 +141,10 @@ export function Settings() {
       setError('Please enter a valid email address.');
       return;
     }
+    if (form.role === 'business_partner' && !form.businessPartnerId) {
+      setError('Please select the business partner this account belongs to.');
+      return;
+    }
     createUser.mutate(
       {
         action: 'createUser',
@@ -112,7 +152,8 @@ export function Settings() {
           username: form.username.trim(),
           email: form.email.trim(),
           displayName: form.displayName.trim(),
-          role: form.role
+          role: form.role,
+          businessPartnerId: form.role === 'business_partner' ? form.businessPartnerId : null
         }
       },
       {
@@ -178,6 +219,7 @@ const visibleUsers = [...(users ?? [])]
       u.organization_ID,
       u.role,
       roleLabel(u.role),
+      u.business_partner?.name,
       u.external_user_id,
       u.active ? 'active' : 'inactive'
     ]
@@ -208,7 +250,17 @@ const visibleUsers = [...(users ?? [])]
   },
     { header: <SortButton label="NAME" column="DISPLAY_NAME" sort={sort} onSort={onSort} />, cell: (u) => u.display_name || '—' },
     { header: <SortButton label="EMAIL" column="EMAIL" sort={sort} onSort={onSort} />, cell: (u) => u.email },
-    { header: <SortButton label="ROLE" column="ROLE" sort={sort} onSort={onSort} />, cell: (u) => roleLabel(u.role) },
+    {
+      header: <SortButton label="ROLE" column="ROLE" sort={sort} onSort={onSort} />,
+      cell: (u) => (
+        <span>
+          {roleLabel(u.role)}
+          {u.business_partner?.name && (
+            <span className="block text-xs text-ink-muted">{u.business_partner.name}</span>
+          )}
+        </span>
+      )
+    },
     { header: <SortButton label="STATUS" column="ACTIVE" sort={sort} onSort={onSort} />, cell: (u) => <StatusBadge status={u.active ? 'active' : 'inactive'} /> },
     {
       header: 'Actions',
@@ -271,6 +323,25 @@ const visibleUsers = [...(users ?? [])]
                 options={USER_ROLES}
               />
             </div>
+            {form.role === 'business_partner' && (
+              <FieldRow
+                label="Business partner"
+                required
+                htmlFor="bp-link"
+                className="md:col-span-2"
+                hint="The partner this external account acts for. The account will only see documents assigned to this partner."
+              >
+                <Select
+                  id="bp-link"
+                  value={form.businessPartnerId}
+                  onChange={set('businessPartnerId')}
+                  options={[
+                    { value: '', label: '— Select a business partner —' },
+                    ...(partners ?? []).map((p) => ({ value: p.ID, label: p.name }))
+                  ]}
+                />
+              </FieldRow>
+            )}
           </FormSection>
 
           <div className="flex justify-end border-t border-black/5 pt-5">

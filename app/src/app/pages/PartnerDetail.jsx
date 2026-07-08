@@ -137,6 +137,11 @@ export function PartnerDetail() {
             >
               {bp.archived ? 'Archived' : 'Archive'}
             </Button>
+            {!bp.archived && (
+              <Button variant="outline" onClick={() => navigate(`/settings?partner=${id}`)}>
+                Create login account
+              </Button>
+            )}
             <Button variant="outline" onClick={() => navigate(`/partners/${id}/edit`)}>
               Edit partner
             </Button>
