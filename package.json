@@ -10,7 +10,7 @@
   "scripts": {
     "start": "cds-serve",
     "watch": "cds watch",
-    "build": "cds build --production && node scripts/prune-mock-data.js",
+    "build": "cds build --production",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "lint": "eslint \"srv/**/*.js\" \"test/**/*.js\"",

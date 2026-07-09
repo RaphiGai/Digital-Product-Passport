@@ -1,0 +1,11 @@
+ID;parent_ID;component_ID;component_name;component_category;component_fibre_composition;quantity;unit;component_role;is_mandatory;sub_dpp_ID;external_dpp_url;ext_co2_footprint;ext_recycled_content_pct;status
+bom-jacket-denim;var-jacket-indigo-m;prod-mat-denim;;;;520.000;g;Outer fabric;true;dpp-denim;;;;active
+bom-jacket-lining;var-jacket-indigo-m;prod-mat-lining;;;;120.000;g;Lining;true;dpp-lining;;;;active
+bom-jacket-zipper;var-jacket-indigo-m;;Metal Zipper;Trim;Metal / Polyester tape;1.000;pcs;Front zipper;true;;https://supplier.example/dpp/zipper-2026;0.0500;0.00;active
+bom-jacket-button;var-jacket-indigo-m;prod-comp-button;;;;4.000;pcs;Front buttons;true;dpp-button;;;;active
+bom-jacket-box;var-jacket-indigo-m;prod-pkg-box;;;;1.000;pcs;Shipping box;false;dpp-box;;;;active
+bom-hoodie-fabric;var-hoodie-grey-m;prod-fabric-fleece;;;;600.000;g;Main fabric;true;dpp-fabric-fleece;;;;active
+bom-hoodie-box;var-hoodie-grey-m;prod-pkg-box;;;;1.000;pcs;Shipping box;false;dpp-box;;;;active
+bom-fleece-yarn;var-fleece-default;prod-yarn-reccotton;;;;580.000;g;Knit yarn;true;dpp-yarn-reccotton;;;;active
+bom-yarn-fibre;var-yarn-default;prod-fibre-reccotton;;;;550.000;g;Base fibre;true;dpp-fibre-reccotton;;;;active
+bom-yarn-elastane;var-yarn-default;prod-mat-elastane;;;;30.000;g;Stretch additive;false;;https://supplier.example/dpp/elastane-2026;20.0000;0.00;active

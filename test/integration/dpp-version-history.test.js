@@ -7,6 +7,10 @@
 const cds = require('@sap/cds');
 
 const { GET, POST, PATCH, DELETE, axios } = cds.test().in(__dirname + '/../..');
+const loadDemoFixtures = require('../helpers/loadDemoFixtures');
+
+// Restore the demo rows removed from the shipped seed (second tenant + jacket/hoodie chains).
+beforeAll(loadDemoFixtures);
 
 const alice = { auth: { username: 'alice.advanced', password: 'x' } }; // ORG-A advanced
 const dan = { auth: { username: 'dan.advanced.b', password: 'x' } };    // ORG-B advanced

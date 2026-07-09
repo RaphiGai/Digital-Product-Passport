@@ -1,0 +1,2 @@
+ID;email;display_name;organization_ID;role;external_user_id;active;username;password_hash;must_reset_password;password_updated_at;failed_login_count;locked_until
+usr-dan;dan.advanced.b@fashionista.example;Dan Advanced;org-fashionista;company_advanced;dan.advanced.b;true;dan.advanced.b;;true;;0;

@@ -2,6 +2,10 @@
 
 const cds = require('@sap/cds');
 const { GET, expect } = cds.test().in(__dirname + '/../..');
+const loadDemoFixtures = require('../helpers/loadDemoFixtures');
+
+// Restore the demo rows removed from the shipped seed (second tenant + jacket/hoodie chains).
+beforeAll(loadDemoFixtures);
 
 const alice = { auth: { username: 'alice.advanced', password: 'x' } };
 const carol = { auth: { username: 'carol.user',     password: 'x' } };

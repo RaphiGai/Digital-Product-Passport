@@ -1,10 +1,3 @@
 ID;batch_ID;serial_number;upi;manufacturing_date;status
 pi-tshirt-0001;batch-2026-05-A;SN-TSH-0001;UPI-TSH-0001;2026-05-15;active
 pi-tshirt-0002;batch-2026-05-A;SN-TSH-0002;UPI-TSH-0002;2026-05-15;sold
-pi-denim-A-0001;batch-denim-2026-03-A;SN-DEN-A-0001;UPI-DEN-A-0001;2026-03-05;active
-pi-denim-B-0001;batch-denim-2026-03-B;SN-DEN-B-0001;UPI-DEN-B-0001;2026-03-20;active
-pi-lining-0001;batch-lining-2026-03;SN-LIN-0001;UPI-LIN-0001;2026-03-12;active
-pi-jacket-0001;batch-jacket-2026-04-A;SN-JKT-0001;UPI-JKT-0001;2026-04-22;active
-pi-jacket-0002;batch-jacket-2026-04-A;SN-JKT-0002;UPI-JKT-0002;2026-04-22;sold
-pi-button-0001;batch-button-2026-03;SN-BTN-0001;UPI-BTN-0001;2026-03-08;active
-pi-box-0001;batch-box-2026-03;SN-BOX-0001;UPI-BOX-0001;2026-03-10;active

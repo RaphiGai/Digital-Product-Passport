@@ -6,6 +6,7 @@ const cds = require('@sap/cds');
 const LOG = cds.log('dpp/server');
 const publicHandler = require('./handlers/public-handler');
 const authRoutes = require('./handlers/auth-routes');
+const aiExtractRoute = require('./routes/ai-extract');
 
 // Swagger UI is loaded lazily so test environments without the dev-only
 // dependency installed can still boot.
@@ -125,6 +126,10 @@ cds.on('bootstrap', (app) => {
   // App-managed login mask + auth endpoints (own auth, replaces XSUAA).
   // Mounted here so they sit OUTSIDE the per-service auth gate, like /public/*.
   authRoutes.register(app);
+
+  // AI assistant document-extraction endpoint (own cookie auth, larger body limit).
+  // Mounted OUTSIDE the OData gate like /auth/* and /public/*.
+  aiExtractRoute.register(app);
 
   // Public consumer endpoints. No authentication; visibility-filtered DTO.
   app.get('/public/dpp/:token', publicHandler.resolveDPPByToken);

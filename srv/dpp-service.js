@@ -9,11 +9,13 @@ const productItemHandlers = require('./handlers/product-item-handlers');
 const dppHandlers         = require('./handlers/dpp-handlers');
 const marketingHandlers   = require('./handlers/marketing-handlers');
 const documentHandlers    = require('./handlers/document-handlers');
+const cascadeDelete       = require('./handlers/cascade-delete');
 const meHandler           = require('./handlers/me-handler');
 const userHandlers        = require('./handlers/user-handlers');
 const importHandlers      = require('./handlers/import-handlers');
 const analyticsHandlers   = require('./handlers/analytics-handlers');
 const complianceHandlers  = require('./handlers/compliance-handlers');
+const aiHandlers          = require('./handlers/ai-handlers');
 
 /**
  * App-internal RBAC + tenant isolation is enforced here in handlers instead
@@ -244,9 +246,14 @@ module.exports = (srv) => {
   dppHandlers(srv);
   marketingHandlers(srv);
   documentHandlers(srv);
+  // Cascade (hard) delete for the product hierarchy. Registered AFTER the write-tenant
+  // guard loop above, so ownership/role are already verified when these before('DELETE')
+  // hooks run and clear the subtree bottom-up.
+  cascadeDelete(srv);
   meHandler(srv);
   userHandlers(srv);
   importHandlers(srv);
   analyticsHandlers(srv);
   complianceHandlers(srv);
+  aiHandlers(srv);
 };

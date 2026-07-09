@@ -213,6 +213,16 @@ service DPPService @(
     esprStatus  : String(20)
   ) returns LargeString;
 
+  // ----- AI assistant (DPP Assistant) — see srv/handlers/ai-handlers.js -----
+  // Backend-orchestrated, tool-calling agent. `messages` is a JSON array of
+  // { role, content } (the client-held conversation); `context` is optional JSON
+  // UI context { route, entity, id }. Returns a JSON string
+  // { reply, proposals[], model, usage }. Performs NO writes (propose tools only
+  // validate via dryRun) → intentionally NOT in auth-helpers.WRITE_EVENTS, so any
+  // active user (incl. read-only company_user) may chat; business_partner logins
+  // are blocked by enforceBusinessPartnerScope.
+  action aiChat(messages : LargeString, context : LargeString) returns LargeString;
+
   // ----- Validation overview — see srv/handlers/dpp-handlers.js -----
   // Org-wide readiness for the Validation page: every DPP of the caller's org with the
   // full unified check catalogue (srv/lib/dpp-validation.js) evaluated per DPP, as a

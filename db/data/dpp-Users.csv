@@ -1,4 +1,3 @@
 ID;email;display_name;organization_ID;role;external_user_id;active;username;password_hash;must_reset_password;password_updated_at;failed_login_count;locked_until
 usr-alice;alice.advanced@greenline.example;Alice Advanced;org-greenline;company_advanced;alice.advanced;true;alice.advanced;$2a$12$V/qT1EVflbcQP2.GxpzfJOzxxU9xq5rS.oPBEng4O3EHkOiutsthy;false;;0;
 usr-carol;carol.user@greenline.example;Carol User;org-greenline;company_user;carol.user;true;carol.user;;true;;0;
-usr-dan;dan.advanced.b@fashionista.example;Dan Advanced;org-fashionista;company_advanced;dan.advanced.b;true;dan.advanced.b;;true;;0;

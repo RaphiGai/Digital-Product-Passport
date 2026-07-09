@@ -1,22 +1,24 @@
 'use strict';
 
 /**
- * Blank the PRODUCTION seed data after `cds build --production`.
+ * OPTIONAL blank-deploy helper — NOT wired into `npm run build` anymore.
  *
- * Local development and the jest suite keep the full demo data in db/data —
- * this script only rewrites the packaged copies under gen/db/src/gen/data, so
- * the deployed HDI container starts empty except for the bootstrap minimum:
+ * db/data now ships a single curated demo product (the Classic T-Shirt + its material
+ * components, Greenline org, users alice/carol, the Greenline business partners), so the
+ * default production build (`cds build --production`) deploys exactly that curated seed.
+ * The removed mock data (jacket/hoodie chains, second tenant) lives under test/fixtures/data
+ * and is loaded only by the jest suite (see test/helpers/loadDemoFixtures.js).
+ *
+ * Run this MANUALLY after `cds build --production` only if you want a BLANK deployment
+ * (bootstrap minimum below); it rewrites the packaged copies under gen/db/src/gen/data:
  *
  *   - dpp-Users.csv          → only `usr-alice` (alice.advanced, company_advanced)
  *   - dpp-Organizations.csv  → only `org-greenline` (alice's tenant anchor)
  *   - dpp-ProductCategories.csv → kept in full (category master data, not mock)
  *
- * Every other CSV is truncated to its header. The per-file .hdbtabledata
- * artifacts use `include_filter: []` (full-table imports), so an empty CSV
- * actively CLEARS the corresponding table on (re)deployment — stale demo rows
- * cannot survive a redeploy.
- *
- * Wired into `npm run build` (see package.json), which the MTA build runs.
+ * Every other CSV is truncated to its header. The per-file .hdbtabledata artifacts use
+ * `include_filter: []` (full-table imports), so an empty CSV actively CLEARS the
+ * corresponding table on (re)deployment — stale demo rows cannot survive a redeploy.
  */
 
 const fs = require('fs');

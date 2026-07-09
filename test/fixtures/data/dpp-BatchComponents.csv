@@ -1,0 +1,7 @@
+ID;batch_ID;bom_ID;supplier_ID;component_batch_ID;external_batch_number;sub_dpp_ID
+bc-jacket-denim-A;batch-jacket-2026-04-A;bom-jacket-denim;bp-cotton-coop;batch-denim-2026-03-A;;
+bc-jacket-denim-B;batch-jacket-2026-04-A;bom-jacket-denim;bp-cotton-coop;batch-denim-2026-03-B;;
+bc-jacket-lining;batch-jacket-2026-04-A;bom-jacket-lining;bp-cotton-coop;batch-lining-2026-03;;
+bc-jacket-zipper;batch-jacket-2026-04-A;bom-jacket-zipper;;;ZIP-2026-0042;
+bc-jacket-button;batch-jacket-2026-04-A;bom-jacket-button;bp-braga;batch-button-2026-03;;
+bc-jacket-box;batch-jacket-2026-04-A;bom-jacket-box;bp-greenpack;batch-box-2026-03;;

@@ -2,6 +2,11 @@
 
 const cds = require('@sap/cds');
 const { GET, POST, PATCH, expect } = cds.test().in(__dirname + '/../..');
+const loadDemoFixtures = require('../helpers/loadDemoFixtures');
+
+// The shipped seed carries only the curated Greenline product; the second tenant and the
+// jacket/hoodie chains this suite relies on live in test fixtures — restore them.
+beforeAll(loadDemoFixtures);
 
 const alice  = { auth: { username: 'alice.advanced',  password: 'x' } }; // company_advanced, ORG-A
 const carol  = { auth: { username: 'carol.user',      password: 'x' } }; // company_user, ORG-A

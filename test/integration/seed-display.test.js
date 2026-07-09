@@ -10,6 +10,10 @@ const cds = require('@sap/cds');
 const tokens = require('../../srv/lib/token');
 
 const { axios } = cds.test().in(__dirname + '/../..');
+const loadDemoFixtures = require('../helpers/loadDemoFixtures');
+
+// Restore the demo rows removed from the shipped seed (second tenant + jacket/hoodie chains).
+beforeAll(loadDemoFixtures);
 
 // Open a seeded (published + public) DPP via a freshly-signed token.
 async function openByDppId(dppId) {
