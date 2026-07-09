@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { odataGet, odataList, ApiError } from '@/api/client';
-import { useUpdate } from '@/api/hooks';
+import { useUpdate, useDelete } from '@/api/hooks';
 import { useHasRole } from '@/auth/useMe';
 import { VARIANT_CATALOGUE, catalogueByKey, mergeVisibility } from '@/lib/fieldCatalogue';
 import { parseCustomFields, serializeCustomFields, validateCustomFields } from '@/lib/customFields';
@@ -11,6 +11,7 @@ import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { FormSection, FieldRow, Input, Select } from '@/ui/Form';
 import { CustomFieldsEditor } from '@/ui/CustomFieldsEditor';
+import { ConfirmDeleteModal } from '@/ui/ConfirmDeleteModal';
 import { ImageUpload } from '@/ui/ImageUpload';
 import { BomEditor } from '@/ui/BomEditor';
 
@@ -27,6 +28,8 @@ export function VariantEdit() {
   const [form, setForm] = useState(null);
   const [fieldVis, setFieldVis] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
   const isAdvanced = useHasRole('company_advanced');
   const VARIANT_VIS = useMemo(() => catalogueByKey(VARIANT_CATALOGUE), []);
 
@@ -90,6 +93,12 @@ export function VariantEdit() {
       ['Products', pid],
       ['Products']
     ]
+  });
+
+  // Hard-delete cascades the variant subtree (batches, items, DPPs, BOM lines, documents).
+  const del = useDelete('ProductVariants', {
+    invalidate: [['ProductVariants', pid], ['Products', pid], ['Products'], ['DPPs'], ['Batches'], ['ProductBOMs']],
+    onSuccess: () => navigate(`/products/${pid}`)
   });
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -164,12 +173,47 @@ export function VariantEdit() {
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-ink">Variant: {label}</h1>
-        <Link to={`/products/${pid}/variants/${vid}/batches`}>
-          <Button variant="outline">Batches</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link to={`/products/${pid}/variants/${vid}/batches`}>
+            <Button variant="outline">Batches</Button>
+          </Link>
+          {isAdvanced && (
+            <Button
+              variant="danger"
+              disabled={del.isPending}
+              onClick={() => { setDeleteError(null); setConfirmDelete(true); }}
+            >
+              Delete
+            </Button>
+          )}
+        </div>
       </div>
 
       {msg && <Banner kind={msg.kind}>{msg.text}</Banner>}
+
+      {confirmDelete && (
+        <ConfirmDeleteModal
+          title={`Delete variant "${label}"?`}
+          confirmLabel="Delete variant"
+          busy={del.isPending}
+          error={deleteError}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() =>
+            del.mutate(vid, {
+              onError: (err) =>
+                setDeleteError(err instanceof ApiError ? err.message : 'Could not delete the variant.')
+            })
+          }
+        >
+          <p>
+            This permanently deletes the variant and every batch, serialized item, digital product
+            passport, QR code, BOM line and batch-level document below it.
+          </p>
+          <p className="mt-2 text-ink-muted">
+            Published passports become unreachable and their QR codes stop resolving.
+          </p>
+        </ConfirmDeleteModal>
+      )}
 
       <Card className="p-6">
         <FormSection

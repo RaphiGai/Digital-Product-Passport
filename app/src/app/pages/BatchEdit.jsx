@@ -9,7 +9,7 @@ import {
   newId,
   ApiError
 } from '@/api/client';
-import { useUpdate } from '@/api/hooks';
+import { useUpdate, useDelete } from '@/api/hooks';
 import { useHasRole } from '@/auth/useMe';
 import { BATCH_CATALOGUE, catalogueByKey, mergeVisibility } from '@/lib/fieldCatalogue';
 import { parseCustomFields, serializeCustomFields, validateCustomFields } from '@/lib/customFields';
@@ -18,6 +18,7 @@ import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { FormSection, FieldRow, Input, Select, CountrySelect } from '@/ui/Form';
 import { CustomFieldsEditor } from '@/ui/CustomFieldsEditor';
+import { ConfirmDeleteModal } from '@/ui/ConfirmDeleteModal';
 import { DocumentManager } from '@/ui/DocumentManager';
 
 function SortButton({ label, column, sort, onSort }) {
@@ -43,6 +44,8 @@ export function BatchEdit() {
   const [form, setForm] = useState(null);
   const [fieldVis, setFieldVis] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   const [itemCount, setItemCount] = useState('');
   const [showItems, setShowItems] = useState(false);
@@ -142,6 +145,12 @@ export function BatchEdit() {
       ['Batches', vid],
       ['Batches', 'count', vid]
     ]
+  });
+
+  // Hard-delete cascades the batch subtree (items, batch/item DPPs, batch documents, per-batch components).
+  const del = useDelete('Batches', {
+    invalidate: [['Batches', vid], ['Batches', 'count', vid], ['Products', pid], ['DPPs']],
+    onSuccess: () => navigate(`/products/${pid}/variants/${vid}/batches`)
   });
 
   const saveItemsMutation = useMutation({
@@ -453,11 +462,47 @@ export function BatchEdit() {
         ]}
       />
 
-      <h1 className="text-2xl font-semibold text-ink">
-        Edit batch: {form.batch_number || batchQ.data.ID}
-      </h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold text-ink">
+          Edit batch: {form.batch_number || batchQ.data.ID}
+        </h1>
+        {isAdvanced && (
+          <Button
+            variant="danger"
+            disabled={del.isPending}
+            onClick={() => { setDeleteError(null); setConfirmDelete(true); }}
+          >
+            Delete batch
+          </Button>
+        )}
+      </div>
 
       {msg && <Banner kind={msg.kind}>{msg.text}</Banner>}
+
+      {confirmDelete && (
+        <ConfirmDeleteModal
+          title={`Delete batch "${form.batch_number || batchQ.data.ID}"?`}
+          confirmLabel="Delete batch"
+          busy={del.isPending}
+          error={deleteError}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() =>
+            del.mutate(bid, {
+              onError: (err) =>
+                setDeleteError(err instanceof ApiError ? err.message : 'Could not delete the batch.')
+            })
+          }
+        >
+          <p>
+            This permanently deletes the batch together with all{' '}
+            <strong>{draftItems.length} item{draftItems.length !== 1 ? 's' : ''}</strong>, their digital
+            product passports and QR codes, the batch-level documents and the per-batch component sourcing.
+          </p>
+          <p className="mt-2 text-ink-muted">
+            Published passports become unreachable and their QR codes stop resolving.
+          </p>
+        </ConfirmDeleteModal>
+      )}
 
       <Card className="p-6">
         <FormSection

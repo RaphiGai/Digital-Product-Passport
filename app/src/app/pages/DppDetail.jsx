@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useParams, Link } from 'react-router-dom';
-import { odataGet, odataList, callFunction, parseJsonFunctionResult } from '@/api/client';
-import { useAction, useUpdate } from '@/api/hooks';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { odataGet, odataList, callFunction, parseJsonFunctionResult, ApiError } from '@/api/client';
+import { useAction, useUpdate, useDelete } from '@/api/hooks';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge, StatusBadge } from '@/ui/Badge';
@@ -10,6 +10,7 @@ import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { Textarea, Select } from '@/ui/Form';
 import { RequireRole } from '@/auth/RequireRole';
 import { DocumentManager } from '@/ui/DocumentManager';
+import { ConfirmDeleteModal } from '@/ui/ConfirmDeleteModal';
 import { MarketingLinksManager } from '@/ui/MarketingLinksManager';
 import { printLabels } from '@/lib/printLabels';
 import { parseCustomFields } from '@/lib/customFields';
@@ -380,11 +381,14 @@ function ReadinessCard({ v, entities }) {
 
 export function DppDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [showPublish, setShowPublish] = useState(false);
   const [reason, setReason] = useState('');
   const [msg, setMsg] = useState(/** @type {{kind:'error'|'success',text:string}|null} */ (null));
   const [co2Open, setCo2Open] = useState(false);
   const [recOpen, setRecOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
   // Version picker: '' = live (current) state; otherwise a DPPVersions.ID to view read-only.
   const [selectedVersionId, setSelectedVersionId] = useState('');
 
@@ -458,6 +462,12 @@ export function DppDetail() {
   const invalidate = [['DPPs', id], ['DPPs'], ['DPPVersions', id], ['DPPs', id, 'validation'], ['Validation']];
   const act = useAction('DPPs', { invalidate });
   const update = useUpdate('DPPs', { invalidate });
+  // Hard-delete removes the passport and its QR codes, marketing links and version history.
+  // (The underlying product/variant/batch/item stays.)
+  const del = useDelete('DPPs', {
+    invalidate: [['DPPs'], ['Validation']],
+    onSuccess: () => navigate('/dpps')
+  });
 
   if (isLoading) return <p className="text-ink-muted">Loading…</p>;
   if (!dpp) return <p className="text-ink-muted">Passport not found.</p>;
@@ -900,10 +910,43 @@ export function DppDetail() {
                   Unarchive
                 </Button>
               )}
+              <Button
+                variant="danger"
+                disabled={busy || del.isPending}
+                onClick={() => { setDeleteError(null); setConfirmDelete(true); }}
+              >
+                Delete
+              </Button>
             </RequireRole>
           )}
         </div>
       </div>
+
+      {confirmDelete && (
+        <ConfirmDeleteModal
+          title="Delete this digital product passport?"
+          confirmLabel="Delete passport"
+          busy={del.isPending}
+          error={deleteError}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() =>
+            del.mutate(id, {
+              onError: (err) =>
+                setDeleteError(err instanceof ApiError ? err.message : 'Could not delete the passport.')
+            })
+          }
+        >
+          <p>
+            This permanently deletes the passport together with its QR codes, marketing links and
+            version history. The underlying product, variant, batch or item is not affected.
+          </p>
+          {(s === 'published' || s === 'archived') && (
+            <p className="mt-2 text-ink-muted">
+              This passport is live for consumers — its public page and QR code will stop resolving.
+            </p>
+          )}
+        </ConfirmDeleteModal>
+      )}
 
       {msg && <Banner kind={msg.kind}>{msg.text}</Banner>}
 

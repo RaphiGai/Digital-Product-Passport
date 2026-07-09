@@ -35,6 +35,7 @@ import { BatchCreate } from './pages/BatchCreate';
 import { Validation } from './pages/Validation';
 import { PartnerDocuments } from './pages/PartnerDocuments';
 import ComplianceCenter from '@/app/pages/ComplianceCenter';
+import { Assistant } from './pages/Assistant';
 
 
 
@@ -53,6 +54,7 @@ export function App() {
 
         <Route element={<AppShell />}>
           <Route index element={<Dashboard />} />
+          <Route path="assistant" element={<Assistant />} />
 
           <Route path="products" element={<Products />} />
           <Route path="products/new" element={<CreateProduct />} />

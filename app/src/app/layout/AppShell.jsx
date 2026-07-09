@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
+import { AssistantWidget } from '@/ui/AssistantWidget';
 import { useMe } from '@/auth/useMe';
 import { ApiError } from '@/api/client';
 import { AccountNotActivated } from '@/app/pages/AccountNotActivated';
@@ -67,6 +68,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <AssistantWidget />
     </div>
   );
 }

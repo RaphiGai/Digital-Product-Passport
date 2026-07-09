@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronDown } from 'lucide-react';
-import { odataGet, odataList } from '@/api/client';
-import { useAction } from '@/api/hooks';
+import { odataGet, odataList, ApiError } from '@/api/client';
+import { useAction, useDelete } from '@/api/hooks';
 import { mergeVisibility, PRODUCT_CATALOGUE } from '@/lib/fieldCatalogue';
 import { parseCustomFields } from '@/lib/customFields';
 import { Card, CardTitle } from '@/ui/Card';
@@ -12,6 +12,7 @@ import { Badge, StatusBadge } from '@/ui/Badge';
 import { Breadcrumb } from '@/ui/Breadcrumb';
 import { RequireRole } from '@/auth/RequireRole';
 import { DocumentManager } from '@/ui/DocumentManager';
+import { ConfirmDeleteModal } from '@/ui/ConfirmDeleteModal';
 import { ExportDropdown } from '@/ui/ExportDropdown';
 import { exportData } from '@/lib/exportExcel';
 
@@ -316,6 +317,9 @@ function VariantRow({ variant, pid }) {
 
 export function ProductDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   const { data: p, isLoading } = useQuery({
     queryKey: ['Products', id],
@@ -323,6 +327,13 @@ export function ProductDetail() {
   });
 
   const archive = useAction('Products', { invalidate: [['Products', id], ['Products']] });
+
+  // Hard-delete cascades the whole product subtree (variants, batches, items, DPPs, documents)
+  // on the backend. Invalidate every affected list so the studio reflects the removal.
+  const del = useDelete('Products', {
+    invalidate: [['Products'], ['DPPs'], ['Batches'], ['ProductBOMs']],
+    onSuccess: () => navigate('/products')
+  });
 
   const { refetch: fetchForExport, isFetching: isExportLoading } = useQuery({
     queryKey: ['Products', id, 'full-export'],
@@ -435,15 +446,47 @@ export function ProductDetail() {
               <Button variant="outline">Edit</Button>
             </Link>
             <Button
-              variant="danger"
+              variant="outline"
               disabled={p.status === 'archived' || archive.isPending}
               onClick={() => archive.mutate({ key: id, action: 'archiveProduct' })}
             >
               {p.status === 'archived' ? 'Archived' : 'Archive'}
             </Button>
+            <Button
+              variant="danger"
+              disabled={del.isPending}
+              onClick={() => { setDeleteError(null); setConfirmDelete(true); }}
+            >
+              Delete
+            </Button>
           </RequireRole>
         </div>
       </div>
+
+      {confirmDelete && (
+        <ConfirmDeleteModal
+          title={`Delete product "${p.name}"?`}
+          confirmLabel="Delete product"
+          busy={del.isPending}
+          error={deleteError}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() =>
+            del.mutate(id, {
+              onError: (err) =>
+                setDeleteError(err instanceof ApiError ? err.message : 'Could not delete the product.')
+            })
+          }
+        >
+          <p>
+            This permanently deletes the product together with{' '}
+            <strong>all {variants.length} variant{variants.length !== 1 ? 's' : ''}</strong>{' '}
+            and every batch, serialized item, digital product passport, QR code and document below them.
+          </p>
+          <p className="mt-2 text-ink-muted">
+            Published passports become unreachable and their QR codes stop resolving.
+          </p>
+        </ConfirmDeleteModal>
+      )}
 
       {/* Product info cards */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
