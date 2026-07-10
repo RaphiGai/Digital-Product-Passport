@@ -101,31 +101,53 @@ service DPPService @(
 
   entity DPPs as projection on db.DPPs actions {
     @Common.SideEffects: { TargetProperties: ['status', 'approved_at'] }
-    action   approveDPP()                            returns DPPs;
+    action approveDPP() returns DPPs;
 
-    @Common.SideEffects: { TargetProperties: ['status', 'published_at', 'qr_token', 'qr_payload_url', 'public_url', 'current_version'] }
-    action   publishDPP(change_reason : String(500)) returns DPPs;
+    @Common.SideEffects: {
+      TargetProperties: [
+        'status',
+        'published_at',
+        'qr_token',
+        'qr_payload_url',
+        'public_url',
+        'current_version'
+      ]
+    }
+    action publishDPP(
+      change_reason : String(500)
+    ) returns DPPs;
 
-    @Common.SideEffects: { TargetProperties: ['status', 'archived_at'] }
-    action   archiveDPP()                            returns DPPs;
+    @Common.SideEffects: {
+      TargetProperties: [
+        'status',
+        'archived_at'
+      ]
+    }
+    action archiveDPP() returns DPPs;
 
-    @Common.SideEffects: { TargetProperties: ['status', 'archived_at'] }
-    action   unarchiveDPP()                          returns DPPs;
+    @Common.SideEffects: {
+      TargetProperties: [
+        'status',
+        'archived_at'
+      ]
+    }
+    action unarchiveDPP() returns DPPs;
 
-    @Common.SideEffects: { TargetProperties: ['qr_token', 'qr_payload_url'] }
-    action   regenerateQRToken()                     returns DPPs;
+    @Common.SideEffects: {
+      TargetProperties: [
+        'qr_token',
+        'qr_payload_url'
+      ]
+    }
+    action regenerateQRToken() returns DPPs;
 
-    function generateQRCode()                        returns QRCodeImage;
+    function generateQRCode() returns QRCodeImage;
 
-    // Live aggregation across the BOM tree for review before publishing.
-    function aggregatedFootprint()                   returns AggregatedFootprint;
+    function aggregatedFootprint()
+      returns AggregatedFootprint;
 
-    // Readiness + drift for the DPP-detail validation panel (JSON string):
-    // { status, live_version, next_version, can_approve, missing_mandatory[], checks[],
-    //   passed, total, score, percent, mandatory_failed, pending_changes, changed_fields[] }
-    // checks[] is the full unified catalogue (srv/lib/dpp-validation.js) — the same
-    // evaluation the approveDPP/publishDPP gate runs.
-    function validationStatus()                      returns LargeString;
+    function validationStatus()
+      returns LargeString;
   };
 
   entity QRCodes               as projection on db.QRCodes;
@@ -222,6 +244,24 @@ service DPPService @(
   // active user (incl. read-only company_user) may chat; business_partner logins
   // are blocked by enforceBusinessPartnerScope.
   action aiChat(messages : LargeString, context : LargeString) returns LargeString;
+
+// ----- AI field suggestions — see srv/handlers/ai-handlers.js -----
+// Generates text for an explicitly supported free-text form field.
+// The action performs no database writes. The frontend must copy an accepted
+// suggestion into the normal form and use the existing Save process.
+action generateFieldSuggestion(
+  entity       : String(50),
+  field        : String(100),
+  currentValue : LargeString,
+  context      : LargeString,
+  instruction  : LargeString
+) returns LargeString;
+
+// ----- AI assistant — see srv/handlers/ai-handlers.js -----
+action aiChat(
+  messages : LargeString,
+  context  : LargeString
+) returns LargeString;
 
   // ----- Validation overview — see srv/handlers/dpp-handlers.js -----
   // Org-wide readiness for the Validation page: every DPP of the caller's org with the
