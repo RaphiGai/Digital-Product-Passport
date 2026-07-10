@@ -452,13 +452,7 @@ export function ProductDetail() {
             >
               {p.status === 'archived' ? 'Archived' : 'Archive'}
             </Button>
-            <Button
-              variant="danger"
-              disabled={del.isPending}
-              onClick={() => { setDeleteError(null); setConfirmDelete(true); }}
-            >
-              Delete
-            </Button>
+
           </RequireRole>
         </div>
       </div>
