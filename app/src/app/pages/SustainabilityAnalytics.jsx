@@ -200,6 +200,9 @@ export function SustainabilityAnalytics() {
       const variants = asArray(variantsRaw);
       const batches = asArray(batchesRaw);
 
+      const productMap = new Map(products.map((p) => [p.ID, p]));
+      const variantMap = new Map(variants.map((v) => [v.ID, v]));
+
       const filteredBatches = batches.filter((b) => {
         const date = b.production_date;
         if (dateFrom && date && date < dateFrom) return false;
@@ -209,13 +212,69 @@ export function SustainabilityAnalytics() {
 
       const batchIds = new Set(filteredBatches.map((b) => b.ID));
 
-      const filteredDpps = dpps.filter((dpp) => {
-        const product = dpp.product;
-        const batch = dpp.batch;
 
-        if (batch?.ID && !batchIds.has(batch.ID)) return false;
-        if (productType && product?.product_type !== productType) return false;
-        if (esprStatus && product?.espr_compliance !== esprStatus) return false;
+      const batchMap = new Map(batches.map((b) => [b.ID, b]));
+
+      const getDppBatch = (dpp) => {
+        const batchId =
+          dpp.batch_ID ??
+          dpp.batch?.ID ??
+          dpp.batch_id;
+
+        return batchId ? batchMap.get(batchId) ?? dpp.batch ?? null : null;
+      };
+
+      const getDppVariant = (dpp) => {
+        const directVariantId =
+          dpp.variant_ID ??
+          dpp.variant?.ID ??
+          dpp.variant_id;
+
+        if (directVariantId) {
+          return variantMap.get(directVariantId) ?? dpp.variant ?? null;
+        }
+
+        const batch = getDppBatch(dpp);
+
+        if (!batch?.variant_ID) return null;
+
+        return variantMap.get(batch.variant_ID) ?? null;
+      };
+
+      const getDppProduct = (dpp) => {
+        const directProductId =
+          dpp.product_ID ??
+          dpp.product?.ID ??
+          dpp.product_id;
+
+        if (directProductId) {
+          return productMap.get(directProductId) ?? dpp.product ?? null;
+        }
+
+        const variant = getDppVariant(dpp);
+
+        if (!variant?.product_ID) return null;
+
+        return productMap.get(variant.product_ID) ?? null;
+      };
+
+      const filteredDpps = dpps.filter((dpp) => {
+        const product = getDppProduct(dpp);
+        const batch = getDppBatch(dpp);
+
+        // A selected date range should only include passports whose batch
+        // belongs to the filtered batch set.
+        if (batch?.ID && !batchIds.has(batch.ID)) {
+          return false;
+        }
+
+        if (productType && product?.product_type !== productType) {
+          return false;
+        }
+
+        if (esprStatus && product?.espr_compliance !== esprStatus) {
+          return false;
+        }
 
         return true;
       });
@@ -232,8 +291,7 @@ export function SustainabilityAnalytics() {
 
       const sum = (arr) => arr.map(num).filter((v) => v !== null).reduce((a, b) => a + b, 0);
 
-      const productMap = new Map(products.map((p) => [p.ID, p]));
-      const variantMap = new Map(variants.map((v) => [v.ID, v]));
+
 
 
       const by_product = products

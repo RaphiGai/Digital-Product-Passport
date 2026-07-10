@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { odataCreate, odataUpdate, odataDelete, callAction, callUnboundAction, newId } from './client';
+import { odataCreate, odataUpdate, callAction, callUnboundAction, newId } from './client';
 
 /**
  * Create an entity, then invalidate the given query keys (e.g. the list + counts).
@@ -29,24 +29,6 @@ export function useUpdate(entitySet, opts = {}) {
     mutationFn: ({ key, payload }) => odataUpdate(entitySet, key, payload),
     onSuccess: () => {
       (opts.invalidate ?? [[entitySet]]).forEach((k) => qc.invalidateQueries({ queryKey: k }));
-    }
-  });
-}
-
-/**
- * Hard-delete an entity by key, then invalidate the given query keys. The backend cascades
- * the delete down the product hierarchy (see srv/handlers/cascade-delete.js), so the single
- * DELETE removes the whole subtree. Pass `onSuccess` to navigate back to the list.
- * @param {string} entitySet
- * @param {{ invalidate?: any[][], onSuccess?: (key: string) => void }} [opts]
- */
-export function useDelete(entitySet, opts = {}) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (key) => odataDelete(entitySet, key),
-    onSuccess: (_d, key) => {
-      (opts.invalidate ?? [[entitySet]]).forEach((k) => qc.invalidateQueries({ queryKey: k }));
-      opts.onSuccess?.(key);
     }
   });
 }
