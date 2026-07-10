@@ -441,6 +441,7 @@ export function ProductDetail() {
             >
               {p.status === 'archived' ? 'Archived' : 'Archive'}
             </Button>
+
           </RequireRole>
         </div>
       </div>
