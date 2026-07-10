@@ -22,7 +22,7 @@ import {
   Copy,
   Printer,
   ShoppingBag,
-  Megaphone, ChevronRight, CheckCircle2
+  Megaphone, ChevronRight, CheckCircle2, Network
 } from 'lucide-react';
 import { MARKETING_LINK_LABEL } from '@/lib/fieldCatalogue';
 
@@ -248,6 +248,7 @@ function Passport({ dpp }) {
   const p = dpp.product ?? {};
   const v = dpp.variant ?? {};
   const b = dpp.batch ?? {};
+  const it = dpp.item ?? {};
   const agg = dpp.aggregated?.values ?? {};
   const origin = p.country_of_origin || b.country_of_origin;
   const token = tokenFromPath();
@@ -284,6 +285,58 @@ function Passport({ dpp }) {
         )
       },
       {
+        id: 'structure',
+        title: 'Trace the hierarchy',
+        subtitle: 'Product → variant → batch → item',
+        icon: Network,
+        content: (
+          <JourneyPanel title="Product hierarchy" icon={Network}>
+            <LevelCard title="Product" subtitle={p.name}>
+              <KeyVal label="Brand" value={p.brand} />
+              <KeyVal label="Category" value={p.category} />
+              <KeyVal label="Model" value={p.model} />
+              <KeyVal label="Type" value={p.product_type} />
+              <KeyVal label="GTIN" value={p.gtin} />
+              <KeyVal label="UPC" value={p.upc} />
+              <KeyVal label="EAN" value={p.ean} />
+            </LevelCard>
+            {dpp.variant && (
+              <LevelCard nested depth={1} title="Variant" subtitle={[v.color, v.size].filter(Boolean).join(' / ') || v.sku}>
+                <KeyVal label="Colour" value={v.color} />
+                <KeyVal label="Size" value={v.size} />
+                <KeyVal label="SKU" value={v.sku} />
+                <KeyVal label="GTIN" value={v.gtin} />
+                <KeyVal label="Weight" value={v.weight_g != null ? `${deNum(v.weight_g, 0)} g` : null} />
+              </LevelCard>
+            )}
+            {dpp.batch && (
+              <LevelCard nested depth={2} title="Batch" subtitle={b.batch_number}>
+                <KeyVal label="Batch number" value={b.batch_number} />
+                <KeyVal label="Produced" value={deDate(b.production_date)} />
+                <KeyVal label="Country of origin" value={b.country_of_origin} />
+                <KeyVal label="Production stage" value={b.production_stage} />
+                <KeyVal label="Factory" value={b.factory?.name} />
+                <KeyVal label="Supplier" value={b.supplier?.name} />
+                <KeyVal label="CO₂ footprint" value={b.co2_footprint_kg != null ? `${deNum(b.co2_footprint_kg, 2)} kg` : null} />
+                <KeyVal label="Recycled content" value={b.recycled_content_pct != null ? `${deNum(b.recycled_content_pct, 2)} %` : null} />
+              </LevelCard>
+            )}
+            {dpp.item && (
+              <LevelCard nested depth={3} title="Item" subtitle={dpp.identification?.serial_number || dpp.identification?.upi}>
+                <KeyVal label="Serial number" value={dpp.identification?.serial_number} />
+                <KeyVal label="UPI" value={dpp.identification?.upi} />
+                <KeyVal label="Manufactured" value={deDate(it.manufacturing_date)} />
+              </LevelCard>
+            )}
+            {dpp.materials?.length > 0 && (
+              <LevelCard nested depth={dpp.item ? 3 : 2} title="Components" subtitle={`${dpp.materials.length} component${dpp.materials.length !== 1 ? 's' : ''}`}>
+                <Materials items={dpp.materials} />
+              </LevelCard>
+            )}
+          </JourneyPanel>
+        )
+      },
+      {
         id: 'story',
         title: 'Discover the story',
         subtitle: 'Why this product exists',
@@ -313,6 +366,12 @@ function Passport({ dpp }) {
         content: (
           <JourneyPanel title="Sustainability score" icon={Leaf}>
             <Stats co2={co2} recycled={recycled} origin={origin} />
+            {(p.durability_score != null || p.repairability_score != null) && (
+              <div className="mt-4">
+                <ScoreBar label="Durability" score={p.durability_score} />
+                <ScoreBar label="Repairability" score={p.repairability_score} />
+              </div>
+            )}
           </JourneyPanel>
         )
       },
@@ -431,7 +490,7 @@ function Passport({ dpp }) {
         )
       }
     ],
-    [dpp, p, v, b, co2, recycled, origin, story, marketing, token]
+    [dpp, p, v, b, it, co2, recycled, origin, story, marketing, token]
   );
 
   const [activeIndex, setActiveIndex] = useState(0);
@@ -733,6 +792,26 @@ function KeyVal({ label, value }) {
     <div className="border-t border-black/5 py-2.5 first:border-0 first:pt-0">
       <dt className="text-xs uppercase tracking-wide text-ink-muted">{label}</dt>
       <dd className="mt-0.5 text-sm text-ink">{value}</dd>
+    </div>
+  );
+}
+
+/**
+ * One level of the product hierarchy (Product → Variant → Batch → Item / Components).
+ * Indented by `depth` to convey nesting. Only fields the backend returned (already
+ * visibility-filtered) render, so internal fields never appear here.
+ */
+function LevelCard({ title, subtitle, depth = 0, nested = false, children }) {
+  return (
+    <div
+      className={`rounded-2xl border border-black/5 bg-[#f7faf5] p-4 ${nested ? 'mt-2.5' : ''}`}
+      style={depth ? { marginLeft: `${depth * 14}px` } : undefined}
+    >
+      <div className="flex items-baseline gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-brand-700">{title}</span>
+        {subtitle && <span className="truncate text-sm font-medium text-ink">{subtitle}</span>}
+      </div>
+      <dl className="mt-2">{children}</dl>
     </div>
   );
 }

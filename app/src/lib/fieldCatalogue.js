@@ -69,6 +69,7 @@ export const VARIANT_CATALOGUE = [
   { key: 'size', label: 'Size', mandatory: false, visibility: 'public' },
   { key: 'sku', label: 'SKU', mandatory: false, visibility: 'internal' },
   { key: 'gtin', label: 'GTIN', mandatory: false, visibility: 'internal' },
+  { key: 'weight_g', label: 'Weight', mandatory: false, visibility: 'internal' },
   // The "Product image" row controls both keys together.
   { key: 'image_url', label: 'ProductImage', mandatory: false, visibility: 'public' },
   { key: 'image_data', label: 'ProductImage', mandatory: false, visibility: 'public' }
@@ -82,8 +83,21 @@ export const BATCH_CATALOGUE = [
   { key: 'batch_number', label: 'BatchNumber', mandatory: false, visibility: 'internal' },
   { key: 'production_date', label: 'ProductionDate', mandatory: false, visibility: 'internal' },
   { key: 'country_of_origin', label: 'CountryOfOrigin', mandatory: true, visibility: 'public', locked: true },
+  { key: 'production_stage', label: 'ProductionStage', mandatory: false, visibility: 'internal' },
+  { key: 'factory', label: 'Factory', mandatory: false, visibility: 'internal' },
+  { key: 'supplier', label: 'Supplier', mandatory: false, visibility: 'internal' },
   { key: 'co2_footprint_kg', label: 'CO2Footprint', mandatory: false, visibility: 'public' },
   { key: 'recycled_content_pct', label: 'RecycledContent', mandatory: false, visibility: 'public' }
+];
+
+/**
+ * Consumer-facing serialized-item fields (mirror toConsumerDTO.item). serial_number/upi
+ * are always-public identifiers and item `status` is internal lifecycle by design —
+ * neither is toggleable, so only manufacturing_date appears here.
+ * @type {CatalogueField[]}
+ */
+export const ITEM_CATALOGUE = [
+  { key: 'manufacturing_date', label: 'ManufacturingDate', mandatory: false, visibility: 'internal' }
 ];
 
 /** key → catalogue entry, for O(1) lookup of visibility/locked. */

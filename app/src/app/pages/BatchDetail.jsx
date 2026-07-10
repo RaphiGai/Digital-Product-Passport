@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import { Printer, Trash2 } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { odataGet, odataList, odataUpdate, callAction, ApiError } from '@/api/client';
-import { useDelete } from '@/api/hooks';
 import { printLabels } from '@/lib/printLabels';
 import { mergeVisibility, BATCH_CATALOGUE, VARIANT_CATALOGUE, PRODUCT_CATALOGUE } from '@/lib/fieldCatalogue';
 import { parseCustomFields } from '@/lib/customFields';
@@ -13,7 +12,6 @@ import { Badge, StatusBadge } from '@/ui/Badge';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { RequireRole } from '@/auth/RequireRole';
 import { DocumentManager } from '@/ui/DocumentManager';
-import { ConfirmDeleteModal } from '@/ui/ConfirmDeleteModal';
 
 const ITEM_STATUSES = ['active', 'sold', 'repaired', 'archived'];
 const DPP_STATUSES = ['draft', 'in_review', 'approved', 'published', 'archived'];
@@ -130,8 +128,6 @@ export function BatchDetail() {
   const [msg, setMsg] = useState(null);
   const [itemSearch, setItemSearch] = useState('');
   const [itemSort, setItemSort] = useState({ column: 'serial', dir: 'asc' });
-  const [confirmDeleteItem, setConfirmDeleteItem] = useState(null);
-  const [deleteError, setDeleteError] = useState(null);
 
   const batchQ = useQuery({
     queryKey: ['Batches', 'one', bid],
@@ -275,16 +271,6 @@ const updateDppStatus = useMutation({
       kind: 'error',
       text: err instanceof ApiError ? err.message : 'Could not update DPP status.'
     })
-});
-
-// Hard-delete a single serialized item; the backend cascades its 1:1 DPP (+ QR code).
-const delItem = useDelete('ProductItems', {
-  invalidate: [['ProductItems', bid], ['DPPs', 'batch', bid], ['DPPs']],
-  onSuccess: () => {
-    setConfirmDeleteItem(null);
-    setSelected([]);
-    setMsg({ kind: 'success', text: 'Item deleted.' });
-  }
 });
 
 const busy = updateItemStatus.isPending || updateDppStatus.isPending;
@@ -568,49 +554,11 @@ return (
                   ) : (
                     <span className="text-xs text-ink-muted italic">—</span>
                   )}
-                  <RequireRole role="company_advanced">
-                    <button
-                      type="button"
-                      title="Delete item"
-                      className="text-ink-muted hover:text-red-600"
-                      disabled={delItem.isPending}
-                      onClick={() => { setDeleteError(null); setConfirmDeleteItem(item); }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </RequireRole>
                 </div>
               </div>
             );
           })}
         </>
-      )}
-
-      {confirmDeleteItem && (
-        <ConfirmDeleteModal
-          title="Delete this item?"
-          confirmLabel="Delete item"
-          busy={delItem.isPending}
-          error={deleteError}
-          onCancel={() => setConfirmDeleteItem(null)}
-          onConfirm={() =>
-            delItem.mutate(confirmDeleteItem.ID, {
-              onError: (err) =>
-                setDeleteError(err instanceof ApiError ? err.message : 'Could not delete the item.')
-            })
-          }
-        >
-          <p>
-            This permanently deletes item{' '}
-            <strong>{confirmDeleteItem.serial_number || confirmDeleteItem.upi || confirmDeleteItem.ID}</strong>{' '}
-            and its digital product passport and QR code.
-          </p>
-          {dppByItem[confirmDeleteItem.ID]?.status === 'published' && (
-            <p className="mt-2 text-ink-muted">
-              Its passport is published — the live consumer page and QR code will stop resolving.
-            </p>
-          )}
-        </ConfirmDeleteModal>
       )}
 
       {!itemsQ.isLoading && items.length > 0 && visibleItems.length === 0 && (
