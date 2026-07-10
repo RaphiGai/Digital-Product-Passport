@@ -136,6 +136,7 @@ entity ProductItems : identified, audited {
   upi                : String(60) not null;                  // Unique Product Identifier (ESPR) — globally unique; resolves the DPP
   manufacturing_date : Date;
   status             : ProductItemStatus default 'active';
+  field_visibility   : LargeString;                          // per-field consumer visibility map (see Products.field_visibility)
 
   dpp : Association to one DPPs on dpp.item = $self;   // 1:1 reverse navigation
 }

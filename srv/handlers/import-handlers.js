@@ -23,6 +23,29 @@ const PARTNER_ROLES    = new Set([
 ]);
 const PARTNER_STATUSES = new Set(['active', 'archived']);
 
+// Max string lengths are the single source of truth in the CDS model (db/product.cds).
+// These maps list only fields stored VERBATIM (input key → column name); fields that are
+// sliced (country_of_origin), enum-checked, code-list-resolved (category) or numeric have
+// their own validation and are deliberately excluded. checkLengths() reads the actual limit
+// from the entity element, so it never drifts from the schema. This runs for BOTH the bulk
+// Excel import AND the AI assistant (which validates via importXxx dryRun).
+const LEN_KEYS = {
+  products: {
+    name: 'name', brand: 'brand', model: 'model', description: 'description',
+    gtin: 'gtin', upc: 'upc', ean: 'ean',
+    fibre_composition: 'fibre_composition', care_instructions: 'care_instructions',
+    repair_instructions: 'repair_instructions', disposal_instructions: 'disposal_instructions',
+    reuse_instructions: 'reuse_instructions', substances_of_concern: 'substances_of_concern',
+    care_video_url: 'care_video_url', repair_video_url: 'repair_video_url',
+    disposal_video_url: 'disposal_video_url', reuse_video_url: 'reuse_video_url',
+    care_products_url: 'care_products_url', repair_products_url: 'repair_products_url',
+    reuse_products_url: 'reuse_products_url', disposal_products_url: 'disposal_products_url',
+  },
+  variants: { sku: 'sku', color: 'color', size: 'size', gtin: 'gtin' },
+  batches: { production_stage: 'production_stage' },
+  bom: { component_product_name: 'component_name', component_role: 'component_role', external_dpp_url: 'external_dpp_url' },
+};
+
 // ── Small helpers ──────────────────────────────────────────────────────────
 
 /** 1-indexed row number for user-facing messages */
@@ -82,6 +105,26 @@ function countHardErrors(issues, fromIdx) {
   return issues.slice(fromIdx).filter((e) => e.severity === 'error').length;
 }
 
+/**
+ * Enforce the CDS string-length limits on verbatim-stored fields. Reads the limit
+ * straight from the entity element so it always matches the schema. Blocks the row
+ * (hard error) — an over-long value would otherwise be silently kept on SQLite (dev)
+ * and rejected by HANA (prod) as a 500.
+ * @param {string} entityName short name on cds.entities('dpp'), e.g. 'Products'
+ * @param {object} keyMap     input field → column name
+ */
+function checkLengths(issues, i, row, entityName, keyMap) {
+  const entity = cds.entities('dpp')[entityName];
+  const els = (entity && entity.elements) || {};
+  for (const [inputKey, col] of Object.entries(keyMap)) {
+    const max = els[col] && els[col].length;
+    const v = row[inputKey];
+    if (max && v != null && String(v).trim().length > max) {
+      err(issues, i, inputKey, `"${inputKey}" must be at most ${max} characters.`);
+    }
+  }
+}
+
 // ── Handler factory ────────────────────────────────────────────────────────
 
 module.exports = (srv) => {
@@ -137,6 +180,7 @@ module.exports = (srv) => {
       requireField(allIssues, i, 'substances_of_concern', r.substances_of_concern);
       requireField(allIssues, i, 'espr_compliance',       r.espr_compliance);
       requireEnum (allIssues, i, 'espr_compliance',       r.espr_compliance, ESPR_STATUSES);
+      checkLengths(allIssues, i, r, 'Products', LEN_KEYS.products);
 
       const dur = parseNum(r.durability_score);
       if (dur !== null && (dur < 0 || dur > 10))
@@ -295,6 +339,7 @@ module.exports = (srv) => {
 
       const statusVal = str(r.status) || 'draft';
       requireEnum(allIssues, i, 'status', statusVal, BATCH_STATUSES);
+      checkLengths(allIssues, i, r, 'Batches', LEN_KEYS.batches);
 
       // Factory / supplier — optional; not found is a warning (batch still created).
       const factoryName = str(r.factory_name);
@@ -431,6 +476,7 @@ module.exports = (srv) => {
       const ALLOWED_UNITS = ['g', 'kg', 'pcs', '%'];
       if (r.unit && !ALLOWED_UNITS.includes(str(r.unit)))
         err(allIssues, i, 'unit', `Unit must be one of: ${ALLOWED_UNITS.join(', ')}.`);
+      checkLengths(allIssues, i, r, 'ProductBOMs', LEN_KEYS.bom);
 
       const qty = parseNum(r.quantity);
       if (qty === null) err(allIssues, i, 'quantity', 'Quantity must be a valid number.');
@@ -542,6 +588,7 @@ module.exports = (srv) => {
 
       const statusVal = str(r.status) || 'active';
       requireEnum(allIssues, i, 'status', statusVal, VARIANT_STATUSES);
+      checkLengths(allIssues, i, r, 'ProductVariants', LEN_KEYS.variants);
 
       const productName = str(r.product_name);
       const product     = productByName.get(productName.toLowerCase());

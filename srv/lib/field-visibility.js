@@ -57,6 +57,7 @@ const CATALOGUES = {
     size: { vis: 'public', locked: false },
     sku: { vis: 'internal', locked: false },
     gtin: { vis: 'internal', locked: false },
+    weight_g: { vis: 'internal', locked: false },
     image_url: { vis: 'public', locked: false },
     image_data: { vis: 'public', locked: false },
   },
@@ -64,8 +65,17 @@ const CATALOGUES = {
     batch_number: { vis: 'internal', locked: false },
     production_date: { vis: 'internal', locked: false },
     country_of_origin: { vis: 'public', locked: true }, // Tier B — origin marking
+    production_stage: { vis: 'internal', locked: false },
+    factory: { vis: 'internal', locked: false },   // resolved BusinessPartner name
+    supplier: { vis: 'internal', locked: false },  // resolved BusinessPartner name
     co2_footprint_kg: { vis: 'public', locked: false },
     recycled_content_pct: { vis: 'public', locked: false },
+  },
+  // Serialized item level. serial_number/upi are NOT here — they are identifiers served
+  // always-public via the DTO `identification` block; `status` is internal lifecycle
+  // (excluded by design). Only content fields are toggleable.
+  item: {
+    manufacturing_date: { vis: 'internal', locked: false },
   },
 };
 

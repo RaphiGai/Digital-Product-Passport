@@ -185,6 +185,7 @@ function toConsumerDTO(dpp, ctx) {
           size: ctx.variant.size,
           sku: ctx.variant.sku,
           gtin: ctx.variant.gtin,
+          weight_g: ctx.variant.weight_g,
           image_url: ctx.variant.image_url,
           image_data: ctx.variant.image_data,
         },
@@ -199,12 +200,25 @@ function toConsumerDTO(dpp, ctx) {
           batch_number: ctx.batch.batch_number,
           production_date: ctx.batch.production_date,
           country_of_origin: ctx.batch.country_of_origin,
+          production_stage: ctx.batch.production_stage,
+          factory: ctx.batch.factory,
+          supplier: ctx.batch.supplier,
           co2_footprint_kg: ctx.batch.co2_footprint_kg,
           recycled_content_pct: ctx.batch.recycled_content_pct,
         },
         'batch',
         ctx.batch.field_visibility,
       ), ctx.batch)
+    : null;
+
+  // Serialized item: only content fields are toggleable. serial_number/upi are served
+  // always-public via `identification`; `status` is internal lifecycle (not exposed).
+  const item = ctx.item
+    ? applyFieldVisibility(
+        { manufacturing_date: ctx.item.manufacturing_date },
+        'item',
+        ctx.item.field_visibility,
+      )
     : null;
 
   // Identification & traceability (US6.11). Identifiers (dpp/product/serial/UPI) are
@@ -234,6 +248,7 @@ function toConsumerDTO(dpp, ctx) {
     product,
     variant,
     batch,
+    item,
     materials: ctx.materialsTree,
     aggregated: ctx.aggregated,
     marketing: ctx.marketing || [],
@@ -350,6 +365,13 @@ async function loadDPPContext(dpp) {
   // Map partner ID → name for BOM supplier display.
   const partnersById = new Map(partnerRows.map((p) => [p.ID, p.name]));
 
+  // Resolve the batch factory/supplier partner names for the batch section. These are
+  // toggleable (default internal) via field_visibility keys 'factory'/'supplier'.
+  if (batch) {
+    batch.factory = batch.factory_ID ? { name: partnersById.get(batch.factory_ID) ?? null } : null;
+    batch.supplier = batch.supplier_ID ? { name: partnersById.get(batch.supplier_ID) ?? null } : null;
+  }
+
   // For internal BOM components: derive supplier from the component product's batch data.
   const supplierByProductId = new Map();
   if (allProducts.length) {
@@ -372,12 +394,6 @@ async function loadDPPContext(dpp) {
       }
     }
   }
-  // TEMP DIAGNOSTIC — remove after verifying supplier works
-  LOG.info('[supplier-debug] owningOrgId=%s partners=%d variantsByProduct=%d supplierMap=%o',
-    owningOrgId, partnerRows.length,
-    allProducts.length,
-    Object.fromEntries(supplierByProductId));
-
   // Resolve category codes → display names ("Textiles") so the consumer view and the
   // BOM materials tree show the human-readable category, not the raw code. The product
   // rows carry only the `category_code` FK; one lookup covers the whole tree.

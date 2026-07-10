@@ -54,6 +54,42 @@ describe('field-visibility — regulatory lock', () => {
   });
 });
 
+describe('field-visibility — newly toggleable fields (all levels)', () => {
+  test('variant weight_g: internal by default, opt-in public', () => {
+    expect(resolve('variant', 'weight_g', {})).toBe('internal');
+    const out = applyFieldVisibility({ weight_g: 180 }, 'variant', JSON.stringify({ weight_g: 'public' }));
+    expect(out.weight_g).toBe(180);
+  });
+
+  test('batch factory/supplier/production_stage: internal by default, opt-in public', () => {
+    const section = {
+      production_stage: 'Cutting',
+      factory: { name: 'Factory A' },
+      supplier: { name: 'Supplier B' },
+    };
+    // No stored map → all dropped (default internal).
+    expect(applyFieldVisibility(section, 'batch', null)).toEqual({});
+    // Opt-in per field.
+    const map = JSON.stringify({ factory: 'public', supplier: 'public', production_stage: 'public' });
+    const shown = applyFieldVisibility(section, 'batch', map);
+    expect(shown.factory).toEqual({ name: 'Factory A' });
+    expect(shown.supplier).toEqual({ name: 'Supplier B' });
+    expect(shown.production_stage).toBe('Cutting');
+  });
+
+  test('item manufacturing_date: internal by default, opt-in public', () => {
+    expect(resolve('item', 'manufacturing_date', {})).toBe('internal');
+    const hidden = applyFieldVisibility({ manufacturing_date: '2026-01-01' }, 'item', null);
+    expect(hidden).not.toHaveProperty('manufacturing_date');
+    const shown = applyFieldVisibility(
+      { manufacturing_date: '2026-01-01' },
+      'item',
+      JSON.stringify({ manufacturing_date: 'public' })
+    );
+    expect(shown.manufacturing_date).toBe('2026-01-01');
+  });
+});
+
 describe('field-visibility — robustness', () => {
   test('unknown fields are never silently hidden', () => {
     const out = applyFieldVisibility({ weird: 1 }, 'product', JSON.stringify({ weird: 'internal' }));

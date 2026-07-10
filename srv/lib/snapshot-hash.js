@@ -88,6 +88,18 @@ function normalizeForHash(snap) {
       if (cf) n[kind].custom_fields = cf;
       else delete n[kind].custom_fields;
     }
+    // Item field_visibility is a LATER addition (new ProductItems column): include it in
+    // the hash ONLY when it carries a real (non-default) override, so snapshots captured
+    // before the column existed keep hashing identically and published item DPPs do not
+    // mass drift-revert on the next check.
+    if (isObj(n.item)) {
+      const eff = effectiveVisibilityMap('item', n.item.field_visibility);
+      if (stableStringify(eff) !== stableStringify(effectiveVisibilityMap('item', null))) {
+        n.item.field_visibility = eff;
+      } else {
+        delete n.item.field_visibility;
+      }
+    }
   }
   return n;
 }

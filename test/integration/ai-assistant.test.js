@@ -89,6 +89,24 @@ describe('aiChat orchestration', () => {
     expect(payload.proposals[0].validation.errors.length).toBeGreaterThan(0);
   });
 
+  test('proposeProduct rejects an over-long field value (CDS length limit)', async () => {
+    const longName = 'X'.repeat(200); // Products.name is String(120)
+    gemini.generate
+      .mockResolvedValueOnce({
+        text: '',
+        functionCalls: [{ name: 'proposeProduct', args: { name: longName, brand: 'Acme', product_type: 'finished' } }],
+        usage: {},
+      })
+      .mockResolvedValueOnce({ text: 'The name is too long.', functionCalls: [], usage: {} });
+    axios.defaults.auth = ALICE;
+    const res = await POST('/odata/v4/dpp/aiChat', {
+      messages: JSON.stringify([{ role: 'user', content: 'create a product' }]),
+    });
+    const payload = parseChat(res);
+    expect(payload.proposals[0].validation.valid).toBe(false);
+    expect(payload.proposals[0].validation.errors.some((e) => e.field === 'name' && /120/.test(e.message))).toBe(true);
+  });
+
   test('read-only company_user may chat', async () => {
     gemini.generate.mockResolvedValueOnce({ text: 'Sure.', functionCalls: [], usage: {} });
     axios.defaults.auth = CAROL;
