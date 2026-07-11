@@ -179,7 +179,7 @@ const TEMPLATES = {
       { header: 'Address',             hint: 'Text (optional)',                                                                                                               example: 'Hauptstraße 1, 10115 Berlin' },
       { header: 'Contact Person',      hint: 'Text (optional)',                                                                                                               example: 'Anna Schmidt' },
       { header: 'Contact Email',       hint: 'Email (optional)',                                                                                                              example: 'anna@supplier.de' },
-      { header: 'External Identifier', hint: 'Your internal ID or EAN (optional)',                                                                                           example: 'SUP-0042' },
+      { header: 'External Identifier', hint: 'Your internal ID or UPC / EAN (optional)',                                                                                           example: 'SUP-0042' },
       { header: 'Roles *',             hint: 'Comma-separated: supplier | manufacturer | recycler | certification_body | distributor | retailer | logistics_provider', example: 'supplier,manufacturer' },
       { header: 'Status *',            hint: 'active | archived',                                                                                                            example: 'active' },
     ],

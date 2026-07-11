@@ -24,7 +24,6 @@ const EMPTY = {
   model: '',
   gtin: '',
   upc: '',
-  ean: '',
   description: '',
   fibre_composition: '',
   substances_of_concern: '',
@@ -129,7 +128,7 @@ export function Step1Product({ ctx, setCtx, next }) {
         ...form,
         gtin: form.gtin || null,
         upc: form.upc || null,
-        ean: form.ean || null,
+        reuse_instructions: form.reuse_instructions || null,
         reuse_instructions: form.reuse_instructions || null,
         durability_score: form.durability_score === '' ? null : Number(form.durability_score),
         repairability_score: form.repairability_score === '' ? null : Number(form.repairability_score),
@@ -192,11 +191,18 @@ export function Step1Product({ ctx, setCtx, next }) {
             <FieldRow label="GTIN" visibility="internal" htmlFor="gtin">
               <Input id="gtin" value={form.gtin} onChange={set('gtin')} placeholder="1234567890123" />
             </FieldRow>
-            <FieldRow label="UPC" visibility="internal" htmlFor="upc" hint="Universal Product Code (optional).">
-              <Input id="upc" value={form.upc} onChange={set('upc')} placeholder="012345678905" />
-            </FieldRow>
-            <FieldRow label="EAN" visibility="internal" htmlFor="ean" hint="European Article Number (optional).">
-              <Input id="ean" value={form.ean} onChange={set('ean')} placeholder="4012345678901" />
+            <FieldRow
+              label="EAN / UPC"
+              visibility="internal"
+              htmlFor="upc"
+              hint="EAN or Universal Product Code (optional)."
+            >
+              <Input
+                id="upc"
+                value={form.upc}
+                onChange={set('upc')}
+                placeholder="4012345678901"
+              />
             </FieldRow>
             <FieldRow label="Description" visibility="public" htmlFor="desc" className="md:col-span-2" hint="Max 500 characters.">
               <Textarea id="desc" value={form.description} onChange={set('description')} maxLength={500} />

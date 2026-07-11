@@ -297,8 +297,7 @@ function Passport({ dpp }) {
               <KeyVal label="Model" value={p.model} />
               <KeyVal label="Type" value={p.product_type} />
               <KeyVal label="GTIN" value={p.gtin} />
-              <KeyVal label="UPC" value={p.upc} />
-              <KeyVal label="EAN" value={p.ean} />
+              <KeyVal label="EAN / UPC" value={p.upc} />
             </LevelCard>
             {dpp.variant && (
               <LevelCard nested depth={1} title="Variant" subtitle={[v.color, v.size].filter(Boolean).join(' / ') || v.sku}>
@@ -951,8 +950,7 @@ function Identification({ ident, product }) {
   const rows = [
     ['Product ID', ident?.product_id],
     ['GTIN', p.gtin],
-    ['UPC', p.upc],
-    ['EAN', p.ean],
+    ['EAN / UPC', p.upc],
     ['Batch number', ident?.batch_number],
     ['Serial number', ident?.serial_number],
     ['UPI', ident?.upi],
