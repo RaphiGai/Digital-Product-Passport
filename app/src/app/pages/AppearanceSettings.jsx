@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMe } from '@/auth/useMe';
 import { useUnboundAction } from '@/api/hooks';
 import { ApiError } from '@/api/client';
@@ -38,40 +38,74 @@ export function AppearanceSettings() {
   // Self-service theme update; invalidating ['me'] re-applies it app-wide (AppShell).
   const updateProfile = useUnboundAction({ invalidate: [['me']] });
 
-  // Instant value from the localStorage cache; the server value (me) is the source
-  // of truth and is adopted once it resolves.
-  const [selectedTheme, setSelectedTheme] = useState(
-    localStorage.getItem('appearanceTheme') || 'green'
-  );
+  const initialTheme = localStorage.getItem('appearanceTheme') || 'green';
+
+  const [selectedTheme, setSelectedTheme] = useState(initialTheme);
   const [msg, setMsg] = useState(null);
 
-  useEffect(() => {
-    if (me?.appearanceTheme) setSelectedTheme(me.appearanceTheme);
-  }, [me?.appearanceTheme]);
+  const savedThemeRef = useRef(initialTheme);
 
-  // Live preview: apply the current selection app-wide while choosing.
+  useEffect(() => {
+    if (!me) return;
+
+    const savedTheme = me.appearanceTheme || 'green';
+
+    savedThemeRef.current = savedTheme;
+    setSelectedTheme(savedTheme);
+
+    try {
+      localStorage.setItem('appearanceTheme', savedTheme);
+    } catch { }
+  }, [me]);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', selectedTheme);
   }, [selectedTheme]);
 
+  useEffect(() => {
+    return () => {
+      document.documentElement.setAttribute(
+        'data-theme',
+        savedThemeRef.current
+      );
+    };
+  }, []);
+
   const saveAppearance = () => {
     setMsg(null);
+
     updateProfile.mutate(
-      { action: 'updateProfile', payload: { appearanceTheme: selectedTheme } },
+      {
+        action: 'updateProfile',
+        payload: {
+          appearanceTheme: selectedTheme
+        }
+      },
       {
         onSuccess: () => {
+          // The preview is now officially saved.
+          savedThemeRef.current = selectedTheme;
+
           try {
             localStorage.setItem('appearanceTheme', selectedTheme);
           } catch {
             /* ignore storage errors */
           }
-          setMsg({ kind: 'success', text: 'Appearance settings saved successfully.' });
+
+          setMsg({
+            kind: 'success',
+            text: 'Appearance settings saved successfully.'
+          });
         },
-        onError: (err) =>
+        onError: (err) => {
           setMsg({
             kind: 'error',
-            text: err instanceof ApiError ? err.message : 'Could not save appearance settings.'
-          })
+            text:
+              err instanceof ApiError
+                ? err.message
+                : 'Could not save appearance settings.'
+          });
+        }
       }
     );
   };
@@ -103,11 +137,10 @@ export function AppearanceSettings() {
               key={theme.value}
               type="button"
               onClick={() => setSelectedTheme(theme.value)}
-              className={`rounded-2xl border p-4 text-left transition ${
-                selectedTheme === theme.value
-                  ? 'border-brand-600 bg-brand-50'
-                  : 'border-black/10 bg-card hover:border-brand-300'
-              }`}
+              className={`rounded-2xl border p-4 text-left transition ${selectedTheme === theme.value
+                ? 'border-brand-600 bg-brand-50'
+                : 'border-black/10 bg-card hover:border-brand-300'
+                }`}
             >
               <div className="flex items-center gap-3">
                 <span className={`h-10 w-10 rounded-full ${theme.color}`} />
