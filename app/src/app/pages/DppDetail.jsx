@@ -385,7 +385,7 @@ export function DppDetail() {
   const isAdvanced = useHasRole('company_advanced');
   const [showPublish, setShowPublish] = useState(false);
   const [reason, setReason] = useState('');
-  const [msg, setMsg] = useState(/** @type {{kind:'error'|'success',text:string}|null} */ (null));
+  const [msg, setMsg] = useState(/** @type {{kind:'error'|'success',text:string}|null} */(null));
   const [co2Open, setCo2Open] = useState(false);
   const [recOpen, setRecOpen] = useState(false);
   // Version picker: '' = live (current) state; otherwise a DPPVersions.ID to view read-only.
@@ -627,64 +627,63 @@ export function DppDetail() {
       : '';
 
     const passportRows = [
-      fv('Passport ID',  dpp.ID),
-      fv('Type',         dpp.dpp_type),
-      fv('Status',       dpp.status),
-      fv('Visibility',   dpp.visibility),
-      fv('Version',      dpp.current_version),
-      fv('Created',      fmtDate(dpp.createdAt)),
+      fv('Passport ID', dpp.ID),
+      fv('Type', dpp.dpp_type),
+      fv('Status', dpp.status),
+      fv('Visibility', dpp.visibility),
+      fv('Version', dpp.current_version),
+      fv('Created', fmtDate(dpp.createdAt)),
       fv('Last updated', fmtDate(dpp.last_updated || dpp.lastChange)),
-      fv('QR token',     dpp.qr_token),
-      fv('Public URL',   consumerUrlFull),
+      fv('QR token', dpp.qr_token),
+      fv('Public URL', consumerUrlFull),
     ];
 
     const productRows = product ? [
-      fv('Name',                  product.name),
-      fv('Brand',                 product.brand),
-      fv('Category',              product.category),
-      fv('Model',                 product.model),
-      fv('GTIN',                  product.gtin),
-      fv('UPC',                   product.upc),
-      fv('EAN',                   product.ean),
-      fv('Fibre composition',     product.fibre_composition),
-      fv('Country of origin',     product.country_of_origin),
+      fv('Name', product.name),
+      fv('Brand', product.brand),
+      fv('Category', product.category),
+      fv('Model', product.model),
+      fv('GTIN', product.gtin),
+      fv('EAN / UPC', product.upc),
+      fv('Fibre composition', product.fibre_composition),
+      fv('Country of origin', product.country_of_origin),
       fv('Substances of concern', product.substances_of_concern),
-      fv('Care instructions',     product.care_instructions),
-      fv('Repair instructions',   product.repair_instructions),
-      fv('Reuse instructions',    product.reuse_instructions),
+      fv('Care instructions', product.care_instructions),
+      fv('Repair instructions', product.repair_instructions),
+      fv('Reuse instructions', product.reuse_instructions),
       fv('Disposal instructions', product.disposal_instructions),
-      fv('Durability score',      product.durability_score),
-      fv('Repairability score',   product.repairability_score),
-      fv('ESPR compliance',       product.espr_compliance),
-      fv('Status',                product.status),
+      fv('Durability score', product.durability_score),
+      fv('Repairability score', product.repairability_score),
+      fv('ESPR compliance', product.espr_compliance),
+      fv('Status', product.status),
     ] : [];
 
     const variantRows = variant ? [
-      fv('Colour',    variant.color),
-      fv('Size',      variant.size),
-      fv('SKU',       variant.sku),
-      fv('GTIN',      variant.gtin),
+      fv('Colour', variant.color),
+      fv('Size', variant.size),
+      fv('SKU', variant.sku),
+      fv('GTIN', variant.gtin),
       fv('Weight (g)', variant.weight_g),
-      fv('Status',    variant.status),
+      fv('Status', variant.status),
     ] : [];
 
     const batchRows = batch ? [
-      fv('Batch number',           batch.batch_number),
-      fv('Production date',        fmtDate(batch.production_date)),
-      fv('Production stage',       batch.production_stage),
-      fv('Factory',                batch.factory?.name),
-      fv('Supplier',               batch.supplier?.name),
-      fv('Country of origin',      batch.country_of_origin),
-      fv('CO₂ footprint (kg)',     batch.co2_footprint_kg),
-      fv('Recycled content (%)',   batch.recycled_content_pct),
-      fv('Status',                 batch.status),
+      fv('Batch number', batch.batch_number),
+      fv('Production date', fmtDate(batch.production_date)),
+      fv('Production stage', batch.production_stage),
+      fv('Factory', batch.factory?.name),
+      fv('Supplier', batch.supplier?.name),
+      fv('Country of origin', batch.country_of_origin),
+      fv('CO₂ footprint (kg)', batch.co2_footprint_kg),
+      fv('Recycled content (%)', batch.recycled_content_pct),
+      fv('Status', batch.status),
     ] : [];
 
     const itemRows = item ? [
-      fv('Serial number',      item.serial_number),
-      fv('UPI',                item.upi),
+      fv('Serial number', item.serial_number),
+      fv('UPI', item.upi),
       fv('Manufacturing date', fmtDate(item.manufacturing_date)),
-      fv('Status',             item.status),
+      fv('Status', item.status),
     ] : [];
 
     const footprintRows = agg ? [
@@ -694,11 +693,11 @@ export function DppDetail() {
     ] : [];
 
     const sheets = [
-      { name: 'Passport',   rows: passportRows },
-      ...(productRows.length  ? [{ name: 'Product',   rows: productRows  }] : []),
-      ...(variantRows.length  ? [{ name: 'Variant',   rows: variantRows  }] : []),
-      ...(batchRows.length    ? [{ name: 'Batch',     rows: batchRows    }] : []),
-      ...(itemRows.length     ? [{ name: 'Item',      rows: itemRows     }] : []),
+      { name: 'Passport', rows: passportRows },
+      ...(productRows.length ? [{ name: 'Product', rows: productRows }] : []),
+      ...(variantRows.length ? [{ name: 'Variant', rows: variantRows }] : []),
+      ...(batchRows.length ? [{ name: 'Batch', rows: batchRows }] : []),
+      ...(itemRows.length ? [{ name: 'Item', rows: itemRows }] : []),
       ...(footprintRows.length ? [{ name: 'Footprint', rows: footprintRows }] : []),
     ];
 
@@ -740,47 +739,47 @@ export function DppDetail() {
 
     // ── Sheet 1: Passport ───────────────────────────────────────────────────
     const passportRows = [
-      { Field: 'Passport ID',     Value: dpp.ID ?? '' },
+      { Field: 'Passport ID', Value: dpp.ID ?? '' },
       { Field: 'Current version', Value: currentVersion != null ? `v${currentVersion}` : '' },
-      { Field: 'Status',          Value: dpp.status ?? '' },
-      { Field: 'Visibility',      Value: dpp.visibility ?? '' },
-      { Field: 'Approved at',     Value: fmtDate(dpp.approved_at) ?? '' },
+      { Field: 'Status', Value: dpp.status ?? '' },
+      { Field: 'Visibility', Value: dpp.visibility ?? '' },
+      { Field: 'Approved at', Value: fmtDate(dpp.approved_at) ?? '' },
       ...(lastApprove?.changed_by?.display_name
         ? [{ Field: 'Approved by', Value: lastApprove.changed_by.display_name }] : []),
-      { Field: 'Published at',    Value: fmtDate(dpp.published_at) ?? '' },
+      { Field: 'Published at', Value: fmtDate(dpp.published_at) ?? '' },
       ...(lastPublish?.changed_by?.display_name
         ? [{ Field: 'Published by', Value: lastPublish.changed_by.display_name }] : []),
-      { Field: 'Archived at',     Value: fmtDate(dpp.archived_at) ?? '' },
+      { Field: 'Archived at', Value: fmtDate(dpp.archived_at) ?? '' },
       { Field: 'Total publishes', Value: String(publishVers.length) },
     ];
 
     // ── Sheet 2: Version Timeline (wide — one column per version) ───────────
     const timelineRows = [
-      wide('Status',     (v)    => rowStatus(v)),
-      wide('Event type', (v)    => v.source === 'approve' ? 'Approval' : 'Publish'),
-      wide('Event date', (v)    => fmtDate(v.snapshot_date)),
+      wide('Status', (v) => rowStatus(v)),
+      wide('Event type', (v) => v.source === 'approve' ? 'Approval' : 'Publish'),
+      wide('Event date', (v) => fmtDate(v.snapshot_date)),
       wide('Visibility', (v, s) => s?.dpp?.visibility),
-      wide('Changed by', (v)    => v.changed_by?.display_name),
+      wide('Changed by', (v) => v.changed_by?.display_name),
     ];
 
     // ── Sheet 3: Field Comparison (wide — one column per version) ───────────
     const fieldRows = [
-      wide('Product Name',              (v, s) => s?.product?.name),
-      wide('Brand',                     (v, s) => s?.product?.brand),
-      wide('Category',                  (v, s) => s?.product?.category),
-      wide('ESPR Compliance',           (v, s) => s?.product?.espr_compliance),
-      wide('Fibre Composition',         (v, s) => s?.product?.fibre_composition),
-      wide('Country of Origin',         (v, s) => s?.product?.country_of_origin),
-      wide('Durability Score',          (v, s) => s?.product?.durability_score),
-      wide('Repairability Score',       (v, s) => s?.product?.repairability_score),
-      wide('Colour',                    (v, s) => s?.variant?.color),
-      wide('Size',                      (v, s) => s?.variant?.size),
-      wide('CO₂ Footprint (kg)',        (v, s) => s?.batch?.co2_footprint_kg),
-      wide('Recycled Content (%)',      (v, s) => s?.batch?.recycled_content_pct),
-      wide('Production Stage',          (v, s) => s?.batch?.production_stage),
+      wide('Product Name', (v, s) => s?.product?.name),
+      wide('Brand', (v, s) => s?.product?.brand),
+      wide('Category', (v, s) => s?.product?.category),
+      wide('ESPR Compliance', (v, s) => s?.product?.espr_compliance),
+      wide('Fibre Composition', (v, s) => s?.product?.fibre_composition),
+      wide('Country of Origin', (v, s) => s?.product?.country_of_origin),
+      wide('Durability Score', (v, s) => s?.product?.durability_score),
+      wide('Repairability Score', (v, s) => s?.product?.repairability_score),
+      wide('Colour', (v, s) => s?.variant?.color),
+      wide('Size', (v, s) => s?.variant?.size),
+      wide('CO₂ Footprint (kg)', (v, s) => s?.batch?.co2_footprint_kg),
+      wide('Recycled Content (%)', (v, s) => s?.batch?.recycled_content_pct),
+      wide('Production Stage', (v, s) => s?.batch?.production_stage),
       wide('Country of Origin (Batch)', (v, s) => s?.batch?.country_of_origin),
-      wide('Serial Number',             (v, s) => s?.item?.serial_number),
-      wide('UPI',                       (v, s) => s?.item?.upi),
+      wide('Serial Number', (v, s) => s?.item?.serial_number),
+      wide('UPI', (v, s) => s?.item?.upi),
     ];
 
     // ── Filename: "Product Name version history YYYY-MM-DD HH-MM" ───────────
@@ -791,9 +790,9 @@ export function DppDetail() {
 
     exportData(
       [
-        { name: 'Passport',          rows: passportRows },
+        { name: 'Passport', rows: passportRows },
         ...(sorted.length ? [{ name: 'Version Timeline', rows: timelineRows }] : []),
-        ...(sorted.length ? [{ name: 'Field Comparison', rows: fieldRows    }] : []),
+        ...(sorted.length ? [{ name: 'Field Comparison', rows: fieldRows }] : []),
       ],
       histFilename,
       format
@@ -860,26 +859,26 @@ export function DppDetail() {
           {/* Lifecycle + versioning actions — hidden while viewing a past snapshot. */}
           {!isSnapshot && (
             <RequireRole role="company_advanced">
-                {(s === 'draft' || s === 'in_review') && (
-                  <Button
-                    disabled={busy || !canApproveOrPublish}
-                    className={
-                      !canApproveOrPublish
-                        ? 'cursor-not-allowed bg-gray-300 text-gray-500 opacity-70'
-                        : ''
-                    }
-                    title={
-                      !canApproveOrPublish
-                        ? validationQ.isLoading
-                          ? 'Checking validation…'
-                          : 'Fill all mandatory fields first.'
-                        : undefined
-                    }
-                    onClick={() => run('approveDPP', undefined, 'Passport approved.')}
-                  >
-                    Approve
-                  </Button>
-                )}
+              {(s === 'draft' || s === 'in_review') && (
+                <Button
+                  disabled={busy || !canApproveOrPublish}
+                  className={
+                    !canApproveOrPublish
+                      ? 'cursor-not-allowed bg-gray-300 text-gray-500 opacity-70'
+                      : ''
+                  }
+                  title={
+                    !canApproveOrPublish
+                      ? validationQ.isLoading
+                        ? 'Checking validation…'
+                        : 'Fill all mandatory fields first.'
+                      : undefined
+                  }
+                  onClick={() => run('approveDPP', undefined, 'Passport approved.')}
+                >
+                  Approve
+                </Button>
+              )}
 
               {s === 'approved' && (
                 <Button
@@ -1096,8 +1095,11 @@ export function DppDetail() {
               <Row label="Category" value={categoryLabel} change={changed('product.category')} />
               <Row label="Model" value={product?.model} change={changed('product.model')} />
               <Row label="GTIN" value={product?.gtin} change={changed('product.gtin')} />
-              <Row label="UPC" value={product?.upc} change={changed('product.upc')} />
-              <Row label="EAN" value={product?.ean} change={changed('product.ean')} />
+              <Row
+                label="EAN / UPC"
+                value={product?.upc}
+                change={changed('product.upc')}
+              />
               <Row label="Fibre composition" value={product?.fibre_composition} change={changed('product.fibre_composition')} />
               <Row label="Country of origin" value={product?.country_of_origin} change={changed('product.country_of_origin')} />
               <Row label="Substances of concern" value={product?.substances_of_concern} change={changed('product.substances_of_concern')} />
@@ -1269,48 +1271,48 @@ export function DppDetail() {
           </Card>
 
           {!isSnapshot && (
-          <Card>
-            <CardTitle>QR code</CardTitle>
-            {qrQ.data?.png ? (
-              <div className="mt-3 flex flex-col items-center gap-3">
-                <img
-                  src={`data:image/png;base64,${qrQ.data.png}`}
-                  alt="DPP QR code"
-                  className="h-44 w-44 rounded-lg border border-black/5"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const ok = printLabels(
-                      [
-                        {
-                          token: dpp.qr_token,
-                          name: product?.name,
-                          brand: product?.brand,
-                          dpp_id: dpp.ID,
-                          product_id: product?.ID,
-                          batch_number: batch?.batch_number,
-                          serial_number: item?.serial_number,
-                          upi: item?.upi,
-                          website: orgQ.data?.website_url
-                        }
-                      ],
-                      { title: `QR label — ${product?.name ?? dpp.ID}` }
-                    );
-                    if (!ok) setMsg({ kind: 'error', text: 'Could not open the print window — allow pop-ups for this site.' });
-                  }}
-                >
-                  <Printer className="h-4 w-4" /> Print label
-                </Button>
-                <span className="text-xs text-ink-muted">Label includes product &amp; identification data</span>
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-ink-muted">
-                {dpp.qr_token ? 'Loading QR…' : 'No QR yet — publish the passport to generate one.'}
-              </p>
-            )}
-          </Card>
+            <Card>
+              <CardTitle>QR code</CardTitle>
+              {qrQ.data?.png ? (
+                <div className="mt-3 flex flex-col items-center gap-3">
+                  <img
+                    src={`data:image/png;base64,${qrQ.data.png}`}
+                    alt="DPP QR code"
+                    className="h-44 w-44 rounded-lg border border-black/5"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const ok = printLabels(
+                        [
+                          {
+                            token: dpp.qr_token,
+                            name: product?.name,
+                            brand: product?.brand,
+                            dpp_id: dpp.ID,
+                            product_id: product?.ID,
+                            batch_number: batch?.batch_number,
+                            serial_number: item?.serial_number,
+                            upi: item?.upi,
+                            website: orgQ.data?.website_url
+                          }
+                        ],
+                        { title: `QR label — ${product?.name ?? dpp.ID}` }
+                      );
+                      if (!ok) setMsg({ kind: 'error', text: 'Could not open the print window — allow pop-ups for this site.' });
+                    }}
+                  >
+                    <Printer className="h-4 w-4" /> Print label
+                  </Button>
+                  <span className="text-xs text-ink-muted">Label includes product &amp; identification data</span>
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-ink-muted">
+                  {dpp.qr_token ? 'Loading QR…' : 'No QR yet — publish the passport to generate one.'}
+                </p>
+              )}
+            </Card>
           )}
         </div>
       </div>
