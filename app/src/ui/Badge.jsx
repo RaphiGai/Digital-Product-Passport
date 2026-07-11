@@ -108,8 +108,8 @@ export function EditableVisibilityBadge({ value, onChange, locked, canEdit }) {
       onClick={() => onChange?.(isPublic ? 'internal' : 'public')}
       title={
         isPublic
-          ? 'Shown on the public passport — click to make internal'
-          : 'Hidden from the public passport — click to make public'
+          ? 'Shown on the public passport — click to make internal. Takes effect on the consumer view after the passport is (re-)published.'
+          : 'Hidden from the public passport — click to make public. Takes effect on the consumer view after the passport is (re-)published.'
       }
       className={cn(
         'inline-flex cursor-pointer items-center rounded-full px-2.5 py-0.5 text-xs font-normal ring-1 ring-inset transition-colors',

@@ -133,7 +133,7 @@ export function VariantView() {
             <InfoRow
               label="Weight"
               value={v.weight_g != null ? `${v.weight_g} g` : null}
-              visibility="internal"
+              visibility={variantVis.weight_g}
             />
             <InfoRow label="Status" value={<StatusBadge status={v.status} />} visibility="internal" />
             {parseCustomFields(v.custom_fields).map((f) => (

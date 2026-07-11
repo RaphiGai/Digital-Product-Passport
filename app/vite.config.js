@@ -23,8 +23,6 @@ export default defineConfig(() => {
       proxy: {
         '/odata': toBackend,
         '/auth': toBackend,
-        // AI assistant document-extraction endpoint (raw file upload, cookie auth).
-        '/ai': toBackend,
         // The QR code points here (/public/dpp/:token). A browser navigating to the
         // consumer PAGE (Accept: text/html) should get the rendered SPA; the page's own
         // JSON fetch, the qr.png image, and per-token sub-resources (e.g. document

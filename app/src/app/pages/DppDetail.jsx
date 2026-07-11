@@ -329,6 +329,13 @@ function ReadinessCard({ v, entities }) {
             />
           </div>
 
+          {v.pending_changes && (
+            <p className="mt-2 text-xs text-ink-muted">
+              Pending edits — including field Public/Internal changes — reach the consumer
+              view only after the passport is (re-)published.
+            </p>
+          )}
+
           {blocking.length > 0 && (
             <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <p className="font-medium">Blocking checks — required before approval:</p>
@@ -533,7 +540,7 @@ export function DppDetail() {
     itemUpdate.mutate(
       { key: dpp.item_ID, payload: { field_visibility: JSON.stringify(merged) } },
       {
-        onSuccess: () => setMsg({ kind: 'success', text: `Manufacturing date is now ${target}.` }),
+        onSuccess: () => setMsg({ kind: 'success', text: `Manufacturing date is now ${target}. Re-publish the passport to update the consumer view.` }),
         onError: (err) => setMsg({ kind: 'error', text: err.message })
       }
     );
@@ -1252,14 +1259,21 @@ export function DppDetail() {
                     label="Public URL"
                     value={
                       consumerUrl ? (
-                        <a
-                          href={consumerUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-medium text-brand-700 hover:underline"
-                        >
-                          Open DPP
-                        </a>
+                        <span className="flex flex-col gap-0.5">
+                          <a
+                            href={consumerUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-medium text-brand-700 hover:underline"
+                          >
+                            Open DPP
+                          </a>
+                          {readiness?.pending_changes && readiness?.live_version && (
+                            <span className="text-xs text-ink-muted">
+                              Shows the published v{readiness.live_version}. Re-publish to apply pending changes.
+                            </span>
+                          )}
+                        </span>
                       ) : null
                     }
                   />

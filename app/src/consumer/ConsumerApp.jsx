@@ -952,7 +952,7 @@ function Identification({ ident, product }) {
     ['Product ID', ident?.product_id],
     ['GTIN', p.gtin],
     ['UPC', p.upc],
-    ['EAN', p.ean ?? p.ein], // p.ein: frozen consumer snapshots published before the ean rename
+    ['EAN', p.ean],
     ['Batch number', ident?.batch_number],
     ['Serial number', ident?.serial_number],
     ['UPI', ident?.upi],

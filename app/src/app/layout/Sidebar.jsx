@@ -2,7 +2,6 @@ import { useState } from 'react'; // Added useState
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Sparkles,
   Shirt,
   Building2,
   QrCode,
@@ -26,7 +25,6 @@ const NAV = [
   {
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-      { to: '/assistant', label: 'DPP Assistant', icon: Sparkles },
       { to: '/products', label: 'Products', icon: Shirt },
       { to: '/partners', label: 'Business partners', icon: Building2 },
       { to: '/dpps', label: 'DPPs', icon: QrCode },

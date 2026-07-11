@@ -242,7 +242,12 @@ export function BatchEdit() {
       return;
     }
 
-    if (form.production_date && form.production_date >= today) {
+    if (!form.production_date) {
+      setMsg({ kind: 'error', text: 'Production date is required.' });
+      return;
+    }
+
+    if (form.production_date >= today) {
       setMsg({ kind: 'error', text: 'Production date must be in the past.' });
       return;
     }
@@ -532,7 +537,7 @@ export function BatchEdit() {
 
         <FormSection
           title="Additional fields"
-          description="Your own name/value fields for this batch. Each field has its own Public/Internal setting — Public fields appear on the consumer passport."
+          description="Your own name/value fields for this batch. Each field has its own Public/Internal setting — Public fields appear on the consumer passport after the passport is (re-)published."
         >
           <CustomFieldsEditor
             rows={form.custom_fields}

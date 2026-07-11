@@ -452,7 +452,7 @@ export function ProductDetail() {
           <CardTitle>Basic information</CardTitle>
           <div className="mt-2">
             <Row label="Product ID" value={p.ID} visibility="internal" />
-            <Row label="Type" value={p.product_type} visibility="internal" />
+            <Row label="Type" value={p.product_type} visibility={vis.product_type} />
             <Row label="Brand" value={p.brand} visibility={vis.brand} />
             <Row label="Category" value={p.category?.name} visibility={vis.category} />
             <Row label="GTIN" value={p.gtin} visibility={vis.gtin} />

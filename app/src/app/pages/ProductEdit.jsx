@@ -259,7 +259,7 @@ export function ProductEdit() {
 
         <FormSection
           title="Basic information"
-          description="Name, Brand and Category appear publicly on the consumer DPP."
+          description="Name, Brand and Category appear publicly on the consumer DPP. Public/Internal changes reach the consumer view only after the passport is (re-)published."
         >
           <FieldRow label="Product ID" visibility="internal">
             <span className="font-mono text-sm text-ink">

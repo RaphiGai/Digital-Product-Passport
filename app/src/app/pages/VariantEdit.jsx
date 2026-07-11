@@ -306,7 +306,7 @@ export function VariantEdit() {
 
         <FormSection
           title="Additional fields"
-          description="Your own name/value fields for this variant. Each field has its own Public/Internal setting — Public fields appear on the consumer passport."
+          description="Your own name/value fields for this variant. Each field has its own Public/Internal setting — Public fields appear on the consumer passport after the passport is (re-)published."
         >
           <CustomFieldsEditor
             rows={form.custom_fields}

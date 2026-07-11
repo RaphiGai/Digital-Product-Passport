@@ -381,9 +381,9 @@ return (
           <InfoRow label="Batch number" value={b.batch_number} visibility={batchVis.batch_number} />
           <InfoRow label="Production date" value={b.production_date} visibility={batchVis.production_date} />
           <InfoRow label="Country of origin" value={b.country_of_origin} visibility={batchVis.country_of_origin} />
-          <InfoRow label="Production stage" value={b.production_stage} visibility="internal" />
-          <InfoRow label="Factory" value={b.factory?.name} visibility="internal" />
-          <InfoRow label="Supplier" value={b.supplier?.name} visibility="internal" />
+          <InfoRow label="Production stage" value={b.production_stage} visibility={batchVis.production_stage} />
+          <InfoRow label="Factory" value={b.factory?.name} visibility={batchVis.factory} />
+          <InfoRow label="Supplier" value={b.supplier?.name} visibility={batchVis.supplier} />
           <InfoRow
             label="CO₂ footprint"
             value={b.co2_footprint_kg != null ? `${b.co2_footprint_kg} kg CO₂/kg` : null}
@@ -412,7 +412,7 @@ return (
           <InfoRow label="Size" value={v?.size} visibility={variantVis.size} />
           <InfoRow label="SKU" value={v?.sku} visibility={variantVis.sku} />
           <InfoRow label="GTIN" value={v?.gtin} visibility={variantVis.gtin} />
-          <InfoRow label="Weight" value={v?.weight_g != null ? `${v.weight_g} g` : null} visibility="internal" />
+          <InfoRow label="Weight" value={v?.weight_g != null ? `${v.weight_g} g` : null} visibility={variantVis.weight_g} />
           <InfoRow label="Brand" value={p?.brand} visibility={productVis.brand} />
           <InfoRow label="Category" value={p?.category?.name} visibility={productVis.category} />
           <InfoRow label="Care instructions" value={p?.care_instructions} visibility={productVis.care_instructions} />

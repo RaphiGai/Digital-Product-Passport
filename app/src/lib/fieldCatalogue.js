@@ -81,7 +81,7 @@ export const VARIANT_CATALOGUE = [
  */
 export const BATCH_CATALOGUE = [
   { key: 'batch_number', label: 'BatchNumber', mandatory: false, visibility: 'internal' },
-  { key: 'production_date', label: 'ProductionDate', mandatory: false, visibility: 'internal' },
+  { key: 'production_date', label: 'ProductionDate', mandatory: true, visibility: 'public' },
   { key: 'country_of_origin', label: 'CountryOfOrigin', mandatory: true, visibility: 'public', locked: true },
   { key: 'production_stage', label: 'ProductionStage', mandatory: false, visibility: 'internal' },
   { key: 'factory', label: 'Factory', mandatory: false, visibility: 'internal' },
