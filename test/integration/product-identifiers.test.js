@@ -63,7 +63,8 @@ describe('Product identifiers — optional UPC / EAN fields', () => {
     expect(data.value[0].ean).toBe('4099999999990');
   });
 
-  test('importProducts accepts the legacy "ein" column as ean', async () => {
+  test('importProducts ignores the legacy "ein" column (EAN only)', async () => {
+    // The legacy "ein" import alias was removed — only the "ean" column populates EAN.
     const row = importRow({ name: 'Import Legacy Ein Column', ein: '4088888888885' });
     const r = await POST(
       '/odata/v4/dpp/importProducts',
@@ -77,6 +78,6 @@ describe('Product identifiers — optional UPC / EAN fields', () => {
       alice
     );
     expect(data.value).toHaveLength(1);
-    expect(data.value[0].ean).toBe('4088888888885');
+    expect(data.value[0].ean == null).toBe(true);
   });
 });

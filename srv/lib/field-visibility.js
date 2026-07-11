@@ -63,7 +63,7 @@ const CATALOGUES = {
   },
   batch: {
     batch_number: { vis: 'internal', locked: false },
-    production_date: { vis: 'internal', locked: false },
+    production_date: { vis: 'public', locked: false },
     country_of_origin: { vis: 'public', locked: true }, // Tier B — origin marking
     production_stage: { vis: 'internal', locked: false },
     factory: { vis: 'internal', locked: false },   // resolved BusinessPartner name

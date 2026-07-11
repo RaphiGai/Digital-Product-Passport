@@ -1,3 +1,1 @@
 ID;batch_ID;bom_ID;supplier_ID;component_batch_ID;external_batch_number;sub_dpp_ID
-bc-tshirt-A-cotton;batch-2026-05-A;bom-tshirt-cotton;bp-cotton-coop;;;dpp-cotton
-bc-tshirt-polybag;batch-2026-05-A;bom-tshirt-polybag;bp-greenpack;;PBG-2026-05;

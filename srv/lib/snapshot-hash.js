@@ -138,7 +138,7 @@ const PATH_LABELS = {
   'product.description': 'Description',
   'product.gtin': 'Product GTIN',
   'product.upc': 'UPC',
-  'product.ein': 'EAN',
+  'product.ean': 'EAN',
   'variant.color': 'Variant colour',
   'variant.size': 'Variant size',
   'variant.sku': 'Variant SKU',

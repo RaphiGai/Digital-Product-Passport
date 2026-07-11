@@ -39,13 +39,6 @@
       "csrfProtection": false
     },
     {
-      "source": "^/ai/(.*)$",
-      "target": "/ai/$1",
-      "destination": "srv-api",
-      "authenticationType": "none",
-      "csrfProtection": false
-    },
-    {
       "source": "^/\\$api-docs/(.*)$",
       "target": "/$api-docs/$1",
       "destination": "srv-api",

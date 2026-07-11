@@ -45,9 +45,11 @@ describe('Defaults follow the field catalogue', () => {
     expect(data.variant).not.toHaveProperty('gtin');
     expect(data.variant.color).toBe('Blue');
 
-    // batch: number/date default internal → omitted; country_of_origin locked → present
+    // batch: number default internal → omitted; production_date default public → present;
+    // country_of_origin locked → present
     expect(data.batch).not.toHaveProperty('batch_number');
-    expect(data.batch).not.toHaveProperty('production_date');
+    expect(data.batch).toHaveProperty('production_date');
+    expect(data.batch.production_date).toBeTruthy();
     expect(data.batch.country_of_origin).toBe('PT');
 
     // product locked fields always present

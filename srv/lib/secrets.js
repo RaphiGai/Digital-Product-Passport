@@ -24,8 +24,6 @@ const KNOWN_KEYS = [
   // Outbound email (self-service password reset) — projected from dpp-secrets on BTP.
   'MAIL_HOST', 'MAIL_PORT', 'MAIL_SECURE', 'MAIL_USER', 'MAIL_PASSWORD', 'MAIL_FROM',
   'PASSWORD_RESET_TTL_MIN',
-  // AI assistant (Google Gemini via Google AI Studio) — projected from dpp-secrets on BTP.
-  'GEMINI_API_KEY', 'GEMINI_MODEL', 'GEMINI_MODEL_EXTRACT', 'GEMINI_BASE_URL',
 ];
 
 function findUserProvided(vcap, name) {

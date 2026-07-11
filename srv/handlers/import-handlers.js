@@ -27,8 +27,8 @@ const PARTNER_STATUSES = new Set(['active', 'archived']);
 // These maps list only fields stored VERBATIM (input key → column name); fields that are
 // sliced (country_of_origin), enum-checked, code-list-resolved (category) or numeric have
 // their own validation and are deliberately excluded. checkLengths() reads the actual limit
-// from the entity element, so it never drifts from the schema. This runs for BOTH the bulk
-// Excel import AND the AI assistant (which validates via importXxx dryRun).
+// from the entity element, so it never drifts from the schema. This runs for the bulk
+// Excel/CSV import.
 const LEN_KEYS = {
   products: {
     name: 'name', brand: 'brand', model: 'model', description: 'description',
@@ -213,7 +213,7 @@ module.exports = (srv) => {
           model:                 str(r.model)              || null,
           gtin:                  str(r.gtin)               || null,
           upc:                   str(r.upc)                || null,
-          ean:                   str(r.ean ?? r.ein)       || null, // r.ein: legacy import column name
+          ean:                   str(r.ean)                || null,
           status:                str(r.status),
           country_of_origin:     str(r.country_of_origin).toUpperCase().slice(0, 2),
           description:           str(r.description)        || null,
