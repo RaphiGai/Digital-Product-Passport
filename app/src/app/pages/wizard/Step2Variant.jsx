@@ -5,7 +5,8 @@ import { ApiError, odataList } from '@/api/client';
 import { Card, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Banner } from '@/ui/Breadcrumb';
-import { FormSection, FieldRow, Input, Select } from '@/ui/Form';
+import { FormSection, FieldRow, Input, Select, SizeSelect } from '@/ui/Form';
+import { validateGtin } from '@/lib/gtin';
 import { ImageUpload } from '@/ui/ImageUpload';
 
 const EMPTY = { color: '', size: '', sku: '', gtin: '', weight_g: '', image_url: '', image_data: '', status: 'active' };
@@ -49,8 +50,9 @@ export function Step2Variant({ ctx, setCtx, onPrimary, primaryLabel, onBack }) {
     }
     // Mirror VariantEdit so invalid input is caught here, with a clear message,
     // before the backend rejects it.
-    if (form.gtin && form.gtin.length < 8) {
-      setError('GTIN must contain at least 8 digits.');
+    const gtinError = validateGtin(form.gtin);
+    if (gtinError) {
+      setError(gtinError);
       return;
     }
     if (form.weight_g !== '' && Number(form.weight_g) <= 0) {
@@ -91,7 +93,7 @@ export function Step2Variant({ ctx, setCtx, onPrimary, primaryLabel, onBack }) {
             <Input id="color" value={form.color} onChange={set('color')} placeholder="Blue" />
           </FieldRow>
           <FieldRow label="Size" visibility="public" htmlFor="size">
-            <Input id="size" value={form.size} onChange={set('size')} placeholder="M" />
+            <SizeSelect id="size" value={form.size} onChange={set('size')} />
           </FieldRow>
           <FieldRow label="SKU" required visibility="internal" htmlFor="sku">
             <Input id="sku" value={form.sku} onChange={set('sku')} placeholder="TSH-BLU-M" />

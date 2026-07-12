@@ -1,6 +1,7 @@
 import { cn } from '@/lib/cn';
 import { FieldVisibilityBadge, EditableVisibilityBadge } from './Badge';
 import { COUNTRIES } from '@/lib/countries';
+import { SIZE_GROUPS } from '@/lib/sizeCatalogue';
 
 /**
  * Section wrapper with a title + description, matching the create-form mockups.
@@ -91,6 +92,30 @@ export function CountrySelect({ className, placeholder = 'Select country', ...pr
         <option key={country.code} value={country.code}>
           {country.name} ({country.code})
         </option>
+      ))}
+    </select>
+  );
+}
+
+/**
+ * Size picker backed by the shared size catalogue (grouped by Women / Men / One size).
+ * Stores the full label string as its value, so it is a drop-in replacement for the old
+ * free-text size `<Input>`.
+ * @param {{ placeholder?: string }
+ *   & React.SelectHTMLAttributes<HTMLSelectElement>} props
+ */
+export function SizeSelect({ className, placeholder = 'Select a size', ...props }) {
+  return (
+    <select className={cn(inputBase, className)} {...props}>
+      <option value="">{placeholder}</option>
+      {SIZE_GROUPS.map((group) => (
+        <optgroup key={group.label} label={group.label}>
+          {group.sizes.map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+        </optgroup>
       ))}
     </select>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { odataGet, odataList, ApiError } from '@/api/client';
@@ -13,10 +13,21 @@ import {
   mergeVisibility
 } from '@/lib/fieldCatalogue';
 import { parseCustomFields, serializeCustomFields, validateCustomFields } from '@/lib/customFields';
+import { validateGtin, GTIN_HINT } from '@/lib/gtin';
+import { useUnsavedChanges } from '@/app/UnsavedChangesContext';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
 import { FormSection, FieldRow, Input, Textarea, RadioCards, CountrySelect, Select } from '@/ui/Form';
+
+// ESPR durability/repairability options: 0–10 in 0.5 steps, plus an explicit "not assessed".
+const SCORE_OPTIONS = [
+  { value: '', label: '— Not assessed —' },
+  ...Array.from({ length: 21 }, (_, i) => {
+    const n = String(i / 2); // 0, 0.5, 1, … 10
+    return { value: n, label: n };
+  })
+];
 import { CustomFieldsEditor } from '@/ui/CustomFieldsEditor';
 import { DocumentManager } from '@/ui/DocumentManager';
 
@@ -70,6 +81,11 @@ export function ProductEdit() {
   });
   const categoryOptions = categoriesQ.data ?? [];
 
+  // Warn on exit while the form has unsaved edits. The clean snapshot is captured once,
+  // right after the product loads; any later change to form/visibility marks it dirty.
+  const { setDirty } = useUnsavedChanges();
+  const cleanRef = useRef(null);
+
   useEffect(() => {
     if (productQ.data && !form) {
       const p = productQ.data;
@@ -98,8 +114,8 @@ export function ProductEdit() {
         repair_instructions: p.repair_instructions ?? '',
         disposal_instructions: p.disposal_instructions ?? '',
         reuse_instructions: p.reuse_instructions ?? '',
-        durability_score: p.durability_score ?? '',
-        repairability_score: p.repairability_score ?? '',
+        durability_score: p.durability_score == null ? '' : String(Number(p.durability_score)),
+        repairability_score: p.repairability_score == null ? '' : String(Number(p.repairability_score)),
         care_video_url: p.care_video_url ?? '',
         repair_video_url: p.repair_video_url ?? '',
         disposal_video_url: p.disposal_video_url ?? '',
@@ -116,6 +132,14 @@ export function ProductEdit() {
       setFieldVis(mergeVisibility(PRODUCT_CATALOGUE, p.field_visibility));
     }
   }, [productQ.data, form]);
+
+  useEffect(() => {
+    if (!form) return;
+    const snap = JSON.stringify({ form, fieldVis });
+    if (cleanRef.current == null) { cleanRef.current = snap; return; } // first load = clean
+    setDirty(snap !== cleanRef.current);
+  }, [form, fieldVis, setDirty]);
+  useEffect(() => () => setDirty(false), [setDirty]); // clear on unmount (save/cancel/leave)
 
   const update = useUpdate('Products', {
     invalidate: [['Products', id], ['Products']]
@@ -141,15 +165,16 @@ export function ProductEdit() {
       return;
     }
 
-    if (form.gtin && form.gtin.length < 8) {
-      setMsg({ kind: 'error', text: 'GTIN must contain at least 8 digits.' });
+    const gtinError = validateGtin(form.gtin);
+    if (gtinError) {
+      setMsg({ kind: 'error', text: gtinError });
       return;
     }
 
     for (const [key, label] of [['durability_score', 'Durability'], ['repairability_score', 'Repairability']]) {
       const v = form[key];
-      if (v !== '' && (Number.isNaN(Number(v)) || Number(v) < 0 || Number(v) > 10)) {
-        setMsg({ kind: 'error', text: `${label} score must be a number between 0 and 10.` });
+      if (v !== '' && (Number.isNaN(Number(v)) || Number(v) < 0 || Number(v) > 10 || (Number(v) * 2) % 1 !== 0)) {
+        setMsg({ kind: 'error', text: `${label} score must be between 0 and 10 in 0.5 steps.` });
         return;
       }
     }
@@ -288,9 +313,7 @@ export function ProductEdit() {
             visibilityControl={visCtl('gtin')}
             htmlFor="gtin"
             hint={
-              form.gtin && form.gtin.length < 8
-                ? 'GTIN must contain at least 8 digits.'
-                : remaining(form.gtin, LIMITS.gtin)
+              validateGtin(form.gtin) ?? GTIN_HINT
             }
           >
             <Input
@@ -400,13 +423,13 @@ export function ProductEdit() {
 
         <FormSection
           title="Durability & repairability (ESPR)"
-          description="ESPR scores on a 0–10 scale (one decimal). Shown publicly when set."
+          description="ESPR scores from 0 to 10 (in 0.5 steps) — higher is better. Shown publicly when set."
         >
-          <FieldRow label="Durability score" visibilityControl={visCtl('durability_score')} htmlFor="durability" hint="0–10 (e.g. 8.5). Leave empty if not assessed.">
-            <Input id="durability" type="number" min="0" max="10" step="0.1" value={form.durability_score} onChange={set('durability_score')} />
+          <FieldRow label="Durability score" visibilityControl={visCtl('durability_score')} htmlFor="durability" hint="How long the item lasts under normal use. 0 = wears out very quickly · 10 = exceptionally long-lasting.">
+            <Select id="durability" value={form.durability_score} onChange={set('durability_score')} options={SCORE_OPTIONS} />
           </FieldRow>
-          <FieldRow label="Repairability score" visibilityControl={visCtl('repairability_score')} htmlFor="repairability" hint="0–10 (e.g. 7.0). Leave empty if not assessed.">
-            <Input id="repairability" type="number" min="0" max="10" step="0.1" value={form.repairability_score} onChange={set('repairability_score')} />
+          <FieldRow label="Repairability score" visibilityControl={visCtl('repairability_score')} htmlFor="repairability" hint="How easily the item can be repaired — spare parts, easy disassembly, repair guides (EU repair-index scale). 0 = not repairable · 10 = very easily repaired.">
+            <Select id="repairability" value={form.repairability_score} onChange={set('repairability_score')} options={SCORE_OPTIONS} />
           </FieldRow>
         </FormSection>
 

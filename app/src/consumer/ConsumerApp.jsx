@@ -898,6 +898,9 @@ function Materials({ items, depth = 0 }) {
               {m.fibre_composition && (
                 <div className="text-xs text-ink-muted">{m.fibre_composition}</div>
               )}
+              {m.supplier && (
+                <div className="text-xs text-ink-muted">Supplier · {m.supplier}</div>
+              )}
             </div>
             {(m.external_dpp_url || m.sub_dpp?.qr_token) && (
               <div className="shrink-0 text-right text-xs">

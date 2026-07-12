@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useMe } from '@/auth/useMe';
+import { useUnsavedChanges } from '@/app/UnsavedChangesContext';
 
 const NAV = [
   {
@@ -61,6 +62,7 @@ const PARTNER_NAV = [
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(true); // State to manage open/close
   const { data: me } = useMe();
+  const { confirmLeave } = useUnsavedChanges();
   const isAdvanced = me?.role === 'company_advanced';
   const nav = me?.role === 'business_partner' ? PARTNER_NAV : NAV;
 
@@ -140,6 +142,7 @@ export function Sidebar() {
                       <NavLink
                         to={item.to}
                         end={item.end}
+                        onClick={(e) => { if (!confirmLeave()) e.preventDefault(); }}
                         className={({ isActive }) =>
                           cn(rowBase, isActive ? 'bg-brand-100 text-brand-800' : inactive)
                         }

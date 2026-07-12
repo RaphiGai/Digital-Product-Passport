@@ -5,6 +5,7 @@ import { Topbar } from './Topbar';
 import { useMe } from '@/auth/useMe';
 import { ApiError } from '@/api/client';
 import { AccountNotActivated } from '@/app/pages/AccountNotActivated';
+import { UnsavedChangesProvider } from '@/app/UnsavedChangesContext';
 
 // The only routes a business_partner login may visit — everything else redirects
 // to the partner portal. Mirrors the server-side scope gate (auth-helpers.js),
@@ -59,14 +60,16 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex h-full">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar />
-        <main className="flex-1 overflow-auto px-8 py-7">
-          <Outlet />
-        </main>
+    <UnsavedChangesProvider>
+      <div className="flex h-full">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar />
+          <main className="flex-1 overflow-auto px-8 py-7">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </UnsavedChangesProvider>
   );
 }

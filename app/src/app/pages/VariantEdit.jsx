@@ -6,17 +6,17 @@ import { useUpdate } from '@/api/hooks';
 import { useHasRole } from '@/auth/useMe';
 import { VARIANT_CATALOGUE, catalogueByKey, mergeVisibility } from '@/lib/fieldCatalogue';
 import { parseCustomFields, serializeCustomFields, validateCustomFields } from '@/lib/customFields';
+import { validateGtin, GTIN_HINT } from '@/lib/gtin';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
-import { FormSection, FieldRow, Input, Select } from '@/ui/Form';
+import { FormSection, FieldRow, Input, Select, SizeSelect } from '@/ui/Form';
 import { CustomFieldsEditor } from '@/ui/CustomFieldsEditor';
 import { ImageUpload } from '@/ui/ImageUpload';
 import { BomEditor } from '@/ui/BomEditor';
 
 const LIMITS = {
   color: 70,
-  size: 30,
   gtin: 14,
   image_url: 500
 };
@@ -97,8 +97,9 @@ export function VariantEdit() {
   const save = () => {
     setMsg(null);
 
-    if (form.gtin && form.gtin.length < 8) {
-      setMsg({ kind: 'error', text: 'GTIN must contain at least 8 digits.' });
+    const gtinError = validateGtin(form.gtin);
+    if (gtinError) {
+      setMsg({ kind: 'error', text: gtinError });
       return;
     }
 
@@ -217,14 +218,8 @@ export function VariantEdit() {
             label="Size"
             visibilityControl={visCtl('size')}
             htmlFor="size"
-            hint={remaining(form.size, LIMITS.size)}
           >
-            <Input
-              id="size"
-              value={form.size}
-              onChange={set('size')}
-              maxLength={LIMITS.size}
-            />
+            <SizeSelect id="size" value={form.size} onChange={set('size')} />
           </FieldRow>
 
           
@@ -233,11 +228,7 @@ export function VariantEdit() {
             label="GTIN"
             visibilityControl={visCtl('gtin')}
             htmlFor="gtin"
-            hint={
-              form.gtin && form.gtin.length < 8
-                ? 'GTIN must contain at least 8 digits.'
-                : remaining(form.gtin, LIMITS.gtin)
-            }
+            hint={validateGtin(form.gtin) ?? GTIN_HINT}
           >
             <Input
               id="gtin"

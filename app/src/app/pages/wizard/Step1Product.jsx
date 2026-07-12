@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useMe } from '@/auth/useMe';
@@ -15,6 +15,8 @@ import { Button } from '@/ui/Button';
 import { Banner } from '@/ui/Breadcrumb';
 import { FieldCatalogueAside } from '@/ui/FieldCatalogueAside';
 import { FormSection, FieldRow, Input, Textarea, RadioCards, CountrySelect, Select } from '@/ui/Form';
+import { validateGtin, GTIN_HINT } from '@/lib/gtin';
+import { useUnsavedChanges } from '@/app/UnsavedChangesContext';
 
 const EMPTY = {
   product_type: 'finished',
@@ -82,6 +84,14 @@ export function Step1Product({ ctx, setCtx, next }) {
 
   // If we already created the product (came back to step 1), keep moving forward.
   const alreadyCreated = Boolean(ctx.productId);
+
+  // Warn on exit while the form has unsaved edits (and isn't yet created).
+  const { setDirty } = useUnsavedChanges();
+  const cleanRef = useRef(JSON.stringify(EMPTY));
+  useEffect(() => {
+    setDirty(!alreadyCreated && JSON.stringify(form) !== cleanRef.current);
+  }, [form, alreadyCreated, setDirty]);
+  useEffect(() => () => setDirty(false), [setDirty]);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   // Storytelling block editor — serialized to a JSON array string on submit.
@@ -119,6 +129,11 @@ export function Step1Product({ ctx, setCtx, next }) {
         setError('Links must start with https:// (or http://).');
         return;
       }
+    }
+    const gtinError = validateGtin(form.gtin);
+    if (gtinError) {
+      setError(gtinError);
+      return;
     }
     const story = form.storytelling
       .map((s) => ({ title: s.title.trim(), body: s.body.trim() }))
@@ -188,8 +203,16 @@ export function Step1Product({ ctx, setCtx, next }) {
             <FieldRow label="Model" visibility="public" htmlFor="model" hint="Season or model line.">
               <Input id="model" value={form.model} onChange={set('model')} placeholder="AW 2025" />
             </FieldRow>
-            <FieldRow label="GTIN" visibility="internal" htmlFor="gtin">
-              <Input id="gtin" value={form.gtin} onChange={set('gtin')} placeholder="1234567890123" />
+            <FieldRow label="GTIN" visibility="internal" htmlFor="gtin" hint={validateGtin(form.gtin) ?? GTIN_HINT}>
+              <Input
+                id="gtin"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={14}
+                value={form.gtin}
+                placeholder="1234567890123"
+                onChange={(e) => setForm((f) => ({ ...f, gtin: e.target.value.replace(/\D/g, '').slice(0, 14) }))}
+              />
             </FieldRow>
             <FieldRow
               label="EAN / UPC"
