@@ -4,6 +4,8 @@ const cds            = require('@sap/cds');
 const { randomUUID } = require('crypto');
 const { getUserOrg } = require('./auth-helpers');
 const { isHttpUrl }  = require('../lib/url-validate');
+const { resolveSize } = require('../lib/size-catalogue');
+const { validateGtin } = require('../lib/gtin-validate');
 
 // Product URL fields rendered as <a href> on the public consumer page — must be http(s).
 const PRODUCT_URL_FIELDS = [
@@ -182,13 +184,16 @@ module.exports = (srv) => {
       requireEnum (allIssues, i, 'espr_compliance',       r.espr_compliance, ESPR_STATUSES);
       checkLengths(allIssues, i, r, 'Products', LEN_KEYS.products);
 
+      const gtinErr = validateGtin(r.gtin);
+      if (gtinErr) err(allIssues, i, 'gtin', gtinErr);
+
       const dur = parseNum(r.durability_score);
-      if (dur !== null && (dur < 0 || dur > 10))
-        err(allIssues, i, 'durability_score', 'Durability score must be between 0 and 10.');
+      if (dur !== null && (dur < 0 || dur > 10 || (dur * 2) % 1 !== 0))
+        err(allIssues, i, 'durability_score', 'Durability score must be between 0 and 10 in 0.5 steps (e.g. 8.5).');
 
       const rep = parseNum(r.repairability_score);
-      if (rep !== null && (rep < 0 || rep > 10))
-        err(allIssues, i, 'repairability_score', 'Repairability score must be between 0 and 10.');
+      if (rep !== null && (rep < 0 || rep > 10 || (rep * 2) % 1 !== 0))
+        err(allIssues, i, 'repairability_score', 'Repairability score must be between 0 and 10 in 0.5 steps (e.g. 7).');
 
       const name = str(r.name);
       if (name && existingNames.has(name.toLowerCase()))
@@ -600,6 +605,16 @@ module.exports = (srv) => {
       if (weightG !== null && weightG <= 0)
         err(allIssues, i, 'weight_g', 'Weight must be a positive number (grams).');
 
+      // Size is a controlled vocabulary (see lib/size-catalogue.js). Accept the short key
+      // ("Women 34") or the full label; store the canonical label. Blank stays blank.
+      const sizeRaw = str(r.size);
+      const sizeVal = sizeRaw ? resolveSize(sizeRaw) : null;
+      if (sizeRaw && !sizeVal)
+        err(allIssues, i, 'size', `Size "${sizeRaw}" is not in the allowed list — pick e.g. "Women 34", "Men 48" or "One size".`);
+
+      const gtinErr = validateGtin(r.gtin);
+      if (gtinErr) err(allIssues, i, 'gtin', gtinErr);
+
       const skuFileKey = `${productName.toLowerCase()}:${sku.toLowerCase()}`;
       if (product && sku && existingSkuKeys.has(`${product.ID}:${sku.toLowerCase()}`))
         err(allIssues, i, 'sku', `Variant with SKU "${sku}" already exists for product "${productName}".`);
@@ -613,7 +628,7 @@ module.exports = (srv) => {
           product_ID:   product.ID,
           sku,
           color:        str(r.color)  || null,
-          size:         str(r.size)   || null,
+          size:         sizeVal,
           gtin:         str(r.gtin)   || null,
           weight_g:     weightG !== null ? Math.round(weightG) : null,
           status:       statusVal,

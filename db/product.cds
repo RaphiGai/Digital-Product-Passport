@@ -88,7 +88,7 @@ annotate Products with @assert.unique : { gtin_per_org : [gtin, owning_organizat
 entity ProductVariants : identified, audited {
   product  : Association to Products not null;
   color    : String(40);
-  size     : String(20);
+  size     : String(40);   // controlled vocabulary — see dpp_frontend sizeCatalogue.js
   sku      : String(40);
   gtin     : GTIN;
   weight_g : Integer;
