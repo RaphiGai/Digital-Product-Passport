@@ -4,11 +4,61 @@ const cds = require('@sap/cds');
 const LOG = cds.log('dpp/public');
 const QRCode = require('qrcode');
 const tokens = require('../lib/token');
+const session = require('../lib/session');
 const { aggregate, firstItemDpp } = require('../lib/aggregator');
 const { applyFieldVisibility, isFieldPublic } = require('../lib/field-visibility');
 const { publicCustomFields } = require('../lib/custom-fields');
 
 const MAX_DEPTH = 8;
+const SESSION_COOKIE = 'dpp_session';
+
+/** Read a single cookie value from an Express request (no cookie-parser dependency). */
+function readCookie(req, name) {
+  const header = req && req.headers && req.headers.cookie;
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq < 0) continue;
+    if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1).trim());
+  }
+  return null;
+}
+
+/**
+ * Internal-review preview gate for the PUBLIC (unauthenticated) endpoint. A not-yet-public
+ * DPP (e.g. draft) is served ONLY to an authenticated, active COMPANY user of the SAME
+ * organization — resolved authoritatively from the Users table (the cookie's role/tenant
+ * claims are advisory). Returns the reviewer's organization id, or null when the request
+ * carries no valid full company session. External scanners (no cookie) get null → 404.
+ */
+async function reviewerOrgId(req) {
+  try {
+    const raw = readCookie(req, SESSION_COOKIE);
+    if (!raw) return null;
+    const payload = session.verify(raw);
+    if (!payload || payload.scope !== 'full' || !payload.uid) return null;
+    const { Users } = cds.entities('dpp');
+    const u = await SELECT.one.from(Users)
+      .columns('organization_ID', 'active', 'role')
+      .where({ ID: payload.uid });
+    if (!u || !u.active) return null;
+    // Internal review is a company-user capability; business_partner logins are excluded.
+    if (u.role !== 'company_advanced' && u.role !== 'company_user') return null;
+    return u.organization_ID || null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when `reviewerOrgId` is set and owns the product the DPP belongs to. */
+async function isPreviewAuthorized(dpp, reviewerOrgIdVal) {
+  if (!reviewerOrgIdVal || !dpp) return false;
+  const { Products } = cds.entities('dpp');
+  const prod = await SELECT.one.from(Products)
+    .columns('owning_organization_ID')
+    .where({ ID: dpp.product_ID });
+  return !!prod && prod.owning_organization_ID === reviewerOrgIdVal;
+}
 
 // A passport is reachable by the public (QR / direct link) once it has been PUBLISHED
 // at least once and is `public`. It stays reachable while a new draft version is being
@@ -467,13 +517,21 @@ async function overlayLive(frozen, dpp, versionNumber) {
   };
 }
 
-async function loadDPPByToken(token) {
+async function loadDPPByToken(token, reviewerOrgIdVal = null) {
   if (!tokens.verify(token)) return null;
   const { DPPs, DPPVersions } = cds.entities('dpp');
 
   const dpp = await SELECT.one.from(DPPs).where({ qr_token: token });
   if (!dpp) return null;
-  if (!isPubliclyVisible(dpp)) return null;
+  if (!isPubliclyVisible(dpp)) {
+    // Not yet public (e.g. draft). Serve a LIVE preview ONLY to a same-org reviewer for
+    // internal review; everyone else gets 404 so unpublished data never leaks. The preview
+    // renders current data (drafts have no frozen consumer_snapshot) and is flagged so the
+    // consumer view can badge it as "not yet published".
+    if (!(await isPreviewAuthorized(dpp, reviewerOrgIdVal))) return null;
+    const ctx = await loadDPPContext(dpp);
+    return { ...toConsumerDTO(dpp, ctx), preview: true };
+  }
 
   // Serve the FROZEN consumer payload of the latest PUBLISHED version — edits in
   // progress (status reverted to draft) stay invisible until re-publish. Approve-
@@ -497,7 +555,8 @@ async function loadDPPByToken(token) {
 
 async function resolveDPPByToken(req, res) {
   try {
-    const dto = await loadDPPByToken(req.params.token);
+    const orgId = await reviewerOrgId(req);
+    const dto = await loadDPPByToken(req.params.token, orgId);
     if (!dto) return res.status(404).json({ error: 'not_found' });
     // No caching: visibility/field edits must reflect immediately on the consumer view.
     res.set('Cache-Control', 'no-store');
@@ -524,7 +583,11 @@ async function downloadPublicDocument(req, res) {
     const dpp = await SELECT.one.from(DPPs)
       .columns('ID', 'product_ID', 'batch_ID', 'status', 'visibility', 'published_at', 'qr_token')
       .where({ qr_token: token });
-    if (!isPubliclyVisible(dpp)) return res.status(404).end();
+    if (!dpp) return res.status(404).end();
+    // Public once published; otherwise downloadable only in the same-org internal-review preview.
+    if (!isPubliclyVisible(dpp) && !(await isPreviewAuthorized(dpp, await reviewerOrgId(req)))) {
+      return res.status(404).end();
+    }
 
     const doc = await SELECT.one.from(Documents)
       .columns('ID', 'product_ID', 'batch_ID', 'visibility', 'file_name', 'mime_type')
