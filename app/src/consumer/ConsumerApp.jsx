@@ -498,6 +498,12 @@ function Passport({ dpp }) {
 
   return (
     <div className="min-h-screen bg-[#f7faf5]">
+      {dpp.preview && (
+        <div className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-center text-sm font-medium text-white print:hidden">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          Preview — this passport is not yet published. Only signed-in reviewers of your organization can see this.
+        </div>
+      )}
       <Hero product={p} variant={v} espr={p.espr_compliance} />
 
       <main className="mx-auto max-w-6xl px-4 pb-12 pt-2 md:pt-0">
