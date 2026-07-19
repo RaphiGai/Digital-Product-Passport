@@ -11,6 +11,15 @@ Monorepo for the Digital Product Passport (DPP) platform — an SAP BTP applicat
 
 Both halves are independent deployables with their own `mta.yaml`; see the README in each folder for setup, development and deployment instructions.
 
+## Demo access
+
+A hosted demo runs on SAP BTP:
+
+- **DPP Studio (company app):** https://cf-procode-bas-dev-dpp-frontend-approuter.cfapps.eu10-004.hana.ondemand.com
+- **Demo login:** username `alice.advanced`, password `DPP` (demo tenant, `company_advanced` role)
+
+The public consumer view requires no login — open any published passport via its QR code or share link from within the studio.
+
 ## Quick start
 
 ```bash
