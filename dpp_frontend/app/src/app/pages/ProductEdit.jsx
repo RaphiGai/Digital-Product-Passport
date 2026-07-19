@@ -1,0 +1,535 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useParams, useNavigate } from 'react-router-dom';
+import { odataGet, odataList, ApiError } from '@/api/client';
+import { useUpdate } from '@/api/hooks';
+import { useHasRole } from '@/auth/useMe';
+import {
+  PRODUCT_TYPES,
+  PRODUCT_STATUSES,
+  ESPR_STATUSES,
+  PRODUCT_CATALOGUE,
+  catalogueByKey,
+  mergeVisibility
+} from '@/lib/fieldCatalogue';
+import { parseCustomFields, serializeCustomFields, validateCustomFields } from '@/lib/customFields';
+import { validateGtin, GTIN_HINT } from '@/lib/gtin';
+import { useUnsavedChanges } from '@/app/UnsavedChangesContext';
+import { Card } from '@/ui/Card';
+import { Button } from '@/ui/Button';
+import { Breadcrumb, Banner } from '@/ui/Breadcrumb';
+import { FormSection, FieldRow, Input, Textarea, RadioCards, CountrySelect, Select } from '@/ui/Form';
+
+// ESPR durability/repairability options: 0–10 in 0.5 steps, plus an explicit "not assessed".
+const SCORE_OPTIONS = [
+  { value: '', label: '— Not assessed —' },
+  ...Array.from({ length: 21 }, (_, i) => {
+    const n = String(i / 2); // 0, 0.5, 1, … 10
+    return { value: n, label: n };
+  })
+];
+import { CustomFieldsEditor } from '@/ui/CustomFieldsEditor';
+import { DocumentManager } from '@/ui/DocumentManager';
+
+export function ProductEdit() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [form, setForm] = useState(null);
+  const [fieldVis, setFieldVis] = useState(null);
+  const [msg, setMsg] = useState(null);
+  const isAdvanced = useHasRole('company_advanced');
+  const PRODUCT_VIS = useMemo(() => catalogueByKey(PRODUCT_CATALOGUE), []);
+
+  /** Build the props for an editable Public/Internal badge bound to `key`. */
+  const visCtl = (key) => ({
+    value: fieldVis?.[key] ?? 'public',
+    onChange: (v) => setFieldVis((m) => ({ ...(m ?? {}), [key]: v })),
+    locked: !!PRODUCT_VIS[key]?.locked,
+    canEdit: isAdvanced
+  });
+
+  const LIMITS = {
+    name: 70,
+    brand: 70,
+    model: 70,
+    gtin: 14,
+    upc: 20,
+    description: 500,
+    fibre_composition: 500,
+    substances_of_concern: 500,
+    country_of_origin: 2,
+    care_instructions: 500,
+    repair_instructions: 500,
+    disposal_instructions: 500,
+    reuse_instructions: 500,
+    storytelling_title: 100,
+    storytelling_body: 1000
+  };
+
+  const remaining = (value, max) => `${max - (value?.length ?? 0)} characters remaining`;
+
+  const productQ = useQuery({
+    queryKey: ['Products', id],
+    queryFn: () => odataGet('Products', id)
+  });
+
+  // Category options come from the ProductCategories code list (single source of truth) —
+  // adding a category there makes it selectable here with no frontend change.
+  const categoriesQ = useQuery({
+    queryKey: ['ProductCategories'],
+    queryFn: () => odataList('ProductCategories', { select: ['code', 'name'], orderby: 'name' })
+  });
+  const categoryOptions = categoriesQ.data ?? [];
+
+  // Warn on exit while the form has unsaved edits. The clean snapshot is captured once,
+  // right after the product loads; any later change to form/visibility marks it dirty.
+  const { setDirty } = useUnsavedChanges();
+  const cleanRef = useRef(null);
+
+  useEffect(() => {
+    if (productQ.data && !form) {
+      const p = productQ.data;
+      let storytelling = [{ title: '', body: '' }];
+      if (p.storytelling) {
+        try {
+          const parsed = JSON.parse(p.storytelling);
+          if (Array.isArray(parsed) && parsed.length) storytelling = parsed;
+        } catch {
+          /* ignore malformed storytelling JSON */
+        }
+      }
+      setForm({
+        product_type: p.product_type ?? 'finished',
+        name: p.name ?? '',
+        brand: p.brand ?? '',
+        category_code: p.category_code ?? '',
+        model: p.model ?? '',
+        gtin: p.gtin ?? '',
+        upc: p.upc ?? '',
+        description: p.description ?? '',
+        fibre_composition: p.fibre_composition ?? '',
+        substances_of_concern: p.substances_of_concern ?? '',
+        country_of_origin: p.country_of_origin ?? '',
+        care_instructions: p.care_instructions ?? '',
+        repair_instructions: p.repair_instructions ?? '',
+        disposal_instructions: p.disposal_instructions ?? '',
+        reuse_instructions: p.reuse_instructions ?? '',
+        durability_score: p.durability_score == null ? '' : String(Number(p.durability_score)),
+        repairability_score: p.repairability_score == null ? '' : String(Number(p.repairability_score)),
+        care_video_url: p.care_video_url ?? '',
+        repair_video_url: p.repair_video_url ?? '',
+        disposal_video_url: p.disposal_video_url ?? '',
+        reuse_video_url: p.reuse_video_url ?? '',
+        care_products_url: p.care_products_url ?? '',
+        repair_products_url: p.repair_products_url ?? '',
+        reuse_products_url: p.reuse_products_url ?? '',
+        disposal_products_url: p.disposal_products_url ?? '',
+        status: p.status ?? 'draft',
+        espr_compliance: p.espr_compliance ?? 'draft',
+        storytelling,
+        custom_fields: parseCustomFields(p.custom_fields)
+      });
+      setFieldVis(mergeVisibility(PRODUCT_CATALOGUE, p.field_visibility));
+    }
+  }, [productQ.data, form]);
+
+  useEffect(() => {
+    if (!form) return;
+    const snap = JSON.stringify({ form, fieldVis });
+    if (cleanRef.current == null) { cleanRef.current = snap; return; } // first load = clean
+    setDirty(snap !== cleanRef.current);
+  }, [form, fieldVis, setDirty]);
+  useEffect(() => () => setDirty(false), [setDirty]); // clear on unmount (save/cancel/leave)
+
+  const update = useUpdate('Products', {
+    invalidate: [['Products', id], ['Products']]
+  });
+
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const setVal = (key) => (v) => setForm((f) => ({ ...f, [key]: v }));
+
+  const setBlock = (i, key) => (e) =>
+    setForm((f) => ({
+      ...f,
+      storytelling: f.storytelling.map((s, idx) => (idx === i ? { ...s, [key]: e.target.value } : s))
+    }));
+  const addBlock = () =>
+    setForm((f) => ({ ...f, storytelling: [...f.storytelling, { title: '', body: '' }] }));
+  const removeBlock = (i) =>
+    setForm((f) => ({ ...f, storytelling: f.storytelling.filter((_, idx) => idx !== i) }));
+
+  const save = () => {
+    setMsg(null);
+    if (!form.name.trim()) {
+      setMsg({ kind: 'error', text: 'Product name is required.' });
+      return;
+    }
+
+    const gtinError = validateGtin(form.gtin);
+    if (gtinError) {
+      setMsg({ kind: 'error', text: gtinError });
+      return;
+    }
+
+    for (const [key, label] of [['durability_score', 'Durability'], ['repairability_score', 'Repairability']]) {
+      const v = form[key];
+      if (v !== '' && (Number.isNaN(Number(v)) || Number(v) < 0 || Number(v) > 10 || (Number(v) * 2) % 1 !== 0)) {
+        setMsg({ kind: 'error', text: `${label} score must be between 0 and 10 in 0.5 steps.` });
+        return;
+      }
+    }
+    const urlFields = [
+      'care_video_url', 'repair_video_url', 'disposal_video_url', 'reuse_video_url',
+      'care_products_url', 'repair_products_url', 'reuse_products_url', 'disposal_products_url'
+    ];
+    for (const key of urlFields) {
+      const v = form[key]?.trim();
+      if (v && !/^https?:\/\//i.test(v)) {
+        setMsg({ kind: 'error', text: 'Links must start with https:// (or http://).' });
+        return;
+      }
+    }
+    const cfError = validateCustomFields(form.custom_fields);
+    if (cfError) {
+      setMsg({ kind: 'error', text: cfError });
+      return;
+    }
+    const story = form.storytelling
+      .map((s) => ({ title: s.title.trim(), body: s.body.trim() }))
+      .filter((s) => s.title || s.body);
+    update.mutate(
+      {
+        key: id,
+        payload: {
+          product_type: form.product_type,
+          name: form.name.trim(),
+          brand: form.brand || null,
+          category_code: form.category_code || null,
+          model: form.model || null,
+          gtin: form.gtin || null,
+          upc: form.upc || null,
+          description: form.description || null,
+          fibre_composition: form.fibre_composition || null,
+          substances_of_concern: form.substances_of_concern || null,
+          country_of_origin: form.country_of_origin || null,
+          care_instructions: form.care_instructions || null,
+          repair_instructions: form.repair_instructions || null,
+          disposal_instructions: form.disposal_instructions || null,
+          reuse_instructions: form.reuse_instructions || null,
+          durability_score: form.durability_score === '' ? null : Number(form.durability_score),
+          repairability_score: form.repairability_score === '' ? null : Number(form.repairability_score),
+          care_video_url: form.care_video_url?.trim() || null,
+          repair_video_url: form.repair_video_url?.trim() || null,
+          disposal_video_url: form.disposal_video_url?.trim() || null,
+          reuse_video_url: form.reuse_video_url?.trim() || null,
+          care_products_url: form.care_products_url?.trim() || null,
+          repair_products_url: form.repair_products_url?.trim() || null,
+          reuse_products_url: form.reuse_products_url?.trim() || null,
+          disposal_products_url: form.disposal_products_url?.trim() || null,
+          status: form.status,
+          espr_compliance: form.espr_compliance,
+          storytelling: story.length ? JSON.stringify(story) : null,
+          custom_fields: serializeCustomFields(form.custom_fields),
+          field_visibility: JSON.stringify(fieldVis ?? {})
+        }
+      },
+      {
+        onSuccess: () => {
+          setMsg({ kind: 'success', text: 'Product saved.' });
+          navigate(`/products/${id}`);
+        },
+        onError: (err) =>
+          setMsg({ kind: 'error', text: err instanceof ApiError ? err.message : 'Could not save.' })
+      }
+    );
+  };
+
+  if (productQ.isLoading || !form) return <p className="text-ink-muted">Loading…</p>;
+  if (!productQ.data) return <p className="text-ink-muted">Product not found.</p>;
+
+  return (
+    <div className="space-y-6">
+      <Breadcrumb
+        items={[
+          { label: 'Dashboard', to: '/' },
+          { label: 'Products', to: '/products' },
+          { label: productQ.data.name, to: `/products/${id}` },
+          { label: 'Edit' }
+        ]}
+      />
+
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-ink">{productQ.data.name}</h1>
+      </div>
+
+      {msg && <Banner kind={msg.kind}>{msg.text}</Banner>}
+
+      <Card className="p-6">
+        <FormSection
+          title="Product type"
+          description="Determines ESPR requirements and which fields appear on the public DPP."
+        >
+          <div className="md:col-span-2">
+            <RadioCards
+              columns={4}
+              value={form.product_type}
+              onChange={setVal('product_type')}
+              options={PRODUCT_TYPES}
+            />
+          </div>
+        </FormSection>
+
+        <FormSection
+          title="Basic information"
+          description="Name, Brand and Category appear publicly on the consumer DPP. Public/Internal changes reach the consumer view only after the passport is (re-)published."
+        >
+          <FieldRow label="Product ID" visibility="internal">
+            <span className="font-mono text-sm text-ink">
+              {productQ.data.ID}
+            </span>
+          </FieldRow>
+          <FieldRow label="Product name" required visibilityControl={visCtl('name')} htmlFor="name">
+            <Input id="name" value={form.name} onChange={set('name')} maxLength={LIMITS.name} />
+          </FieldRow>
+          <FieldRow label="Brand" visibilityControl={visCtl('brand')} htmlFor="brand">
+            <Input id="brand" value={form.brand} onChange={set('brand')} maxLength={LIMITS.brand} />
+          </FieldRow>
+          <FieldRow label="Category" visibilityControl={visCtl('category')} htmlFor="category">
+            <Select
+              id="category"
+              value={form.category_code}
+              onChange={set('category_code')}
+              options={[
+                { value: '', label: 'Select category…' },
+                ...categoryOptions.map((c) => ({ value: c.code, label: c.name }))
+              ]}
+            />
+          </FieldRow>
+          <FieldRow label="Model" visibilityControl={visCtl('model')} htmlFor="model" hint="Season or model line.">
+            <Input id="model" value={form.model} onChange={set('model')} maxLength={LIMITS.model} />
+          </FieldRow>
+          <FieldRow
+            label="GTIN"
+            visibilityControl={visCtl('gtin')}
+            htmlFor="gtin"
+            hint={
+              validateGtin(form.gtin) ?? GTIN_HINT
+            }
+          >
+            <Input
+              id="gtin"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={LIMITS.gtin}
+              value={form.gtin}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  gtin: e.target.value.replace(/\D/g, '').slice(0, LIMITS.gtin)
+                }))
+              }
+            />
+          </FieldRow>
+          <FieldRow
+            label="EAN / UPC"
+            visibilityControl={visCtl('upc')}
+            htmlFor="upc"
+            hint="EAN or Universal Product Code (optional)."
+          >
+            <Input
+              id="upc"
+              value={form.upc}
+              onChange={set('upc')}
+              maxLength={LIMITS.upc}
+            />
+          </FieldRow>
+          <FieldRow
+            label="Description"
+            visibilityControl={visCtl('description')}
+            htmlFor="desc"
+            className="md:col-span-2"
+            hint={remaining(form.description, LIMITS.description)}
+          >
+            <Textarea id="desc" value={form.description} onChange={set('description')} maxLength={LIMITS.description} />
+          </FieldRow>
+        </FormSection>
+
+        <FormSection
+          title="Material & composition"
+          description="Mandatory for EU textile labelling and ESPR compliance. All appear publicly."
+        >
+          <FieldRow
+            label="Fibre composition"
+            visibilityControl={visCtl('fibre_composition')}
+            htmlFor="fibre"
+            hint={remaining(form.fibre_composition, LIMITS.fibre_composition)}
+          >
+            <Textarea id="fibre" value={form.fibre_composition} onChange={set('fibre_composition')} maxLength={LIMITS.fibre_composition} />
+          </FieldRow>
+          <FieldRow
+            label="Substances of concern"
+            visibilityControl={visCtl('substances_of_concern')}
+            htmlFor="soc"
+            hint={remaining(form.substances_of_concern, LIMITS.substances_of_concern)}
+          >
+            <Textarea
+              id="soc"
+              value={form.substances_of_concern}
+              onChange={set('substances_of_concern')}
+              maxLength={LIMITS.substances_of_concern}
+            />
+          </FieldRow>
+          <FieldRow
+            label="Country of origin"
+            visibilityControl={visCtl('country_of_origin')}
+            htmlFor="coo"
+            className="md:col-span-2"
+          >
+            <CountrySelect id="coo" value={form.country_of_origin} onChange={set('country_of_origin')} />
+          </FieldRow>
+        </FormSection>
+
+        <FormSection
+          title="Care, repair, reuse & end-of-life"
+          description="Mandatory ESPR lifecycle information. All appear publicly. Each block can have an optional how-to video link and a “recommended products” shop link, shown only when set."
+        >
+          <FieldRow label="Care & washing instructions" visibilityControl={visCtl('care_instructions')} htmlFor="care" className="md:col-span-2" hint={remaining(form.care_instructions, LIMITS.care_instructions)}>
+            <Textarea id="care" value={form.care_instructions} onChange={set('care_instructions')} maxLength={LIMITS.care_instructions} />
+            <Input className="mt-2" value={form.care_video_url} onChange={set('care_video_url')} placeholder="Care/washing video link (optional, https://…)" />
+            <Input className="mt-2" value={form.care_products_url} onChange={set('care_products_url')} placeholder="Recommended products link (optional, https://…)" />
+          </FieldRow>
+          <FieldRow label="Repair instructions" visibilityControl={visCtl('repair_instructions')} htmlFor="repair" hint={remaining(form.repair_instructions, LIMITS.repair_instructions)}>
+            <Textarea id="repair" value={form.repair_instructions} onChange={set('repair_instructions')} maxLength={LIMITS.repair_instructions} />
+            <Input className="mt-2" value={form.repair_video_url} onChange={set('repair_video_url')} placeholder="Repair video link (optional, https://…)" />
+            <Input className="mt-2" value={form.repair_products_url} onChange={set('repair_products_url')} placeholder="Recommended products link (optional, https://…)" />
+          </FieldRow>
+          <FieldRow label="Disposal instructions" visibilityControl={visCtl('disposal_instructions')} htmlFor="disposal" hint={remaining(form.disposal_instructions, LIMITS.disposal_instructions)}>
+            <Textarea
+              id="disposal"
+              value={form.disposal_instructions}
+              onChange={set('disposal_instructions')}
+              maxLength={LIMITS.disposal_instructions}
+            />
+            <Input className="mt-2" value={form.disposal_video_url} onChange={set('disposal_video_url')} placeholder="Disposal video link (optional, https://…)" />
+            <Input className="mt-2" value={form.disposal_products_url} onChange={set('disposal_products_url')} placeholder="Recommended products link (optional, https://…)" />
+          </FieldRow>
+          <FieldRow label="Reuse instructions" visibilityControl={visCtl('reuse_instructions')} htmlFor="reuse" className="md:col-span-2" hint={remaining(form.reuse_instructions, LIMITS.reuse_instructions)}>
+            <Textarea id="reuse" value={form.reuse_instructions} onChange={set('reuse_instructions')} maxLength={LIMITS.reuse_instructions} placeholder="Second-life / reuse guidance (resale, donation, repurposing…)" />
+            <Input className="mt-2" value={form.reuse_video_url} onChange={set('reuse_video_url')} placeholder="Reuse video link (optional, https://…)" />
+            <Input className="mt-2" value={form.reuse_products_url} onChange={set('reuse_products_url')} placeholder="Recommended products link (optional, https://…)" />
+          </FieldRow>
+        </FormSection>
+
+        <FormSection
+          title="Durability & repairability (ESPR)"
+          description="ESPR scores from 0 to 10 (in 0.5 steps) — higher is better. Shown publicly when set."
+        >
+          <FieldRow label="Durability score" visibilityControl={visCtl('durability_score')} htmlFor="durability" hint="How long the item lasts under normal use. 0 = wears out very quickly · 10 = exceptionally long-lasting.">
+            <Select id="durability" value={form.durability_score} onChange={set('durability_score')} options={SCORE_OPTIONS} />
+          </FieldRow>
+          <FieldRow label="Repairability score" visibilityControl={visCtl('repairability_score')} htmlFor="repairability" hint="How easily the item can be repaired — spare parts, easy disassembly, repair guides (EU repair-index scale). 0 = not repairable · 10 = very easily repaired.">
+            <Select id="repairability" value={form.repairability_score} onChange={set('repairability_score')} options={SCORE_OPTIONS} />
+          </FieldRow>
+        </FormSection>
+
+        <FormSection
+          title="Storytelling"
+          description="Optional brand / sustainability story shown on the consumer passport. Add one or more blocks (title + text)."
+        >
+          <div className="space-y-3 md:col-span-2">
+            {form.storytelling.map((s, i) => (
+              <div key={i} className="rounded-lg border border-black/5 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                    Block {i + 1}
+                  </span>
+                  {form.storytelling.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeBlock(i)}
+                      className="text-xs text-ink-muted hover:text-red-600"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <Input
+                  value={s.title}
+                  onChange={setBlock(i, 'title')}
+                  placeholder="Title (e.g. Sustainable sourcing)"
+                  maxLength={LIMITS.storytelling_title}
+                />
+
+                <p className="mt-1 text-xs text-ink-muted">
+                  {remaining(s.title, LIMITS.storytelling_title)}
+                </p>
+
+                <Textarea
+                  className="mt-2"
+                  value={s.body}
+                  onChange={setBlock(i, 'body')}
+                  placeholder="Story text…"
+                  maxLength={LIMITS.storytelling_body}
+                />
+
+                <p className="mt-1 text-xs text-ink-muted">
+                  {remaining(s.body, LIMITS.storytelling_body)}
+                </p>
+              </div>
+            ))}
+            <Button type="button" variant="outline" onClick={addBlock}>
+              + Add story block
+            </Button>
+          </div>
+        </FormSection>
+
+        <FormSection
+          title="Additional fields"
+          description="Your own name/value fields for information the standard fields don’t cover (e.g. upcoming ESPR requirements). Each field has its own Public/Internal setting — Public fields appear on the consumer passport."
+        >
+          <CustomFieldsEditor
+            rows={form.custom_fields}
+            onChange={(rows) => setForm((f) => ({ ...f, custom_fields: rows }))}
+            canEditVisibility={isAdvanced}
+          />
+        </FormSection>
+
+        <FormSection title="Product status" description="Internal only.">
+          <div className="md:col-span-2">
+            <RadioCards
+              value={form.status}
+              onChange={setVal('status')}
+              options={PRODUCT_STATUSES}
+            />
+          </div>
+        </FormSection>
+
+        <FormSection
+          title="ESPR compliance status"
+          description="Compliance assessment for EU ESPR. Summary shown publicly."
+        >
+          <div className="md:col-span-2">
+            <RadioCards
+              value={form.espr_compliance}
+              onChange={setVal('espr_compliance')}
+              options={ESPR_STATUSES}
+            />
+          </div>
+        </FormSection>
+
+        <div className="flex justify-end gap-3 border-t border-black/5 pt-5">
+          <Button type="button" variant="outline" onClick={() => navigate(`/products/${id}`)}>
+            Cancel
+          </Button>
+          <Button type="button" disabled={update.isPending} onClick={save}>
+            {update.isPending ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      </Card>
+
+      {/* Certificates & proofs at product level — self-persisting, like the BOM editor. */}
+      <DocumentManager scope="product" ownerId={id} />
+    </div>
+  );
+}

@@ -1,0 +1,54 @@
+{
+  "welcomeFile": "/index.html",
+  "authenticationMethod": "none",
+  "routes": [
+    {
+      "source": "^/healthz$",
+      "target": "/healthz",
+      "destination": "srv-api",
+      "authenticationType": "none",
+      "csrfProtection": false
+    },
+    {
+      "source": "^/auth/(.*)$",
+      "target": "/auth/$1",
+      "destination": "srv-api",
+      "authenticationType": "none",
+      "csrfProtection": false
+    },
+    {
+      "source": "^/public/(.*)$",
+      "target": "/public/$1",
+      "destination": "srv-api",
+      "authenticationType": "none",
+      "csrfProtection": false
+    },
+    {
+      "source": "^/odata/(.*)$",
+      "target": "/odata/$1",
+      "destination": "srv-api",
+      "authenticationType": "none",
+      "csrfProtection": false
+    },
+    {
+      "source": "^/assets/(.*)$",
+      "localDir": "resources",
+      "authenticationType": "none"
+    },
+    {
+      "source": "^/consumer\\.html.*$",
+      "localDir": "resources",
+      "authenticationType": "none"
+    },
+    {
+      "source": "^/lookup\\.html.*$",
+      "localDir": "resources",
+      "authenticationType": "none"
+    },
+    {
+      "source": "^(.*)$",
+      "localDir": "resources",
+      "authenticationType": "none"
+    }
+  ]
+}

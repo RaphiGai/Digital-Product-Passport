@@ -1,0 +1,70 @@
+_schema-version: '3.3'
+ID: dpp-frontend
+version: 0.1.0
+description: DPP Studio — React frontend; standalone approuter serves the SPA from its own container
+
+parameters:
+  enable-parallel-deployments: true
+
+# ---------------------------------------------------------------------------
+# Deploy prerequisites (see README):
+#  1. Backend MTA (dpp-capgemini) is deployed first → its dpp-srv route is set
+#     in the `srv-api` destination URL below (update if the backend host changes).
+#  2. The shared XSUAA instance `dpp-uaa` already exists in the target space.
+#
+# Variante A: the approuter serves the built SPA directly from a local `resources/`
+# folder (xs-app.json localDir). No HTML5 Application Repository is used — this
+# avoids the repo's app-resolution problems in the XSUAA-protected path.
+# ---------------------------------------------------------------------------
+
+modules:
+  # ---- React build (Vite → dist) ----
+  - name: dpp-ui
+    type: html5
+    path: app
+    build-parameters:
+      builder: custom
+      commands:
+        - npm ci || npm install
+        - npm run build
+      supported-platforms: []
+      build-result: dist
+
+  # ---- Approuter: serves the SPA from its container, forwards API to the backend ----
+  # NOTE: must NOT be named `dpp-approuter` — that app name is owned by the backend MTA.
+  - name: dpp-frontend-approuter
+    type: approuter.nodejs
+    path: router
+    parameters:
+      keep-existing-routes: true
+      memory: 256M
+      disk-quota: 512M
+    build-parameters:
+      # Copy the Vite build output into the approuter's resources/ folder so
+      # xs-app.json can serve the SPA via localDir. `*` matches the dist contents
+      # (index.html, consumer.html, assets/) relative to dpp-ui's build-result.
+      requires:
+        - name: dpp-ui
+          artifacts:
+            - '*'
+          target-path: resources/
+    properties:
+      # Inline destination to the backend CAP service. forwardAuthToken sends the
+      # XSUAA JWT to dpp-srv, which accepts it because both bind the SAME dpp-uaa.
+      destinations: >
+        [{"name":"srv-api","url":"https://cf-procode-bas-dev-dpp-srv.cfapps.eu10-004.hana.ondemand.com","forwardAuthToken":true}]
+    requires:
+      - name: dpp-uaa
+    provides:
+      - name: fe-app-api
+        properties:
+          app-protocol: ${protocol}
+          app-uri: ${default-uri}
+
+resources:
+  # SHARED XSUAA — bind the EXISTING backend instance (do NOT re-declare as managed).
+  # Identical xsappname/audience → the forwarded JWT is accepted by dpp-srv.
+  - name: dpp-uaa
+    type: org.cloudfoundry.existing-service
+    parameters:
+      service-name: dpp-uaa

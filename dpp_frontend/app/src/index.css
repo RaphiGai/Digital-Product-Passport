@@ -1,0 +1,210 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-50: 243 247 238;
+  --brand-100: 228 238 214;
+  --brand-200: 202 223 174;
+  --brand-300: 168 201 126;
+  --brand-400: 132 173 82;
+  --brand-500: 95 141 52;
+  --brand-600: 47 94 31;
+  --brand-700: 39 77 28;
+  --brand-800: 33 63 26;
+  --brand-900: 29 53 24;
+
+  --canvas: 244 243 238;
+  --card: 255 255 255;
+
+  --ink: 31 36 33;
+  --ink-muted: 107 114 128;
+}
+
+[data-theme='blue'] {
+  --brand-50: 239 246 255;
+  --brand-100: 219 234 254;
+  --brand-200: 191 219 254;
+  --brand-300: 147 197 253;
+  --brand-400: 96 165 250;
+  --brand-500: 59 130 246;
+  --brand-600: 37 99 235;
+  --brand-700: 29 78 216;
+  --brand-800: 30 64 175;
+  --brand-900: 30 58 138;
+
+  --canvas: 248 250 252;
+}
+
+[data-theme='purple'] {
+  --brand-50: 245 243 255;
+  --brand-100: 237 233 254;
+  --brand-200: 221 214 254;
+  --brand-300: 196 181 253;
+  --brand-400: 167 139 250;
+  --brand-500: 139 92 246;
+  --brand-600: 124 58 237;
+  --brand-700: 109 40 217;
+  --brand-800: 91 33 182;
+  --brand-900: 76 29 149;
+
+  --canvas: 250 245 255;
+}
+
+[data-theme='green'] {
+  --brand-50: 243 247 238;
+  --brand-100: 228 238 214;
+  --brand-200: 202 223 174;
+  --brand-300: 168 201 126;
+  --brand-400: 132 173 82;
+  --brand-500: 95 141 52;
+  --brand-600: 47 94 31;
+  --brand-700: 39 77 28;
+  --brand-800: 33 63 26;
+  --brand-900: 29 53 24;
+
+  --canvas: 244 243 238;
+}
+
+.pdf-export-mode * {
+  line-height: 1.35 !important;
+}
+
+.pdf-export-mode svg text {
+  dominant-baseline: auto !important;
+}
+
+.pdf-export-mode select,
+.pdf-export-mode input,
+.pdf-export-mode button {
+  display: none !important;
+}
+
+.pdf-export-mode .overflow-hidden {
+  overflow: visible !important;
+}
+
+.pdf-export-mode td,
+.pdf-export-mode th,
+.pdf-export-mode p,
+.pdf-export-mode span,
+.pdf-export-mode h3 {
+  overflow: visible !important;
+}
+
+/* ── Dark theme ────────────────────────────────────────────────────────────── */
+/* Brand scale is flipped: 100=dark tint for subtle bgs, 600-700=bright/light  */
+/* for buttons and links. Active nav (bg-brand-100 text-brand-800) works auto.  */
+[data-theme='dark'] {
+  /* color-scheme: dark tells the browser to render ALL native form controls    */
+  /* (bare <input>, <select>, checkboxes, scrollbars) with dark UA styles.      */
+  /* This handles raw inputs that have no bg-white class at all.                */
+  color-scheme: dark;
+
+  --brand-50:  22 35 18;
+  --brand-100: 28 48 22;
+  --brand-200: 35 61 26;
+  --brand-300: 47 82 31;
+  --brand-400: 71 110 42;
+  --brand-500: 104 152 60;
+  --brand-600: 135 178 84;
+  --brand-700: 165 204 118;
+  --brand-800: 195 225 160;
+  --brand-900: 228 242 210;
+
+  --canvas: 18 20 18;
+  --card:   26 30 26;
+
+  --ink:       232 238 233;
+  --ink-muted: 138 155 141;
+}
+
+/* Global dark-mode overrides for hardcoded near-black border/bg utilities     */
+/* that appear in 50+ components — cheaper than touching every file.            */
+[data-theme='dark'] .border-black\/5  { border-color: rgb(255 255 255 / 0.07); }
+[data-theme='dark'] .border-black\/8  { border-color: rgb(255 255 255 / 0.09); }
+[data-theme='dark'] .border-black\/10 { border-color: rgb(255 255 255 / 0.12); }
+[data-theme='dark'] .border-black\/15 { border-color: rgb(255 255 255 / 0.18); }
+[data-theme='dark'] .divide-black\/5 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgb(255 255 255 / 0.07);
+}
+[data-theme='dark'] .bg-black\/5 { background-color: rgb(255 255 255 / 0.06); }
+
+/* Table/list row hover backgrounds used in BomEditor, DataTable, etc.          */
+[data-theme='dark'] .hover\:bg-gray-50:hover     { background-color: rgb(255 255 255 / 0.05); }
+[data-theme='dark'] .hover\:bg-gray-50\/40:hover { background-color: rgb(255 255 255 / 0.04); }
+[data-theme='dark'] .hover\:bg-gray-100:hover    { background-color: rgb(255 255 255 / 0.08); }
+[data-theme='dark'] .hover\:bg-gray-200:hover    { background-color: rgb(255 255 255 / 0.12); }
+[data-theme='dark'] .hover\:bg-red-50:hover      { background-color: rgb(239 68 68 / 0.12); }
+[data-theme='dark'] .bg-gray-50      { background-color: rgb(255 255 255 / 0.04); }
+[data-theme='dark'] .bg-gray-50\/40  { background-color: rgb(255 255 255 / 0.03); }
+[data-theme='dark'] .bg-gray-100     { background-color: rgb(255 255 255 / 0.07); }
+
+/* White surfaces (inputs, outline buttons, cards with hardcoded bg-white)      */
+[data-theme='dark'] .bg-white        { background-color: rgb(255 255 255 / 0.07); }
+[data-theme='dark'] .bg-white\/40    { background-color: rgb(255 255 255 / 0.06); }
+[data-theme='dark'] .bg-white\/60    { background-color: rgb(255 255 255 / 0.09); }
+
+/* Light borders (form inputs, outline buttons)                                 */
+[data-theme='dark'] .border-gray-200 { border-color: rgb(255 255 255 / 0.10); }
+[data-theme='dark'] .border-gray-300 { border-color: rgb(255 255 255 / 0.15); }
+
+/* Input/textarea placeholder colour                                            */
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder { color: rgb(255 255 255 / 0.30); }
+
+/* Gray text that becomes near-invisible on dark backgrounds                    */
+[data-theme='dark'] .text-gray-400 { color: rgb(255 255 255 / 0.38); }
+[data-theme='dark'] .text-gray-500 { color: rgb(255 255 255 / 0.50); }
+[data-theme='dark'] .text-gray-700 { color: rgb(255 255 255 / 0.65); }
+
+/* Subtle gray panel backgrounds (expanded rows, sub-sections, table headers)   */
+[data-theme='dark'] .bg-gray-50\/60 { background-color: rgb(255 255 255 / 0.05); }
+[data-theme='dark'] .bg-gray-50\/70 { background-color: rgb(255 255 255 / 0.05); }
+[data-theme='dark'] .bg-gray-50\/80 { background-color: rgb(255 255 255 / 0.06); }
+
+/* Non-brand badge/alert backgrounds (fixed Tailwind colors, not CSS vars)      */
+[data-theme='dark'] .bg-blue-100    { background-color: rgb(59 130 246 / 0.18); }
+[data-theme='dark'] .text-blue-800  { color: rgb(147 197 253); }
+[data-theme='dark'] .bg-amber-100   { background-color: rgb(217 119 6 / 0.20); }
+[data-theme='dark'] .bg-amber-50    { background-color: rgb(217 119 6 / 0.15); }
+[data-theme='dark'] .bg-amber-50\/60 { background-color: rgb(217 119 6 / 0.10); }
+[data-theme='dark'] .text-amber-800 { color: rgb(252 211 77); }
+[data-theme='dark'] .text-amber-700 { color: rgb(252 211 77); }
+[data-theme='dark'] .border-amber-200 { border-color: rgb(217 119 6 / 0.35); }
+[data-theme='dark'] .bg-red-100     { background-color: rgb(220 38 38 / 0.18); }
+[data-theme='dark'] .bg-red-50      { background-color: rgb(220 38 38 / 0.15); }
+[data-theme='dark'] .text-red-700   { color: rgb(252 165 165 / 0.90); }
+[data-theme='dark'] .text-red-800   { color: rgb(252 165 165 / 0.90); }
+[data-theme='dark'] .border-red-200 { border-color: rgb(220 38 38 / 0.30); }
+[data-theme='dark'] .bg-green-100   { background-color: rgb(34 197 94 / 0.18); }
+[data-theme='dark'] .bg-green-50    { background-color: rgb(34 197 94 / 0.12); }
+[data-theme='dark'] .text-green-600 { color: rgb(134 239 172 / 0.85); }
+[data-theme='dark'] .text-green-700 { color: rgb(134 239 172 / 0.90); }
+[data-theme='dark'] .text-green-800 { color: rgb(134 239 172); }
+
+
+@layer base {
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-ink antialiased;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

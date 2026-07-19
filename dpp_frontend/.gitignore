@@ -1,0 +1,16 @@
+node_modules/
+dist/
+resources/
+mta_archives/
+*.mtar
+# Generated HTML5-repo bundle (built by app/scripts/package-html5.mjs)
+dpp-ui-content.zip
+.env
+.env.local
+.env.*.local
+default-env.json
+*-key.txt
+.DS_Store
+*.log
+coverage/
+.vite/
