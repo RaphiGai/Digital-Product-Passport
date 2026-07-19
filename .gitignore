@@ -36,3 +36,7 @@ mta_archives/
 coverage/
 .nyc_output/
 .cf/
+
+# Local-only project material (not needed to run the web app)
+docs/
+scripts/
