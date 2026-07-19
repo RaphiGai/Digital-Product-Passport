@@ -1,15 +1,24 @@
-name: CI
+name: Backend CI
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'dpp_backend/**'
+      - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'dpp_backend/**'
+      - '.github/workflows/backend-ci.yml'
 
 jobs:
   cap-build-test:
     name: CAP backend build & test
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dpp_backend
     steps:
       - uses: actions/checkout@v5
 
@@ -18,6 +27,7 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
+          cache-dependency-path: dpp_backend/package-lock.json
 
       - name: Install dependencies
         run: npm ci || npm install
