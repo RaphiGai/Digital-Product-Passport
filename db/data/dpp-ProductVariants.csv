@@ -1,1 +1,4 @@
 ID;product_ID;color;size;sku;gtin;weight_g;status;image_url
+var-tshirt-blue-m;prod-tshirt-classic;Blue;M;TSHIRT-BLUE-M;04012345670010;180;active;https://placehold.co/600x450/2563eb/ffffff?text=Classic+T-Shirt+Blue
+var-cotton-default;prod-mat-cotton;Natural;OneSize;OC-160-DEF;;;active;
+var-elastane-default;prod-mat-elastane;Natural;OneSize;EL-40-DEF;;;active;

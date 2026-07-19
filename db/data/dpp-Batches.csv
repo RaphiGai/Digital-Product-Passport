@@ -1,1 +1,4 @@
 ID;variant_ID;batch_number;production_date;factory_ID;supplier_ID;country_of_origin;production_stage;co2_footprint_kg;recycled_content_pct;status
+batch-2026-05-A;var-tshirt-blue-m;2026-05-A;2026-05-15;;;PT;Cut & Sew;2.400;;approved
+batch-cotton-2026-04;var-cotton-default;2026-04-COT;2026-04-10;;;TR;Spinning;15.000;15.00;approved
+batch-elastane-2026-04;var-elastane-default;2026-04-ELA;2026-04-12;;;DE;Extrusion;;0.00;approved

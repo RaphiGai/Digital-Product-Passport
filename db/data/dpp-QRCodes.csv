@@ -1,1 +1,4 @@
 ID;dpp_ID;qr_value;qr_image_url;status;created_at;replaced_at
+qr-12345;dpp-12345;/public/dpp/dpp~04012345670010~TSHIRT-BLUE-M~2026-05-A~~20260515~Fs7QUDad.obTBOmsM1NPvbYTReqcRTKklKcg8rwOF2Kkr7XNxGkY;/public/dpp/dpp~04012345670010~TSHIRT-BLUE-M~2026-05-A~~20260515~Fs7QUDad.obTBOmsM1NPvbYTReqcRTKklKcg8rwOF2Kkr7XNxGkY/qr.png;active;2026-05-17T12:00:00Z;
+qr-cotton;dpp-cotton;/public/dpp/dpp~04012345670027~OC-160-DEF~2026-04-COT~~20260410~FcrFfPwx.f6vV9W_A4XhvoqgclyAm5a45zDRb8u91skps2bOFFfY;/public/dpp/dpp~04012345670027~OC-160-DEF~2026-04-COT~~20260410~FcrFfPwx.f6vV9W_A4XhvoqgclyAm5a45zDRb8u91skps2bOFFfY/qr.png;active;2026-04-15T12:00:00Z;
+qr-elastane;dpp-elastane;/public/dpp/dpp~04012345670034~EL-40-DEF~2026-04-ELA~~20260412~LjnQn1e_.rlVU9kLyJPI3Iby3MfaVbETiP62_j9wNFtKrgdq-BIc;/public/dpp/dpp~04012345670034~EL-40-DEF~2026-04-ELA~~20260412~LjnQn1e_.rlVU9kLyJPI3Iby3MfaVbETiP62_j9wNFtKrgdq-BIc/qr.png;active;2026-04-16T12:00:00Z;
